@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { ArrowRight, SkipForward } from 'lucide-react';
 import { Dialog } from './ui/Dialog';
@@ -18,6 +18,7 @@ export function SkipDialog({
   currentRep,
   nextRep,
   allReps,
+  forcedRepId,
   onDone,
 }: {
   open: boolean;
@@ -26,12 +27,24 @@ export function SkipDialog({
   currentRep: SalesRep | null;
   nextRep: SalesRep | null;
   allReps: SalesRep[];
+  forcedRepId?: string | null;
   onDone: () => void;
 }) {
   const [mode, setMode] = useState<Mode>('next');
   const [targetId, setTargetId] = useState<string | undefined>(undefined);
   const [reason, setReason] = useState('');
   const [submitting, setSubmitting] = useState(false);
+
+  // When opened from the queue strip with a specific target, pre-select that rep
+  useEffect(() => {
+    if (open && forcedRepId) {
+      setMode('specific');
+      setTargetId(forcedRepId);
+    } else if (open) {
+      setMode('next');
+      setTargetId(undefined);
+    }
+  }, [open, forcedRepId]);
 
   if (!assignment) return null;
 

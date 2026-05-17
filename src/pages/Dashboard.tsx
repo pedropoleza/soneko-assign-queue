@@ -11,9 +11,16 @@ import type { AppState, Assignment } from '@/types';
 
 export function Dashboard({ state, refresh }: { state: AppState; refresh: () => void }) {
   const [skipTarget, setSkipTarget] = useState<Assignment | null>(null);
+  const [skipForcedRepId, setSkipForcedRepId] = useState<string | null>(null);
   const [drawerAssignment, setDrawerAssignment] = useState<Assignment | null>(null);
   const repsById = new Map(state.reps.map((r) => [r.id, r]));
   const recent = state.assignments.slice(0, 20);
+  const lastAssignment = state.assignments[0] ?? null;
+
+  function openSkipForced(a: Assignment, repId: string) {
+    setSkipForcedRepId(repId);
+    setSkipTarget(a);
+  }
 
   return (
     <div className="space-y-5">
@@ -56,6 +63,9 @@ export function Dashboard({ state, refresh }: { state: AppState; refresh: () => 
             reps={state.reps}
             nextRepId={state.next_rep?.id}
             lastRepId={state.queue?.last_assigned_rep_id ?? null}
+            recentAssignment={lastAssignment}
+            onRefresh={refresh}
+            onSkipAssignment={openSkipForced}
           />
         </div>
       </div>
@@ -71,11 +81,12 @@ export function Dashboard({ state, refresh }: { state: AppState; refresh: () => 
 
       <SkipDialog
         open={!!skipTarget}
-        onOpenChange={(v) => !v && setSkipTarget(null)}
+        onOpenChange={(v) => { if (!v) { setSkipTarget(null); setSkipForcedRepId(null); } }}
         assignment={skipTarget}
         currentRep={skipTarget ? repsById.get(skipTarget.assigned_rep_id ?? '') ?? null : null}
         nextRep={state.next_rep}
         allReps={state.reps}
+        forcedRepId={skipForcedRepId}
         onDone={refresh}
       />
 

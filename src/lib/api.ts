@@ -56,6 +56,11 @@ export const api = {
     timezone?: string;
   }) => call<{ ok: true; rep: any }>('POST', '/reps/settings', { rep_id, ...settings }),
 
+  setNextRep: (rep_id: string) =>
+    call<{ ok: true; next_rep: { id: string; name: string } }>('POST', '/queue/set-next', { rep_id }),
+  advanceQueue: () =>
+    call<{ ok: true; next_rep: { id: string; name: string } }>('POST', '/queue/advance', {}),
+
   listTagRules: () => call<TagRule[]>('GET', '/tag-rules'),
   upsertTagRule: (tag: string, rep_id: string, priority = 100) =>
     call<{ ok: true }>('POST', '/tag-rules/upsert', { tag, rep_id, priority }),
