@@ -1,5 +1,5 @@
 import { API_URL, getSecret } from './config';
-import type { AppState } from '@/types';
+import type { AppState, DistributionByRep, TagRule } from '@/types';
 
 class ApiError extends Error {
   constructor(message: string, public status: number) {
@@ -32,13 +32,35 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
 
 export const api = {
   getState: () => call<AppState>('GET', '/state'),
+  distribution: (days = 30) => call<{ days: number; by_rep: DistributionByRep[] }>('GET', `/distribution?days=${days}`),
+  contact: (id: string) => call<any>('GET', `/contact/${id}`),
+
   skip: (assignment_id: string, target_rep_id: string | null, reason?: string) =>
     call<{ ok: true; rep: { id: string; name: string; ghl_user_id: string }; sync: string; error: string | null }>(
       'POST', '/skip', { assignment_id, target_rep_id, reason }),
+  bulkSkip: (assignment_ids: string[], target_rep_id: string | null, reason?: string) =>
+    call<{ ok: true; results: any[] }>('POST', '/bulk-skip', { assignment_ids, target_rep_id, reason }),
+  retry: (assignment_id: string) =>
+    call<{ ok: true; rep: any; sync: string; error: string | null }>('POST', '/retry', { assignment_id }),
+
   toggleRep: (rep_id: string, active: boolean) =>
     call<{ ok: true }>('POST', '/reps/toggle', { rep_id, active }),
   reorderReps: (ordered_rep_ids: string[]) =>
     call<{ ok: true }>('POST', '/reps/reorder', { ordered_rep_ids }),
+  updateRepSettings: (rep_id: string, settings: {
+    weight?: number;
+    vacation_start?: string | null;
+    vacation_end?: string | null;
+    working_hours_start?: string | null;
+    working_hours_end?: string | null;
+    timezone?: string;
+  }) => call<{ ok: true; rep: any }>('POST', '/reps/settings', { rep_id, ...settings }),
+
+  listTagRules: () => call<TagRule[]>('GET', '/tag-rules'),
+  upsertTagRule: (tag: string, rep_id: string, priority = 100) =>
+    call<{ ok: true }>('POST', '/tag-rules/upsert', { tag, rep_id, priority }),
+  deleteTagRule: (id: string) =>
+    call<{ ok: true }>('POST', '/tag-rules/delete', { id }),
 };
 
 export { ApiError };

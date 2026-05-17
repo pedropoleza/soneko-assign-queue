@@ -6,6 +6,13 @@ export type SalesRep = {
   avatar_url: string | null;
   position: number;
   active: boolean;
+  weight: number;
+  vacation_start: string | null;
+  vacation_end: string | null;
+  working_hours_start: string | null;
+  working_hours_end: string | null;
+  timezone: string;
+  available: boolean;
 };
 
 export type Assignment = {
@@ -21,6 +28,8 @@ export type Assignment = {
   skipped_from_rep_id: string | null;
   ghl_sync_status: 'pending' | 'synced' | 'failed';
   ghl_sync_error: string | null;
+  sync_attempts: number;
+  last_sync_attempt_at: string | null;
   created_at: string;
   rep_name: string | null;
   rep_avatar: string | null;
@@ -30,6 +39,7 @@ export type Queue = {
   current_position: number;
   last_assigned_rep_id: string | null;
   last_assigned_at: string | null;
+  current_rep_picks_used: number;
 } | null;
 
 export type AppState = {
@@ -41,7 +51,26 @@ export type AppState = {
   stats: {
     total_assignments: number;
     total_skipped: number;
+    total_failed: number;
     active_reps: number;
+    available_reps: number;
     monthly_by_rep: Record<string, number>;
+    last_webhook_at: string | null;
   };
+};
+
+export type TagRule = {
+  id: string;
+  tag: string;
+  rep_id: string;
+  rep_name: string;
+  priority: number;
+};
+
+export type DistributionPoint = { day: string; count: number };
+export type DistributionByRep = {
+  rep_id: string;
+  rep_name: string;
+  day_count: number;
+  days: DistributionPoint[];
 };

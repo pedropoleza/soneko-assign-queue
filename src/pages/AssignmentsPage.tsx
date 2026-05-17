@@ -1,20 +1,40 @@
 import { useMemo, useState } from 'react';
-import { Search } from 'lucide-react';
+import { toast } from 'sonner';
+import { Calendar, Search, SkipForward, X } from 'lucide-react';
 import { AssignmentsTable } from '@/components/AssignmentsTable';
+import { ContactDrawer } from '@/components/ContactDrawer';
+import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { SkipDialog } from '@/components/SkipDialog';
+import { api } from '@/lib/api';
+import { cn } from '@/lib/utils';
 import type { AppState, Assignment } from '@/types';
+
+type Period = 'all' | 'today' | '7d' | '30d';
 
 export function AssignmentsPage({ state, refresh }: { state: AppState; refresh: () => void }) {
   const [q, setQ] = useState('');
   const [repFilter, setRepFilter] = useState<string | undefined>(undefined);
+  const [statusFilter, setStatusFilter] = useState<string | undefined>(undefined);
+  const [period, setPeriod] = useState<Period>('all');
   const [skipTarget, setSkipTarget] = useState<Assignment | null>(null);
+  const [drawerAssignment, setDrawerAssignment] = useState<Assignment | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkSkipping, setBulkSkipping] = useState(false);
   const repsById = new Map(state.reps.map((r) => [r.id, r]));
 
   const filtered = useMemo(() => {
+    const now = Date.now();
     return state.assignments.filter((a) => {
       if (repFilter && a.assigned_rep_id !== repFilter) return false;
+      if (statusFilter && a.ghl_sync_status !== statusFilter) return false;
+      if (period !== 'all') {
+        const ageMs = now - new Date(a.created_at).getTime();
+        if (period === 'today' && ageMs > 24 * 3600 * 1000) return false;
+        if (period === '7d' && ageMs > 7 * 24 * 3600 * 1000) return false;
+        if (period === '30d' && ageMs > 30 * 24 * 3600 * 1000) return false;
+      }
       if (q) {
         const term = q.toLowerCase();
         return (
@@ -26,37 +46,109 @@ export function AssignmentsPage({ state, refresh }: { state: AppState; refresh: 
       }
       return true;
     });
-  }, [state.assignments, q, repFilter]);
+  }, [state.assignments, q, repFilter, statusFilter, period]);
+
+  async function bulkSkip() {
+    if (selected.size === 0) return;
+    setBulkSkipping(true);
+    try {
+      const res = await api.bulkSkip(Array.from(selected), null);
+      const ok = res.results.filter((r) => r.sync === 'synced').length;
+      const fail = res.results.length - ok;
+      toast.success(`${ok} reatribuídos${fail ? `, ${fail} falharam (retry automático)` : ''}`);
+      setSelected(new Set());
+      refresh();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBulkSkipping(false);
+    }
+  }
+
+  function exportCsv() {
+    const headers = ['ID', 'Contato', 'Email', 'Telefone', 'Tags', 'Vendedor', 'Status', 'Sync', 'Recebido em'];
+    const rows = filtered.map((a) => [
+      a.ghl_contact_id, a.contact_name ?? '', a.contact_email ?? '', a.contact_phone ?? '',
+      (a.contact_tags ?? []).join('|'), a.rep_name ?? '',
+      a.was_skipped ? 'Pulado' : 'Round-robin',
+      a.ghl_sync_status, a.created_at,
+    ]);
+    const csv = [headers, ...rows].map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `soneko-assignments-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
 
   return (
     <div className="space-y-4">
       <div className="card p-4 flex flex-wrap items-center gap-3">
         <div className="relative flex-1 min-w-[240px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-ink-400" />
-          <Input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Buscar por nome, email, telefone ou ID..."
-            className="pl-9"
-          />
+          <Input value={q} onChange={(e) => setQ(e.target.value)}
+                 placeholder="Buscar por nome, email, telefone ou ID..." className="pl-9" />
         </div>
-        <div className="w-56">
-          <Select
-            value={repFilter}
-            onChange={(v) => setRepFilter(v === '__all__' ? undefined : v)}
-            options={[
-              { value: '__all__', label: 'Todos os vendedores' },
-              ...state.reps.map((r) => ({ value: r.id, label: r.name })),
-            ]}
-            placeholder="Filtrar por vendedor"
-          />
+
+        <div className="flex items-center gap-1 rounded-md border border-ink-200 bg-white p-0.5">
+          {(['all', 'today', '7d', '30d'] as const).map((p) => (
+            <button key={p} onClick={() => setPeriod(p)}
+                    className={cn(
+                      'rounded px-2.5 py-1 text-xs font-medium transition-colors',
+                      period === p ? 'bg-brand-600 text-white' : 'text-ink-600 hover:bg-ink-100',
+                    )}>
+              {p === 'all' ? 'Tudo' : p === 'today' ? 'Hoje' : p === '7d' ? '7 dias' : '30 dias'}
+            </button>
+          ))}
         </div>
+
+        <div className="w-44">
+          <Select value={repFilter} onChange={(v) => setRepFilter(v === '__all__' ? undefined : v)}
+                  options={[{ value: '__all__', label: 'Todos os vendedores' }, ...state.reps.map((r) => ({ value: r.id, label: r.name }))]}
+                  placeholder="Vendedor" />
+        </div>
+        <div className="w-36">
+          <Select value={statusFilter} onChange={(v) => setStatusFilter(v === '__all__' ? undefined : v)}
+                  options={[
+                    { value: '__all__', label: 'Qualquer sync' },
+                    { value: 'synced', label: 'Sincronizado' },
+                    { value: 'pending', label: 'Pendente' },
+                    { value: 'failed', label: 'Falhou' },
+                  ]}
+                  placeholder="Sync" />
+        </div>
+        <Button variant="outline" size="sm" onClick={exportCsv}><Calendar className="h-3.5 w-3.5" /> CSV</Button>
         <div className="text-xs text-ink-500 ml-auto">
-          {filtered.length} de {state.assignments.length} atribuições
+          {filtered.length} de {state.assignments.length}
         </div>
       </div>
 
-      <AssignmentsTable assignments={filtered} onSkip={setSkipTarget} />
+      {selected.size > 0 && (
+        <div className="card px-4 py-3 flex items-center justify-between gap-3 bg-brand-50 border-brand-200">
+          <div className="text-sm text-brand-800">
+            <span className="font-semibold">{selected.size}</span> selecionado(s)
+          </div>
+          <div className="flex items-center gap-2">
+            <Button size="sm" variant="outline" onClick={() => setSelected(new Set())}>
+              <X className="h-3.5 w-3.5" /> Limpar
+            </Button>
+            <Button size="sm" onClick={bulkSkip} loading={bulkSkipping}>
+              <SkipForward className="h-3.5 w-3.5" /> Pular todos (próximo da fila)
+            </Button>
+          </div>
+        </div>
+      )}
+
+      <AssignmentsTable
+        assignments={filtered}
+        onSkip={setSkipTarget}
+        onOpenContact={setDrawerAssignment}
+        selectable
+        selected={selected}
+        onSelectChange={setSelected}
+        onRetry={refresh}
+      />
 
       <SkipDialog
         open={!!skipTarget}
@@ -66,6 +158,13 @@ export function AssignmentsPage({ state, refresh }: { state: AppState; refresh: 
         nextRep={state.next_rep}
         allReps={state.reps}
         onDone={refresh}
+      />
+
+      <ContactDrawer
+        open={!!drawerAssignment}
+        onClose={() => setDrawerAssignment(null)}
+        assignment={drawerAssignment}
+        rep={drawerAssignment ? repsById.get(drawerAssignment.assigned_rep_id ?? '') ?? null : null}
       />
     </div>
   );

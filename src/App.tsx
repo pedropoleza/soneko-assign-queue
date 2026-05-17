@@ -1,48 +1,38 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useState } from 'react';
 import { toast } from 'sonner';
 import { Topbar, type TabId } from '@/components/Topbar';
-import { Dashboard } from '@/pages/Dashboard';
-import { AssignmentsPage } from '@/pages/AssignmentsPage';
-import { RepsPage } from '@/pages/RepsPage';
-import { api } from '@/lib/api';
-import type { AppState } from '@/types';
+import { CardSkeleton, TableSkeleton } from '@/components/ui/Skeleton';
+import { useAppState } from '@/hooks/useAppState';
+import { useShortcuts } from '@/hooks/useShortcuts';
 
-const REFRESH_INTERVAL_MS = 12_000;
+const Dashboard = lazy(() => import('@/pages/Dashboard').then((m) => ({ default: m.Dashboard })));
+const AssignmentsPage = lazy(() => import('@/pages/AssignmentsPage').then((m) => ({ default: m.AssignmentsPage })));
+const RepsPage = lazy(() => import('@/pages/RepsPage').then((m) => ({ default: m.RepsPage })));
 
 export default function App() {
-  const [state, setState] = useState<AppState | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const { state, error, isLoading, refresh, mutateRep } = useAppState();
   const [tab, setTab] = useState<TabId>('dashboard');
-  const [isLoading, setIsLoading] = useState(true);
 
-  const load = useCallback(async () => {
-    try {
-      const data = await api.getState();
-      setState(data);
-      setError(null);
-    } catch (e) {
-      setError((e as Error).message);
-      toast.error(`Falha ao carregar: ${(e as Error).message}`);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    load();
-    const id = setInterval(load, REFRESH_INTERVAL_MS);
-    return () => clearInterval(id);
-  }, [load]);
-
-  const isLive = useMemo(() => !error && !!state, [error, state]);
+  useShortcuts([
+    { key: 'r', handler: () => refresh() },
+    { key: '1', handler: () => setTab('dashboard') },
+    { key: '2', handler: () => setTab('assignments') },
+    { key: '3', handler: () => setTab('reps') },
+    { key: '?', shift: true, handler: () => {
+      toast.info('Atalhos: 1/2/3 (navegar abas) · R (recarregar) · ? (ajuda)', { duration: 6000 });
+    } },
+  ]);
 
   if (isLoading && !state) {
     return (
-      <div className="min-h-screen grid place-items-center bg-ink-50">
-        <div className="flex items-center gap-2 text-ink-500">
-          <span className="h-4 w-4 rounded-full border-2 border-brand-500 border-t-transparent animate-spin" />
-          Carregando painel...
-        </div>
+      <div className="min-h-screen bg-ink-50">
+        <div className="h-14 border-b border-ink-200 bg-white" />
+        <main className="mx-auto max-w-screen-2xl px-6 py-6 space-y-5">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+            <CardSkeleton /><CardSkeleton /><CardSkeleton /><CardSkeleton />
+          </div>
+          <TableSkeleton rows={6} />
+        </main>
       </div>
     );
   }
@@ -53,10 +43,8 @@ export default function App() {
         <div className="card p-6 text-center max-w-md">
           <div className="text-sm font-medium text-ink-900">Não foi possível carregar o painel</div>
           <div className="mt-1 text-xs text-ink-500">{error ?? 'erro desconhecido'}</div>
-          <button
-            onClick={load}
-            className="mt-4 rounded-md bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-700"
-          >
+          <button onClick={refresh}
+                  className="mt-4 rounded-md bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-700">
             Tentar de novo
           </button>
         </div>
@@ -71,12 +59,14 @@ export default function App() {
         ghlLocationId={state.location.ghl_location_id}
         activeTab={tab}
         onTabChange={setTab}
-        isLive={isLive}
+        isLive={!error}
       />
       <main className="mx-auto max-w-screen-2xl px-6 py-6">
-        {tab === 'dashboard' && <Dashboard state={state} refresh={load} />}
-        {tab === 'assignments' && <AssignmentsPage state={state} refresh={load} />}
-        {tab === 'reps' && <RepsPage state={state} refresh={load} />}
+        <Suspense fallback={<TableSkeleton rows={4} />}>
+          {tab === 'dashboard' && <Dashboard state={state} refresh={refresh} />}
+          {tab === 'assignments' && <AssignmentsPage state={state} refresh={refresh} />}
+          {tab === 'reps' && <RepsPage state={state} refresh={refresh} mutateRep={mutateRep} />}
+        </Suspense>
       </main>
     </div>
   );
