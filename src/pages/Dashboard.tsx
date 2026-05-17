@@ -7,6 +7,7 @@ import { AssignmentsTable } from '@/components/AssignmentsTable';
 import { SkipDialog } from '@/components/SkipDialog';
 import { ContactDrawer } from '@/components/ContactDrawer';
 import { DistributionChart } from '@/components/DistributionChart';
+import { LastLeadCard } from '@/components/LastLeadCard';
 import type { AppState, Assignment } from '@/types';
 
 export function Dashboard({ state, refresh }: { state: AppState; refresh: () => void }) {
@@ -24,6 +25,8 @@ export function Dashboard({ state, refresh }: { state: AppState; refresh: () => 
 
   return (
     <div className="space-y-5">
+      <LastLeadCard assignment={lastAssignment} />
+
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         <StatCard
           label="Disponíveis agora"
