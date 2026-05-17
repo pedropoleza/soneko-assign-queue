@@ -1,19 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { Topbar, type TabId } from '@/components/Topbar';
-import { SecretGate } from '@/components/SecretGate';
 import { Dashboard } from '@/pages/Dashboard';
 import { AssignmentsPage } from '@/pages/AssignmentsPage';
 import { RepsPage } from '@/pages/RepsPage';
-import { SettingsPage } from '@/pages/SettingsPage';
-import { api, ApiError } from '@/lib/api';
-import { getSecret } from '@/lib/config';
+import { api } from '@/lib/api';
 import type { AppState } from '@/types';
 
 const REFRESH_INTERVAL_MS = 12_000;
 
 export default function App() {
-  const [hasSecret, setHasSecret] = useState<boolean>(() => !!getSecret());
   const [state, setState] = useState<AppState | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<TabId>('dashboard');
@@ -25,30 +21,20 @@ export default function App() {
       setState(data);
       setError(null);
     } catch (e) {
-      if (e instanceof ApiError && (e.status === 401 || e.message === 'invalid_secret')) {
-        setHasSecret(false);
-        setError('Secret inválido — entre novamente.');
-      } else {
-        setError((e as Error).message);
-        toast.error(`Falha ao carregar: ${(e as Error).message}`);
-      }
+      setError((e as Error).message);
+      toast.error(`Falha ao carregar: ${(e as Error).message}`);
     } finally {
       setIsLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    if (!hasSecret) return;
     load();
     const id = setInterval(load, REFRESH_INTERVAL_MS);
     return () => clearInterval(id);
-  }, [hasSecret, load]);
+  }, [load]);
 
   const isLive = useMemo(() => !error && !!state, [error, state]);
-
-  if (!hasSecret) {
-    return <SecretGate onAuthed={() => { setHasSecret(true); setIsLoading(true); }} />;
-  }
 
   if (isLoading && !state) {
     return (
@@ -91,7 +77,6 @@ export default function App() {
         {tab === 'dashboard' && <Dashboard state={state} refresh={load} />}
         {tab === 'assignments' && <AssignmentsPage state={state} refresh={load} />}
         {tab === 'reps' && <RepsPage state={state} refresh={load} />}
-        {tab === 'settings' && <SettingsPage state={state} />}
       </main>
     </div>
   );
