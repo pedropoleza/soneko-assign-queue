@@ -7,7 +7,6 @@ import { AssignmentsTable } from '@/components/AssignmentsTable';
 import { SkipDialog } from '@/components/SkipDialog';
 import { ContactDrawer } from '@/components/ContactDrawer';
 import { DistributionChart } from '@/components/DistributionChart';
-import { SyncStatusBar } from '@/components/SyncStatusBar';
 import type { AppState, Assignment } from '@/types';
 
 export function Dashboard({ state, refresh }: { state: AppState; refresh: () => void }) {
@@ -25,11 +24,6 @@ export function Dashboard({ state, refresh }: { state: AppState; refresh: () => 
 
   return (
     <div className="space-y-5">
-      <SyncStatusBar
-        failed={state.stats.total_failed}
-        totalRecent={state.stats.total_assignments}
-      />
-
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         <StatCard
           label="Disponíveis agora"
