@@ -51,29 +51,31 @@ export function Dashboard({ state, refresh }: { state: AppState; refresh: () => 
         <LastLeadCard assignment={lastAssignment} />
       </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <div className="lg:col-span-1"><NextRepCard rep={state.next_rep} /></div>
-        <div className="lg:col-span-2">
-          <QueueStrip
-            reps={state.reps}
-            nextRepId={state.next_rep?.id}
-            lastRepId={state.queue?.last_assigned_rep_id ?? null}
-            recentAssignment={lastAssignment}
-            cyclePicksUsed={state.queue?.current_rep_picks_used ?? 0}
-            onRefresh={refresh}
-            onSkipAssignment={openSkipForced}
+      <QueueStrip
+        reps={state.reps}
+        nextRepId={state.next_rep?.id}
+        lastRepId={state.queue?.last_assigned_rep_id ?? null}
+        recentAssignment={lastAssignment}
+        cyclePicksUsed={state.queue?.current_rep_picks_used ?? 0}
+        onRefresh={refresh}
+        onSkipAssignment={openSkipForced}
+      />
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-4">
+        <div className="lg:col-span-1 order-2 lg:order-1">
+          <NextRepCard rep={state.next_rep} />
+        </div>
+        <div className="lg:col-span-3 order-1 lg:order-2">
+          <AssignmentsTable
+            assignments={recent}
+            onSkip={setSkipTarget}
+            onOpenContact={setDrawerAssignment}
+            onRetry={refresh}
           />
         </div>
       </div>
 
       <DistributionChart days={30} />
-
-      <AssignmentsTable
-        assignments={recent}
-        onSkip={setSkipTarget}
-        onOpenContact={setDrawerAssignment}
-        onRetry={refresh}
-      />
 
       <SkipDialog
         open={!!skipTarget}
