@@ -3,13 +3,14 @@ import { Avatar } from './ui/Avatar';
 import { repStatus } from './ui/StatusDot';
 import { QueueRepPopover } from './QueueRepPopover';
 import type { Assignment, SalesRep } from '@/types';
-import { cn } from '@/lib/utils';
+import { cn, formatRelative } from '@/lib/utils';
 
 export function QueueStrip({
   reps,
   nextRepId,
   lastRepId,
   recentAssignment,
+  cyclePicksUsed,
   onRefresh,
   onSkipAssignment,
 }: {
@@ -27,30 +28,30 @@ export function QueueStrip({
         <div>
           <div className="card-title">Ordem da Fila</div>
           <div className="text-xs text-ink-500">
-            Distribuição por <strong>menos atendidos (7d)</strong> · clique para gerenciar
+            Distribuição automática por <strong>menos atendidos</strong> nos últimos 7 dias. Clique pra gerenciar.
           </div>
         </div>
-        <div className="hidden md:flex items-center gap-3 text-[10px] text-ink-500">
-          <span className="flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />Disponível</span>
-          <span className="flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full bg-amber-500" />Indisponível</span>
-          <span className="flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full bg-ink-400" />Inativo</span>
+        <div className="hidden md:flex items-center gap-3 text-[11px] text-ink-500">
+          <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-emerald-500" />Disponível</span>
+          <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-amber-500" />Indisponível</span>
+          <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-ink-400" />Inativo</span>
         </div>
       </div>
-      <div className="px-3 py-3">
-        <div className="flex flex-wrap items-stretch gap-1.5">
+      <div className="px-4 py-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-11 gap-2">
           {reps.map((rep) => {
             const isNext = rep.id === nextRepId;
             const isLast = rep.id === lastRepId;
             const status = repStatus(rep);
             const tagCount = rep.tag_rules.length;
+            const showCycle = isLast && rep.weight > 1 && (cyclePicksUsed ?? 0) > 0;
 
             const chip = (
               <button
                 type="button"
                 className={cn(
-                  'group relative flex flex-col items-center justify-center rounded-lg border transition-all',
-                  'flex-1 min-w-[82px] max-w-[120px] px-1.5 py-2',
-                  'cursor-pointer hover:scale-[1.04] hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-brand-400',
+                  'group relative flex w-full flex-col items-center rounded-xl border px-2 py-2.5 transition-all',
+                  'cursor-pointer hover:scale-[1.03] hover:shadow-md focus:outline-none focus:ring-2 focus:ring-brand-400 focus:ring-offset-1',
                   isNext
                     ? 'border-brand-300 bg-brand-50 ring-2 ring-brand-200'
                     : isLast
@@ -63,26 +64,37 @@ export function QueueStrip({
                 )}
               >
                 {isNext && (
-                  <span className="absolute -top-1.5 left-1/2 -translate-x-1/2 rounded-full bg-brand-600 px-1.5 py-0 text-[8px] font-semibold uppercase text-white shadow animate-pulse leading-tight">
+                  <span className="absolute -top-2 left-1/2 -translate-x-1/2 rounded-full bg-brand-600 px-2 py-0.5 text-[10px] font-semibold uppercase text-white shadow animate-pulse">
                     Próximo
                   </span>
                 )}
                 {tagCount > 0 && (
                   <span
-                    className="absolute -top-1 -right-1 inline-flex items-center justify-center rounded-full bg-violet-100 text-violet-700 border border-violet-200 h-4 min-w-[16px] px-1 text-[9px] font-semibold"
+                    className="absolute -top-2 right-1 inline-flex items-center gap-0.5 rounded-full bg-violet-100 text-violet-700 border border-violet-200 px-1.5 py-0.5 text-[9px] font-semibold"
                     title={rep.tag_rules.join(', ')}
                   >
-                    <Tag className="h-2 w-2 mr-0.5" />{tagCount}
+                    <Tag className="h-2.5 w-2.5" />{tagCount}
                   </span>
                 )}
-                <Avatar name={rep.name} src={rep.avatar_url} size="xs" status={status} />
-                <div className="mt-1 text-center leading-tight w-full">
-                  <div className="text-[11px] font-medium text-ink-900 truncate">
+                <Avatar name={rep.name} src={rep.avatar_url} size="sm" status={status} />
+                <div className="mt-1.5 text-center leading-tight w-full">
+                  <div className="text-[12px] font-medium text-ink-900 truncate">
                     {rep.name.split(' ')[0]}
                   </div>
-                  <div className="text-[9px] text-ink-500 tabular-nums">
-                    {rep.recent_leads}{rep.weight > 1 && ` · ${rep.weight}x`}
+                  <div className="text-[10px] text-ink-500 tabular-nums">
+                    {rep.recent_leads} lead{rep.recent_leads === 1 ? '' : 's'} · 7d
+                    {rep.weight > 1 && ` · ${rep.weight}x`}
                   </div>
+                  <div className="text-[10px] text-ink-400 truncate">
+                    {rep.last_assigned_at
+                      ? `último ${formatRelative(rep.last_assigned_at)}`
+                      : 'sem leads ainda'}
+                  </div>
+                  {showCycle && (
+                    <div className="mt-0.5 inline-flex items-center gap-0.5 rounded-full bg-brand-100 text-brand-700 px-1.5 text-[9px] font-medium">
+                      ciclo {cyclePicksUsed}/{rep.weight}
+                    </div>
+                  )}
                 </div>
               </button>
             );
