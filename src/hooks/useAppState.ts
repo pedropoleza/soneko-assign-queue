@@ -21,10 +21,12 @@ export function useAppState() {
   // Hydrate from cache immediately (stale-while-revalidate)
   const [state, setState] = useState<AppState | null>(() => readCache());
   const [isLoading, setIsLoading] = useState(!state);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const seenAssignmentIds = useRef<Set<string>>(new Set());
 
   const refresh = useCallback(async () => {
+    setIsRefreshing(true);
     try {
       const data = await api.getState();
       setState(data);
@@ -38,6 +40,7 @@ export function useAppState() {
       setError((e as Error).message);
     } finally {
       setIsLoading(false);
+      setIsRefreshing(false);
     }
   }, []);
 
@@ -97,5 +100,5 @@ export function useAppState() {
     });
   }, []);
 
-  return { state, error, isLoading, refresh, mutateAssignment, mutateRep };
+  return { state, error, isLoading, isRefreshing, refresh, mutateAssignment, mutateRep };
 }

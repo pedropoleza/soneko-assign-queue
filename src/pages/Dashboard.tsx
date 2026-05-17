@@ -7,6 +7,7 @@ import { AssignmentsTable } from '@/components/AssignmentsTable';
 import { SkipDialog } from '@/components/SkipDialog';
 import { ContactDrawer } from '@/components/ContactDrawer';
 import { DistributionChart } from '@/components/DistributionChart';
+import { LeadsTimeline } from '@/components/LeadsTimeline';
 import type { AppState, Assignment } from '@/types';
 
 export function Dashboard({ state, refresh }: { state: AppState; refresh: () => void }) {
@@ -24,6 +25,8 @@ export function Dashboard({ state, refresh }: { state: AppState; refresh: () => 
 
   return (
     <div className="space-y-5">
+      {state.recent_chips.length > 0 && <LeadsTimeline chips={state.recent_chips} />}
+
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
         <StatCard
           label="Disponíveis agora"
@@ -64,6 +67,7 @@ export function Dashboard({ state, refresh }: { state: AppState; refresh: () => 
             nextRepId={state.next_rep?.id}
             lastRepId={state.queue?.last_assigned_rep_id ?? null}
             recentAssignment={lastAssignment}
+            cyclePicksUsed={state.queue?.current_rep_picks_used ?? 0}
             onRefresh={refresh}
             onSkipAssignment={openSkipForced}
           />

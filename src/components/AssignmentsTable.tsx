@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import { AlertCircle, CheckCircle2, Clock, ExternalLink, RotateCw, SkipForward, XCircle } from 'lucide-react';
 import { Avatar } from './ui/Avatar';
 import { Badge } from './ui/Badge';
 import { Button } from './ui/Button';
-import { cn, formatRelative } from '@/lib/utils';
+import { EmptyState } from './ui/EmptyState';
+import { cn, formatAdaptive, isFresh } from '@/lib/utils';
 import { api } from '@/lib/api';
 import type { Assignment } from '@/types';
 
@@ -41,6 +42,14 @@ export function AssignmentsTable({
     }
   }
 
+  async function fastSkipToNext(a: Assignment) {
+    try {
+      const res = await api.skip(a.id, null);
+      toast.success(`Reatribuído a ${res.rep.name}`);
+      onRetry?.();
+    } catch (e) { toast.error((e as Error).message); }
+  }
+
   function toggleSelect(id: string) {
     if (!selected || !onSelectChange) return;
     const next = new Set(selected);
@@ -55,22 +64,20 @@ export function AssignmentsTable({
 
   if (assignments.length === 0) {
     return (
-      <div className="card p-10 text-center text-ink-500">
-        <div className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-ink-100">
-          <Clock className="h-6 w-6 text-ink-400" />
-        </div>
-        <div className="mt-3 text-sm font-medium text-ink-700">Nenhuma atribuição</div>
-        <div className="text-xs">Quando um contato for criado no GHL, ele aparece aqui.</div>
-      </div>
+      <EmptyState
+        icon={<Clock className="h-6 w-6" />}
+        title="Nenhuma atribuição ainda"
+        description="Assim que alguém criar um contato no GHL, ele entra na fila e é atribuído automaticamente ao próximo consultor disponível."
+      />
     );
   }
 
   return (
     <div className="card overflow-hidden">
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto max-h-[70vh] overflow-y-auto">
         <table className="w-full text-sm">
-          <thead>
-            <tr className="bg-ink-50/60 text-left text-[11px] uppercase tracking-wider text-ink-500">
+          <thead className="sticky top-0 z-10 bg-ink-50">
+            <tr className="text-left text-[11px] uppercase tracking-wider text-ink-500 shadow-[0_1px_0_0_rgb(226_232_240)]">
               {selectable && (
                 <th className="pl-5 pr-2 py-2.5 w-8">
                   <input
@@ -93,30 +100,33 @@ export function AssignmentsTable({
           <tbody>
             {assignments.map((a) => {
               const isSelected = !!selected?.has(a.id);
+              const fresh = isFresh(a.created_at, 60);
               return (
               <tr
                 key={a.id}
                 className={cn(
-                  'border-b border-ink-100 last:border-0 transition-colors cursor-pointer',
+                  'border-b border-ink-100 last:border-0 transition-colors',
                   isSelected ? 'bg-brand-50/50' : 'hover:bg-ink-50/60',
+                  fresh && 'row-fresh',
                 )}
-                onClick={(e) => {
-                  if ((e.target as HTMLElement).tagName === 'INPUT' || (e.target as HTMLElement).closest('button, a')) return;
-                  onOpenContact(a);
-                }}
               >
                 {selectable && (
-                  <td className="pl-5 pr-2 py-3 w-8" onClick={(e) => e.stopPropagation()}>
+                  <td className="pl-5 pr-2 py-3 w-8">
                     <input type="checkbox" className="rounded border-ink-300" checked={isSelected} onChange={() => toggleSelect(a.id)} />
                   </td>
                 )}
                 <td className="px-5 py-3">
-                  <div className="flex flex-col">
-                    <span className="font-medium text-ink-900 truncate max-w-[260px]">{a.contact_name ?? '—'}</span>
+                  <button
+                    onClick={() => onOpenContact(a)}
+                    className="flex flex-col text-left group/name"
+                  >
+                    <span className="font-medium text-ink-900 truncate max-w-[260px] group-hover/name:text-brand-700 group-hover/name:underline underline-offset-2 decoration-brand-300">
+                      {a.contact_name ?? '—'}
+                    </span>
                     <span className="text-[11px] text-ink-500 truncate max-w-[260px]">
                       {a.contact_email ?? a.contact_phone ?? a.ghl_contact_id}
                     </span>
-                  </div>
+                  </button>
                 </td>
                 <td className="px-3 py-3">
                   {a.rep_name ? (
@@ -154,8 +164,10 @@ export function AssignmentsTable({
                     </Badge>
                   )}
                 </td>
-                <td className="px-3 py-3 text-ink-600 text-xs">{formatRelative(a.created_at)}</td>
-                <td className="px-5 py-3 text-right" onClick={(e) => e.stopPropagation()}>
+                <td className="px-3 py-3 text-ink-600 text-xs" title={new Date(a.created_at).toLocaleString('pt-BR')}>
+                  {formatAdaptive(a.created_at)}
+                </td>
+                <td className="px-5 py-3 text-right">
                   <div className="flex items-center justify-end gap-1">
                     {a.ghl_sync_status === 'failed' && (
                       <Button size="sm" variant="ghost" onClick={() => retry(a)} loading={retrying === a.id} title="Tentar sincronizar de novo">
@@ -170,7 +182,11 @@ export function AssignmentsTable({
                     >
                       <ExternalLink className="h-3 w-3" />
                     </a>
-                    <Button size="sm" variant="outline" onClick={() => onSkip(a)}>
+                    <Button
+                      size="sm" variant="outline"
+                      onClick={(e) => e.shiftKey ? fastSkipToNext(a) : onSkip(a)}
+                      title="Click: escolher destino · Shift+Click: pular pro próximo"
+                    >
                       <SkipForward className="h-3 w-3" />
                       Pular
                     </Button>

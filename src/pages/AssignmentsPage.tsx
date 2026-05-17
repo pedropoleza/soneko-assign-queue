@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { toast } from 'sonner';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { toast } from '@/lib/toast';
 import { Calendar, Search, SkipForward, X } from 'lucide-react';
 import { AssignmentsTable } from '@/components/AssignmentsTable';
 import { ContactDrawer } from '@/components/ContactDrawer';
@@ -22,7 +22,19 @@ export function AssignmentsPage({ state, refresh }: { state: AppState; refresh: 
   const [drawerAssignment, setDrawerAssignment] = useState<Assignment | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkSkipping, setBulkSkipping] = useState(false);
+  const searchRef = useRef<HTMLInputElement>(null);
   const repsById = new Map(state.reps.map((r) => [r.id, r]));
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === '/' && document.activeElement?.tagName !== 'INPUT') {
+        e.preventDefault();
+        searchRef.current?.focus();
+      }
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   const filtered = useMemo(() => {
     const now = Date.now();
@@ -87,8 +99,8 @@ export function AssignmentsPage({ state, refresh }: { state: AppState; refresh: 
       <div className="card p-4 flex flex-wrap items-center gap-3">
         <div className="relative flex-1 min-w-[240px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-ink-400" />
-          <Input value={q} onChange={(e) => setQ(e.target.value)}
-                 placeholder="Buscar por nome, email, telefone ou ID..." className="pl-9" />
+          <Input ref={searchRef} value={q} onChange={(e) => setQ(e.target.value)}
+                 placeholder="Buscar por nome, email, telefone ou ID... (atalho: /)" className="pl-9" />
         </div>
 
         <div className="flex items-center gap-1 rounded-md border border-ink-200 bg-white p-0.5">

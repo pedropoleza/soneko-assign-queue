@@ -36,6 +36,28 @@ export function formatDateTime(iso: string | null | undefined): string {
   });
 }
 
+// Adaptive datetime: today = HH:MM, this week = "Ter 14:32", older = "12/05 14:32"
+export function formatAdaptive(iso: string | null | undefined): string {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  const now = new Date();
+  const sameDay = d.toDateString() === now.toDateString();
+  const ageDays = (now.getTime() - d.getTime()) / 86400000;
+  const time = d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  if (sameDay) return time;
+  if (ageDays < 7) {
+    const dow = d.toLocaleDateString('pt-BR', { weekday: 'short' }).replace('.', '');
+    return `${dow.charAt(0).toUpperCase() + dow.slice(1)} ${time}`;
+  }
+  return `${d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })} ${time}`;
+}
+
+// True if iso is within the last `seconds` seconds
+export function isFresh(iso: string | null | undefined, seconds = 60): boolean {
+  if (!iso) return false;
+  return Date.now() - new Date(iso).getTime() < seconds * 1000;
+}
+
 // Deterministic color from a string (used for avatar fallbacks)
 export function colorFromString(s: string): string {
   let h = 0;

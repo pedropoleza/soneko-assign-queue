@@ -15,6 +15,16 @@ export type SalesRep = {
   available: boolean;
   recent_leads: number;
   fair_score: number;
+  last_assigned_at: string | null;
+  tag_rules: string[];
+};
+
+export type RecentChip = {
+  id: string;
+  rep_name: string | null;
+  contact_name: string | null;
+  created_at: string;
+  was_skipped: boolean;
 };
 
 export type Assignment = {
@@ -50,6 +60,7 @@ export type AppState = {
   queue: Queue;
   next_rep: SalesRep | null;
   assignments: Assignment[];
+  recent_chips: RecentChip[];
   stats: {
     total_assignments: number;
     total_skipped: number;
@@ -57,6 +68,7 @@ export type AppState = {
     active_reps: number;
     available_reps: number;
     monthly_by_rep: Record<string, number>;
+    previous_monthly_by_rep: Record<string, number>;
     last_webhook_at: string | null;
     window_days: number;
   };

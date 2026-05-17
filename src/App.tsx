@@ -10,7 +10,7 @@ const AssignmentsPage = lazy(() => import('@/pages/AssignmentsPage').then((m) =>
 const RepsPage = lazy(() => import('@/pages/RepsPage').then((m) => ({ default: m.RepsPage })));
 
 export default function App() {
-  const { state, error, isLoading, refresh, mutateRep } = useAppState();
+  const { state, error, isLoading, isRefreshing, refresh, mutateRep } = useAppState();
   const [tab, setTab] = useState<TabId>('dashboard');
 
   useShortcuts([
@@ -60,6 +60,7 @@ export default function App() {
         activeTab={tab}
         onTabChange={setTab}
         isLive={!error}
+        isRefreshing={isRefreshing}
       />
       <main className="mx-auto max-w-screen-2xl px-6 py-6">
         <Suspense fallback={<TableSkeleton rows={4} />}>

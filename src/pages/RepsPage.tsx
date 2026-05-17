@@ -14,6 +14,7 @@ export function RepsPage({
       <RepsManager
         reps={state.reps}
         monthlyByRep={state.stats.monthly_by_rep}
+        previousMonthlyByRep={state.stats.previous_monthly_by_rep}
         onChange={refresh}
         mutateRep={mutateRep}
       />

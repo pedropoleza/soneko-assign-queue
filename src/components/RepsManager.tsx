@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { toast } from 'sonner';
-import { Clock, GripVertical, Mail, Plane, Settings2 } from 'lucide-react';
+import { toast } from '@/lib/toast';
+import { Check, Clock, GripVertical, Mail, Plane, Settings2 } from 'lucide-react';
+import { TrendArrow } from './ui/TrendArrow';
 import {
   DndContext, type DragEndEvent,
   KeyboardSensor, PointerSensor, closestCenter, useSensor, useSensors,
@@ -23,11 +24,13 @@ import type { SalesRep } from '@/types';
 export function RepsManager({
   reps,
   monthlyByRep,
+  previousMonthlyByRep,
   onChange,
   mutateRep,
 }: {
   reps: SalesRep[];
   monthlyByRep: Record<string, number>;
+  previousMonthlyByRep: Record<string, number>;
   onChange: () => void;
   mutateRep: (id: string, patch: Partial<SalesRep>) => void;
 }) {
@@ -107,9 +110,11 @@ export function RepsManager({
                     key={rep.id}
                     rep={rep}
                     monthly={monthlyByRep[rep.id] ?? 0}
+                    prevMonthly={previousMonthlyByRep[rep.id] ?? 0}
                     busy={busy === rep.id}
                     onToggle={() => toggle(rep)}
                     onEdit={() => setEditing(rep)}
+                    mutateRep={mutateRep}
                   />
                 ))}
               </tbody>
@@ -129,16 +134,28 @@ export function RepsManager({
 }
 
 function SortableRow({
-  rep, monthly, busy, onToggle, onEdit,
+  rep, monthly, prevMonthly, busy, onToggle, onEdit, mutateRep,
 }: {
-  rep: SalesRep; monthly: number; busy: boolean;
+  rep: SalesRep; monthly: number; prevMonthly: number; busy: boolean;
   onToggle: () => void; onEdit: () => void;
+  mutateRep: (id: string, patch: Partial<SalesRep>) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: rep.id });
   const style = { transform: CSS.Transform.toString(transform), transition };
   const onVacation = rep.vacation_start && rep.vacation_end
     && new Date(rep.vacation_start) <= new Date() && new Date(rep.vacation_end) >= new Date();
   const hasHours = rep.working_hours_start && rep.working_hours_end;
+  const [editingWeight, setEditingWeight] = useState(false);
+  const [weightDraft, setWeightDraft] = useState(rep.weight);
+
+  async function saveWeight() {
+    const w = Math.max(1, Math.min(10, weightDraft));
+    setEditingWeight(false);
+    if (w === rep.weight) return;
+    mutateRep(rep.id, { weight: w });
+    try { await api.updateRepSettings(rep.id, { weight: w }); toast.success(`${rep.name}: peso ${w}x`); }
+    catch (e) { mutateRep(rep.id, { weight: rep.weight }); toast.error((e as Error).message); }
+  }
 
   return (
     <tr ref={setNodeRef} style={style}
@@ -153,7 +170,8 @@ function SortableRow({
       </td>
       <td className="px-3 py-3">
         <div className="flex items-center gap-3">
-          <Avatar name={rep.name} src={rep.avatar_url} size="sm" />
+          <Avatar name={rep.name} src={rep.avatar_url} size="sm"
+                  status={!rep.active ? 'inactive' : !rep.available ? 'unavailable' : 'available'} />
           <div className="min-w-0">
             <div className="font-medium text-ink-900 truncate">{rep.name}</div>
             {rep.email && (
@@ -165,7 +183,26 @@ function SortableRow({
         </div>
       </td>
       <td className="px-3 py-3">
-        <Badge tone={rep.weight > 1 ? 'brand' : 'neutral'}>{rep.weight}x</Badge>
+        {editingWeight ? (
+          <div className="inline-flex items-center gap-1">
+            <input
+              type="number" min={1} max={10} autoFocus
+              value={weightDraft}
+              onChange={(e) => setWeightDraft(+e.target.value || 1)}
+              onKeyDown={(e) => { if (e.key === 'Enter') saveWeight(); if (e.key === 'Escape') { setEditingWeight(false); setWeightDraft(rep.weight); } }}
+              onBlur={saveWeight}
+              className="h-6 w-14 rounded border border-brand-300 px-1.5 text-sm font-medium text-brand-700 focus:outline-none focus:ring-2 focus:ring-brand-200"
+            />
+            <Check className="h-3 w-3 text-emerald-500" />
+          </div>
+        ) : (
+          <button onClick={() => { setEditingWeight(true); setWeightDraft(rep.weight); }}
+                  title="Click para editar">
+            <Badge tone={rep.weight > 1 ? 'brand' : 'neutral'} className="cursor-pointer hover:ring-2 hover:ring-brand-200">
+              {rep.weight}x
+            </Badge>
+          </button>
+        )}
       </td>
       <td className="px-3 py-3">
         <div className="flex flex-wrap gap-1">
@@ -183,8 +220,10 @@ function SortableRow({
         <span className="ml-1 text-[10px] text-ink-500">leads</span>
       </td>
       <td className="px-3 py-3">
-        <span className="font-semibold text-ink-900">{monthly}</span>
-        <span className="ml-1 text-xs text-ink-500">leads</span>
+        <div className="flex items-center gap-2">
+          <span className="font-semibold text-ink-900">{monthly}</span>
+          <TrendArrow current={monthly} previous={prevMonthly} />
+        </div>
       </td>
       <td className="px-3 py-3">
         {!rep.active ? <Badge tone="neutral">Inativo</Badge>

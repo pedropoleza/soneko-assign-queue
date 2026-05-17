@@ -13,9 +13,15 @@
 @layer utilities {
   @keyframes fade-in { from { opacity: 0 } to { opacity: 1 } }
   @keyframes slide-in-from-right { from { transform: translateX(100%) } to { transform: translateX(0) } }
+  @keyframes slide { 0% { transform: translateX(-100%) } 100% { transform: translateX(400%) } }
+  @keyframes new-row-flash {
+    0% { background-color: rgb(254 252 232); }
+    100% { background-color: transparent; }
+  }
   .animate-in { animation-duration: 200ms; animation-fill-mode: both; }
   .fade-in { animation-name: fade-in; }
   .slide-in-from-right { animation-name: slide-in-from-right; }
+  .row-fresh { animation: new-row-flash 4s ease-out 1; }
 }
 
 @layer components {

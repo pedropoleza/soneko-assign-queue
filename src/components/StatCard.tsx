@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { cn } from '@/lib/utils';
+import { AnimatedNumber } from './ui/AnimatedNumber';
 
 export function StatCard({
   label,
@@ -14,6 +15,7 @@ export function StatCard({
   icon?: ReactNode;
   tone?: 'neutral' | 'brand' | 'success' | 'warn';
 }) {
+  const renderValue = typeof value === 'number' ? <AnimatedNumber value={value} /> : value;
   const tones = {
     neutral: 'text-ink-700 bg-ink-100',
     brand: 'text-brand-700 bg-brand-100',
@@ -25,7 +27,7 @@ export function StatCard({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="text-[11px] font-medium uppercase tracking-wider text-ink-500">{label}</div>
-          <div className="mt-1 text-2xl font-semibold tracking-tight text-ink-900">{value}</div>
+          <div className="mt-1 text-2xl font-semibold tracking-tight text-ink-900 tabular-nums">{renderValue}</div>
           {hint && <div className="mt-1 text-xs text-ink-500">{hint}</div>}
         </div>
         {icon && (
