@@ -75,7 +75,7 @@ export function Dashboard({ state, refresh }: { state: AppState; refresh: () => 
         </div>
       </div>
 
-      <DistributionChart days={30} />
+      <DistributionChart days={30} reps={state.reps} />
 
       <SkipDialog
         open={!!skipTarget}

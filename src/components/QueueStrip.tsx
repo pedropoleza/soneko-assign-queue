@@ -1,4 +1,4 @@
-import { Tag } from 'lucide-react';
+import { Ban, Tag } from 'lucide-react';
 import { Avatar } from './ui/Avatar';
 import { repStatus } from './ui/StatusDot';
 import { QueueRepPopover } from './QueueRepPopover';
@@ -46,6 +46,7 @@ export function QueueStrip({
             const tagCount = rep.tag_rules.length;
             const showCycle = isLast && rep.weight > 1 && (cyclePicksUsed ?? 0) > 0;
 
+            const isInactive = status === 'inactive';
             const chip = (
               <button
                 type="button"
@@ -58,17 +59,33 @@ export function QueueStrip({
                     ? 'border-ink-300 bg-ink-50'
                     : status === 'unavailable'
                     ? 'border-amber-200 bg-amber-50/40'
-                    : status === 'inactive'
-                    ? 'border-ink-200 bg-ink-50 opacity-60'
+                    : isInactive
+                    ? 'border-rose-200 bg-rose-50/40 saturate-0'
                     : 'border-ink-200 bg-white hover:border-brand-300',
                 )}
               >
+                {/* Inactive: diagonal "OFF" stripe overlay */}
+                {isInactive && (
+                  <span
+                    aria-hidden
+                    className="pointer-events-none absolute inset-0 overflow-hidden rounded-xl"
+                    style={{
+                      backgroundImage:
+                        'repeating-linear-gradient(135deg, rgba(244,63,94,0.06) 0 6px, transparent 6px 14px)',
+                    }}
+                  />
+                )}
                 {isNext && (
                   <span className="absolute -top-2 left-1/2 -translate-x-1/2 rounded-full bg-brand-600 px-2 py-0.5 text-[10px] font-semibold uppercase text-white shadow animate-pulse">
                     Próximo
                   </span>
                 )}
-                {tagCount > 0 && (
+                {isInactive && (
+                  <span className="absolute -top-2 left-1/2 -translate-x-1/2 inline-flex items-center gap-0.5 rounded-full bg-rose-600 px-2 py-0.5 text-[10px] font-bold uppercase text-white shadow">
+                    <Ban className="h-2.5 w-2.5" /> Fora
+                  </span>
+                )}
+                {tagCount > 0 && !isInactive && (
                   <span
                     className="absolute -top-2 right-1 inline-flex items-center gap-0.5 rounded-full bg-violet-100 text-violet-700 border border-violet-200 px-1.5 py-0.5 text-[9px] font-semibold"
                     title={rep.tag_rules.join(', ')}
@@ -76,17 +93,24 @@ export function QueueStrip({
                     <Tag className="h-2.5 w-2.5" />{tagCount}
                   </span>
                 )}
-                <Avatar name={rep.name} src={rep.avatar_url} size="sm" status={status} />
-                <div className="mt-1.5 text-center leading-tight w-full">
-                  <div className="text-[12px] font-medium text-ink-900 truncate">
+                <div className={cn('relative', isInactive && 'grayscale')}>
+                  <Avatar name={rep.name} src={rep.avatar_url} size="sm" status={status} />
+                </div>
+                <div className="mt-1.5 text-center leading-tight w-full relative">
+                  <div className={cn(
+                    'text-[12px] font-medium truncate',
+                    isInactive ? 'text-ink-500 line-through decoration-rose-400/60 decoration-1' : 'text-ink-900',
+                  )}>
                     {rep.name.split(' ')[0]}
                   </div>
                   <div className="text-[10px] text-ink-500 tabular-nums">
                     {rep.recent_leads} lead{rep.recent_leads === 1 ? '' : 's'} · 7d
                     {rep.weight > 1 && ` · ${rep.weight}x`}
                   </div>
-                  <div className="text-[10px] text-ink-400 truncate">
-                    {rep.last_assigned_at
+                  <div className={cn('text-[10px] truncate', isInactive ? 'text-rose-600 font-medium' : 'text-ink-400')}>
+                    {isInactive
+                      ? 'não recebe leads'
+                      : rep.last_assigned_at
                       ? `último ${formatRelative(rep.last_assigned_at)}`
                       : 'sem leads ainda'}
                   </div>

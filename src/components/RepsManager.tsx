@@ -159,7 +159,11 @@ function SortableRow({
 
   return (
     <tr ref={setNodeRef} style={style}
-        className={cn('border-b border-ink-100 last:border-0 transition-colors hover:bg-ink-50/60', isDragging && 'bg-brand-50/50 shadow-lg')}>
+        className={cn(
+          'border-b border-ink-100 last:border-0 transition-colors hover:bg-ink-50/60',
+          isDragging && 'bg-brand-50/50 shadow-lg',
+          !rep.active && 'bg-rose-50/30',
+        )}>
       <td className="pl-5 pr-2 py-3">
         <button {...attributes} {...listeners} className="cursor-grab text-ink-300 hover:text-ink-600 active:cursor-grabbing">
           <GripVertical className="h-4 w-4" />
@@ -170,10 +174,17 @@ function SortableRow({
       </td>
       <td className="px-3 py-3">
         <div className="flex items-center gap-3">
-          <Avatar name={rep.name} src={rep.avatar_url} size="sm"
-                  status={!rep.active ? 'inactive' : !rep.available ? 'unavailable' : 'available'} />
+          <div className={cn(!rep.active && 'grayscale')}>
+            <Avatar name={rep.name} src={rep.avatar_url} size="sm"
+                    status={!rep.active ? 'inactive' : !rep.available ? 'unavailable' : 'available'} />
+          </div>
           <div className="min-w-0">
-            <div className="font-medium text-ink-900 truncate">{rep.name}</div>
+            <div className={cn(
+              'font-medium truncate',
+              !rep.active
+                ? 'text-ink-500 line-through decoration-rose-400/60 decoration-1'
+                : 'text-ink-900',
+            )}>{rep.name}</div>
             {rep.email && (
               <div className="flex items-center gap-1 text-[11px] text-ink-500 truncate">
                 <Mail className="h-3 w-3" /> {rep.email}
@@ -226,8 +237,10 @@ function SortableRow({
         </div>
       </td>
       <td className="px-3 py-3">
-        {!rep.active ? <Badge tone="neutral">Inativo</Badge>
-          : !rep.available ? <Badge tone="warn">Indisponível</Badge>
+        {!rep.active
+          ? <Badge tone="danger" className="font-semibold uppercase tracking-wide">Fora da fila</Badge>
+          : !rep.available
+          ? <Badge tone="warn">Indisponível</Badge>
           : <Badge tone="success">Ativo</Badge>}
       </td>
       <td className="px-5 py-3">
