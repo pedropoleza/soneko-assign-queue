@@ -25,7 +25,7 @@ export function QueueStrip({
         <div>
           <div className="card-title">Ordem da Fila</div>
           <div className="text-xs text-ink-500">
-            Clique em qualquer vendedor para definir como próximo ou avançar a fila.
+            Distribuição automática por <strong>menos atendidos</strong> nos últimos 7 dias. Clique pra gerenciar.
           </div>
         </div>
         <div className="flex items-center gap-3 text-[11px] text-ink-500">
@@ -75,7 +75,10 @@ export function QueueStrip({
                   <div className="text-[12px] font-medium text-ink-900 truncate max-w-[100px]">
                     {rep.name.split(' ')[0]}
                   </div>
-                  <div className="text-[10px] text-ink-500">#{rep.position}{rep.weight > 1 && ` · ${rep.weight}x`}</div>
+                  <div className="text-[10px] text-ink-500">
+                    {rep.recent_leads} lead{rep.recent_leads === 1 ? '' : 's'} · 7d
+                    {rep.weight > 1 && ` · ${rep.weight}x`}
+                  </div>
                 </div>
               </button>
             );

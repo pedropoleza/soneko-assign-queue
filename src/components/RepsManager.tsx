@@ -95,6 +95,7 @@ export function RepsManager({
                   <th className="px-3 py-2.5 font-medium">Consultor</th>
                   <th className="px-3 py-2.5 font-medium">Peso</th>
                   <th className="px-3 py-2.5 font-medium">Disponibilidade</th>
+                  <th className="px-3 py-2.5 font-medium">7d</th>
                   <th className="px-3 py-2.5 font-medium">Mês</th>
                   <th className="px-3 py-2.5 font-medium">Status</th>
                   <th className="px-5 py-2.5 font-medium text-right">Ações</th>
@@ -176,6 +177,10 @@ function SortableRow({
           )}
           {!onVacation && !hasHours && <span className="text-[11px] text-ink-400">24/7</span>}
         </div>
+      </td>
+      <td className="px-3 py-3">
+        <span className="font-semibold text-ink-900">{rep.recent_leads}</span>
+        <span className="ml-1 text-[10px] text-ink-500">leads</span>
       </td>
       <td className="px-3 py-3">
         <span className="font-semibold text-ink-900">{monthly}</span>

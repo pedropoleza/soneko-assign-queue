@@ -82,8 +82,8 @@ export function QueueRepPopover({
             <div className="min-w-0 flex-1">
               <div className="text-sm font-semibold text-ink-900 truncate">{rep.name}</div>
               <div className="text-[11px] text-ink-500">
-                #{rep.position} · peso {rep.weight}x
-                {isNext && <span className="ml-1.5 text-brand-700 font-medium">· próximo atual</span>}
+                {rep.recent_leads} leads/7d · peso {rep.weight}x
+                {isNext && <span className="ml-1.5 text-brand-700 font-medium">· próximo</span>}
               </div>
             </div>
           </div>

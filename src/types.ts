@@ -13,6 +13,8 @@ export type SalesRep = {
   working_hours_end: string | null;
   timezone: string;
   available: boolean;
+  recent_leads: number;
+  fair_score: number;
 };
 
 export type Assignment = {
@@ -56,6 +58,7 @@ export type AppState = {
     available_reps: number;
     monthly_by_rep: Record<string, number>;
     last_webhook_at: string | null;
+    window_days: number;
   };
 };
 
