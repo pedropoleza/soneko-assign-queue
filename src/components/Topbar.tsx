@@ -1,4 +1,4 @@
-import { CircleDot, Menu, Webhook } from 'lucide-react';
+import { CircleDot, Menu } from 'lucide-react';
 import { useState } from 'react';
 import { Badge } from './ui/Badge';
 import { cn } from '@/lib/utils';
@@ -39,15 +39,12 @@ export function Topbar({
       <div className="mx-auto flex h-14 max-w-screen-2xl items-center justify-between gap-3 px-4 sm:px-6">
         <div className="flex min-w-0 items-center gap-3 sm:gap-4">
           <div className="flex items-center gap-2.5 shrink-0">
-            <div className="grid h-8 w-8 place-items-center rounded-lg bg-gradient-to-br from-brand-500 to-brand-700 text-white">
-              <Webhook className="h-4 w-4" />
-            </div>
-            <div className="hidden sm:block leading-tight">
-              <div className="text-sm font-semibold text-ink-900">Soneko Assign Queue</div>
-              <div className="text-[11px] text-ink-500">Distribuição round-robin de leads</div>
-            </div>
+            <img src="/soneko-logo.png" alt="Soneko" className="h-6 w-auto" />
+            <span className="hidden md:inline-flex items-center text-[11px] text-ink-400">
+              · <span className="ml-1 text-ink-600 font-medium">Fila de Atribuições</span>
+            </span>
           </div>
-          <Badge tone="brand" className="hidden sm:inline-flex">
+          <Badge tone="brand" className="hidden lg:inline-flex">
             <CircleDot className="h-3 w-3" />
             {locationName}
             <span className="ml-1 font-mono text-[10px] text-brand-500">{ghlLocationId.slice(0, 8)}…</span>
