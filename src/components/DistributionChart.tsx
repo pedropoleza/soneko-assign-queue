@@ -5,7 +5,7 @@ import { colorFromString } from '@/lib/utils';
 import type { DistributionByRep, SalesRep } from '@/types';
 
 export function DistributionChart({
-  days = 30,
+  days = 7,
   reps,
 }: {
   days?: number;
@@ -49,43 +49,45 @@ export function DistributionChart({
       <div className="card-header">
         <div>
           <div className="card-title flex items-center gap-2">
-            <BarChart3 className="h-4 w-4 text-ink-400" /> Distribuição (últimos {days} dias)
+            <BarChart3 className="h-4 w-4 text-ink-400" /> Distribuição da semana
           </div>
           <div className="text-xs text-ink-500">
-            Leads por consultor · total {total} no período
+            Últimos {days} dias · {total} lead{total === 1 ? '' : 's'} total
           </div>
         </div>
       </div>
-      <div className="px-5 py-5">
+      <div className="px-5 py-4">
         {!merged ? (
-          <div className="space-y-2.5">
+          <div className="space-y-2">
             {Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} className="h-7 rounded bg-ink-100 animate-pulse" />
+              <div key={i} className="h-5 rounded bg-ink-100 animate-pulse" />
             ))}
           </div>
         ) : merged.length === 0 ? (
-          <div className="py-10 text-center text-sm text-ink-500">Sem dados ainda nesse período.</div>
+          <div className="py-8 text-center text-sm text-ink-500">Sem dados ainda nesse período.</div>
         ) : (
-          <div className="space-y-2.5">
+          <div className="space-y-2">
             {merged.map((r) => {
-              const pct = (r.day_count / max) * 100;
+              const pct = total > 0 ? (r.day_count / max) * 100 : 0;
               const color = colorFromString(r.rep_name);
               const totalPct = total > 0 ? Math.round((r.day_count / total) * 100) : 0;
               return (
-                <div key={r.rep_id} className="grid grid-cols-[180px_1fr_70px] items-center gap-3 text-sm">
+                <div key={r.rep_id} className="grid grid-cols-[160px_1fr_64px] items-center gap-3 text-sm">
                   <span className="truncate text-ink-700 font-medium">{r.rep_name}</span>
-                  <div className="h-7 rounded-md bg-ink-100 overflow-hidden relative">
-                    <div className={`absolute inset-y-0 left-0 ${color} rounded-md transition-all duration-500`}
-                         style={{ width: `${Math.max(pct, r.day_count > 0 ? 3 : 0)}%` }} />
-                    {r.day_count > 0 && pct > 12 && (
-                      <span className="absolute inset-y-0 left-2.5 flex items-center text-[11px] font-semibold text-white">
+                  <div className="h-5 rounded bg-ink-100/80 overflow-hidden relative">
+                    {r.day_count > 0 && (
+                      <div className={`absolute inset-y-0 left-0 ${color} rounded transition-all duration-500`}
+                           style={{ width: `${pct}%` }} />
+                    )}
+                    {r.day_count > 0 && pct > 18 && (
+                      <span className="absolute inset-y-0 left-2 flex items-center text-[10px] font-semibold text-white">
                         {r.day_count}
                       </span>
                     )}
                   </div>
-                  <div className="text-right tabular-nums">
+                  <div className="text-right tabular-nums text-xs">
                     <span className="font-semibold text-ink-900">{r.day_count}</span>
-                    <span className="ml-1 text-[10px] text-ink-500">({totalPct}%)</span>
+                    {total > 0 && <span className="ml-1 text-[10px] text-ink-500">{totalPct}%</span>}
                   </div>
                 </div>
               );
