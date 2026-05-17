@@ -25,9 +25,7 @@ export function Dashboard({ state, refresh }: { state: AppState; refresh: () => 
 
   return (
     <div className="space-y-5">
-      <LastLeadCard assignment={lastAssignment} />
-
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
         <StatCard
           label="Disponíveis agora"
           value={state.stats.available_reps}
@@ -50,6 +48,7 @@ export function Dashboard({ state, refresh }: { state: AppState; refresh: () => 
           icon={<SkipForward className="h-4 w-4" />}
           tone="warn"
         />
+        <LastLeadCard assignment={lastAssignment} />
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
