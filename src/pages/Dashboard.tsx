@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { CheckCircle2, SkipForward, Users2, XCircle, Zap } from 'lucide-react';
+import { SkipForward, Users2, Zap } from 'lucide-react';
 import { NextRepCard } from '@/components/NextRepCard';
 import { QueueStrip } from '@/components/QueueStrip';
 import { StatCard } from '@/components/StatCard';
@@ -7,7 +7,7 @@ import { AssignmentsTable } from '@/components/AssignmentsTable';
 import { SkipDialog } from '@/components/SkipDialog';
 import { ContactDrawer } from '@/components/ContactDrawer';
 import { DistributionChart } from '@/components/DistributionChart';
-import { LeadsTimeline } from '@/components/LeadsTimeline';
+import { SyncStatusBar } from '@/components/SyncStatusBar';
 import type { AppState, Assignment } from '@/types';
 
 export function Dashboard({ state, refresh }: { state: AppState; refresh: () => void }) {
@@ -25,9 +25,12 @@ export function Dashboard({ state, refresh }: { state: AppState; refresh: () => 
 
   return (
     <div className="space-y-5">
-      {state.recent_chips.length > 0 && <LeadsTimeline chips={state.recent_chips} />}
+      <SyncStatusBar
+        failed={state.stats.total_failed}
+        totalRecent={state.stats.total_assignments}
+      />
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         <StatCard
           label="Disponíveis agora"
           value={state.stats.available_reps}
@@ -49,13 +52,6 @@ export function Dashboard({ state, refresh }: { state: AppState; refresh: () => 
             : '—'}
           icon={<SkipForward className="h-4 w-4" />}
           tone="warn"
-        />
-        <StatCard
-          label="Sync com falha"
-          value={state.stats.total_failed}
-          hint={state.stats.total_failed > 0 ? 'retry automático rodando' : 'tudo sincronizado'}
-          icon={state.stats.total_failed > 0 ? <XCircle className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
-          tone={state.stats.total_failed > 0 ? 'warn' : 'success'}
         />
       </div>
 
