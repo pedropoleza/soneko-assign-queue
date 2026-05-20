@@ -1,11 +1,12 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { toast } from '@/lib/toast';
-import { Shuffle, UserCheck, X } from 'lucide-react';
+import { Check, Shuffle, UserCheck, X } from 'lucide-react';
 import { Button } from './ui/Button';
 import { Dialog } from './ui/Dialog';
 import { Select } from './ui/Select';
 import { Avatar } from './ui/Avatar';
 import { api } from '@/lib/api';
+import { cn } from '@/lib/utils';
 import type { SalesRep } from '@/types';
 
 export function BulkActionsBar({
@@ -23,10 +24,19 @@ export function BulkActionsBar({
   const [openSingle, setOpenSingle] = useState(false);
   const [openRandom, setOpenRandom] = useState(false);
   const [targetRep, setTargetRep] = useState<string | undefined>(undefined);
+  const [pool, setPool] = useState<Set<string>>(new Set());
+
+  const activeReps = reps.filter((r) => r.active);
+
+  // Default the divide pool to all active reps whenever the modal opens
+  useEffect(() => {
+    if (openRandom) setPool(new Set(activeReps.map((r) => r.id)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openRandom]);
 
   if (selected.size === 0) return null;
   const ids = Array.from(selected);
-  const activeReps = reps.filter((r) => r.active);
+  const poolCount = pool.size;
 
   async function sendToOne() {
     if (!targetRep) { toast.error('Escolha um vendedor'); return; }
@@ -44,11 +54,20 @@ export function BulkActionsBar({
     finally { setBusy(null); }
   }
 
+  function togglePool(id: string) {
+    setPool((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+
   async function divideAmong() {
+    if (pool.size === 0) { toast.error('Selecione ao menos um vendedor'); return; }
     setBusy('random');
     setOpenRandom(false);
     try {
-      const res = await api.bulkRandom(ids);
+      const res = await api.bulkRandom(ids, Array.from(pool));
       const ok = res.results.filter((r) => r.sync === 'synced').length;
       const fail = res.results.length - ok;
       const summary = Object.entries(res.summary)
@@ -117,24 +136,60 @@ export function BulkActionsBar({
         </div>
       </Dialog>
 
-      {/* Divide randomly among active reps */}
+      {/* Divide randomly among selected active reps */}
       <Dialog
         open={openRandom}
         onOpenChange={setOpenRandom}
         title="Dividir entre vendedores"
-        description={`${selected.size} lead${selected.size === 1 ? '' : 's'} ${selected.size === 1 ? 'será distribuído' : 'serão distribuídos'} entre os ${activeReps.length} consultores ativos em ordem aleatória balanceada.`}
+        description={`${selected.size} lead${selected.size === 1 ? '' : 's'} ${selected.size === 1 ? 'será distribuído' : 'serão distribuídos'} aleatoriamente entre os vendedores marcados abaixo.`}
       >
         <div className="space-y-3">
-          <div className="rounded-md bg-ink-50 px-3 py-2.5 text-xs text-ink-600">
-            <div className="font-medium text-ink-700 mb-1">Como funciona</div>
-            A lista de consultores ativos é embaralhada uma vez e os leads são
-            distribuídos round-robin a partir dela — cada consultor recebe ao
-            menos um antes de qualquer um receber o segundo.
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-medium text-ink-600">
+              Vendedores na divisão ({poolCount}/{activeReps.length})
+            </label>
+            <div className="flex gap-2 text-[11px]">
+              <button className="text-brand-600 hover:underline" onClick={() => setPool(new Set(activeReps.map((r) => r.id)))}>
+                Todos
+              </button>
+              <span className="text-ink-300">·</span>
+              <button className="text-brand-600 hover:underline" onClick={() => setPool(new Set())}>
+                Nenhum
+              </button>
+            </div>
+          </div>
+          <div className="max-h-64 overflow-y-auto rounded-md border border-ink-200 divide-y divide-ink-100">
+            {activeReps.map((r) => {
+              const checked = pool.has(r.id);
+              return (
+                <button
+                  key={r.id}
+                  onClick={() => togglePool(r.id)}
+                  className={cn(
+                    'flex w-full items-center gap-2.5 px-3 py-2 text-left transition-colors',
+                    checked ? 'bg-brand-50/60' : 'hover:bg-ink-50',
+                  )}
+                >
+                  <span className={cn(
+                    'grid h-4 w-4 place-items-center rounded border transition-colors',
+                    checked ? 'bg-brand-600 border-brand-600 text-white' : 'border-ink-300 bg-white',
+                  )}>
+                    {checked && <Check className="h-3 w-3" />}
+                  </span>
+                  <Avatar name={r.name} src={r.avatar_url} size="xs" />
+                  <span className="flex-1 text-sm text-ink-800 truncate">{r.name}</span>
+                  <span className="text-[11px] text-ink-500 tabular-nums">{r.recent_leads} leads/7d</span>
+                </button>
+              );
+            })}
+          </div>
+          <div className="rounded-md bg-ink-50 px-3 py-2 text-[11px] text-ink-500">
+            Os marcados são embaralhados e recebem os leads round-robin — cada um recebe ao menos um antes de alguém receber o segundo.
           </div>
           <div className="flex justify-end gap-2">
             <Button variant="ghost" onClick={() => setOpenRandom(false)}>Cancelar</Button>
-            <Button onClick={divideAmong}>
-              <Shuffle className="h-3.5 w-3.5" /> Dividir
+            <Button onClick={divideAmong} disabled={poolCount === 0}>
+              <Shuffle className="h-3.5 w-3.5" /> Dividir entre {poolCount}
             </Button>
           </div>
         </div>
