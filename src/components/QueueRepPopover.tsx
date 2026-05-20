@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import * as RPopover from '@radix-ui/react-popover';
 import { toast } from 'sonner';
-import { ArrowRight, Clock, Plane, RotateCw, Target } from 'lucide-react';
+import { ArrowRight, Ban, CheckCircle2, Clock, Plane, RotateCw, Target } from 'lucide-react';
 import { api } from '@/lib/api';
 import { Avatar } from './ui/Avatar';
 import { cn } from '@/lib/utils';
@@ -59,6 +59,17 @@ export function QueueRepPopover({
     if (!recentAssignment) return;
     onSkipAssignment(recentAssignment, rep.id);
     setOpen(false);
+  }
+
+  async function toggleActive() {
+    setBusy('toggle');
+    try {
+      await api.toggleRep(rep.id, !rep.active);
+      toast.success(`${rep.name} ${!rep.active ? 'reativado' : 'inativado'} para receber leads`);
+      setOpen(false);
+      onAction();
+    } catch (e) { toast.error((e as Error).message); }
+    finally { setBusy(null); }
   }
 
   const canSetNext = !isNext && !unavailableReason;
@@ -123,6 +134,16 @@ export function QueueRepPopover({
                 onClick={reassignLast}
               />
             )}
+
+            <div className="my-1 border-t border-ink-100" />
+            <ActionRow
+              icon={rep.active ? <Ban className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
+              label={rep.active ? 'Inativar para receber leads' : 'Reativar para receber leads'}
+              hint={rep.active ? 'Sai da fila até ser reativado' : 'Volta a entrar na rotação'}
+              onClick={toggleActive}
+              loading={busy === 'toggle'}
+              danger={rep.active}
+            />
           </div>
 
           <RPopover.Arrow className="fill-white stroke-ink-200" />
@@ -133,10 +154,10 @@ export function QueueRepPopover({
 }
 
 function ActionRow({
-  icon, label, hint, onClick, disabled, loading,
+  icon, label, hint, onClick, disabled, loading, danger,
 }: {
   icon: ReactNode; label: string; hint?: string;
-  onClick: () => void; disabled?: boolean; loading?: boolean;
+  onClick: () => void; disabled?: boolean; loading?: boolean; danger?: boolean;
 }) {
   return (
     <button
@@ -144,14 +165,20 @@ function ActionRow({
       disabled={disabled || loading}
       className={cn(
         'group flex w-full items-start gap-2.5 rounded-md px-2.5 py-2 text-left transition-colors',
-        'hover:bg-brand-50 disabled:opacity-50 disabled:hover:bg-transparent disabled:cursor-not-allowed',
+        'disabled:opacity-50 disabled:hover:bg-transparent disabled:cursor-not-allowed',
+        danger ? 'hover:bg-rose-50' : 'hover:bg-brand-50',
       )}
     >
-      <span className="mt-0.5 grid h-6 w-6 place-items-center rounded-md bg-ink-100 text-ink-600 group-hover:bg-brand-100 group-hover:text-brand-700 transition-colors">
+      <span className={cn(
+        'mt-0.5 grid h-6 w-6 place-items-center rounded-md transition-colors',
+        danger
+          ? 'bg-rose-100 text-rose-600 group-hover:bg-rose-200'
+          : 'bg-ink-100 text-ink-600 group-hover:bg-brand-100 group-hover:text-brand-700',
+      )}>
         {loading ? <span className="h-3 w-3 rounded-full border-2 border-current border-t-transparent animate-spin" /> : icon}
       </span>
       <div className="min-w-0 flex-1">
-        <div className="text-[13px] font-medium text-ink-900">{label}</div>
+        <div className={cn('text-[13px] font-medium', danger ? 'text-rose-700' : 'text-ink-900')}>{label}</div>
         {hint && <div className="text-[11px] text-ink-500 truncate">{hint}</div>}
       </div>
     </button>
