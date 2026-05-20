@@ -4,6 +4,7 @@ import { NextRepCard } from '@/components/NextRepCard';
 import { QueueStrip } from '@/components/QueueStrip';
 import { StatCard } from '@/components/StatCard';
 import { AssignmentsTable } from '@/components/AssignmentsTable';
+import { BulkActionsBar } from '@/components/BulkActionsBar';
 import { SkipDialog } from '@/components/SkipDialog';
 import { ContactDrawer } from '@/components/ContactDrawer';
 import { DistributionChart } from '@/components/DistributionChart';
@@ -14,6 +15,7 @@ export function Dashboard({ state, refresh }: { state: AppState; refresh: () => 
   const [skipTarget, setSkipTarget] = useState<Assignment | null>(null);
   const [skipForcedRepId, setSkipForcedRepId] = useState<string | null>(null);
   const [drawerAssignment, setDrawerAssignment] = useState<Assignment | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
   const repsById = new Map(state.reps.map((r) => [r.id, r]));
   const recent = state.assignments.slice(0, 20);
   const lastAssignment = state.assignments[0] ?? null;
@@ -65,11 +67,20 @@ export function Dashboard({ state, refresh }: { state: AppState; refresh: () => 
         <div className="lg:col-span-1 order-2 lg:order-1">
           <NextRepCard rep={state.next_rep} />
         </div>
-        <div className="lg:col-span-3 order-1 lg:order-2">
+        <div className="lg:col-span-3 order-1 lg:order-2 space-y-4">
+          <BulkActionsBar
+            selected={selected}
+            onClear={() => setSelected(new Set())}
+            onDone={refresh}
+            activeRepsCount={state.stats.available_reps}
+          />
           <AssignmentsTable
             assignments={recent}
             onSkip={setSkipTarget}
             onOpenContact={setDrawerAssignment}
+            selectable
+            selected={selected}
+            onSelectChange={setSelected}
             onRetry={refresh}
           />
         </div>

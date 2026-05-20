@@ -1,13 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { toast } from '@/lib/toast';
-import { Calendar, Search, SkipForward, X } from 'lucide-react';
+import { Calendar, Search } from 'lucide-react';
 import { AssignmentsTable } from '@/components/AssignmentsTable';
+import { BulkActionsBar } from '@/components/BulkActionsBar';
 import { ContactDrawer } from '@/components/ContactDrawer';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { SkipDialog } from '@/components/SkipDialog';
-import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import type { AppState, Assignment } from '@/types';
 
@@ -21,7 +20,6 @@ export function AssignmentsPage({ state, refresh }: { state: AppState; refresh: 
   const [skipTarget, setSkipTarget] = useState<Assignment | null>(null);
   const [drawerAssignment, setDrawerAssignment] = useState<Assignment | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [bulkSkipping, setBulkSkipping] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
   const repsById = new Map(state.reps.map((r) => [r.id, r]));
 
@@ -59,23 +57,6 @@ export function AssignmentsPage({ state, refresh }: { state: AppState; refresh: 
       return true;
     });
   }, [state.assignments, q, repFilter, statusFilter, period]);
-
-  async function bulkSkip() {
-    if (selected.size === 0) return;
-    setBulkSkipping(true);
-    try {
-      const res = await api.bulkSkip(Array.from(selected), null);
-      const ok = res.results.filter((r) => r.sync === 'synced').length;
-      const fail = res.results.length - ok;
-      toast.success(`${ok} reatribuídos${fail ? `, ${fail} falharam (retry automático)` : ''}`);
-      setSelected(new Set());
-      refresh();
-    } catch (e) {
-      toast.error((e as Error).message);
-    } finally {
-      setBulkSkipping(false);
-    }
-  }
 
   function exportCsv() {
     const headers = ['ID', 'Contato', 'Email', 'Telefone', 'Tags', 'Vendedor', 'Status', 'Sync', 'Recebido em'];
@@ -136,21 +117,12 @@ export function AssignmentsPage({ state, refresh }: { state: AppState; refresh: 
         </div>
       </div>
 
-      {selected.size > 0 && (
-        <div className="card px-4 py-3 flex items-center justify-between gap-3 bg-brand-50 border-brand-200">
-          <div className="text-sm text-brand-800">
-            <span className="font-semibold">{selected.size}</span> selecionado(s)
-          </div>
-          <div className="flex items-center gap-2">
-            <Button size="sm" variant="outline" onClick={() => setSelected(new Set())}>
-              <X className="h-3.5 w-3.5" /> Limpar
-            </Button>
-            <Button size="sm" onClick={bulkSkip} loading={bulkSkipping}>
-              <SkipForward className="h-3.5 w-3.5" /> Pular todos (próximo da fila)
-            </Button>
-          </div>
-        </div>
-      )}
+      <BulkActionsBar
+        selected={selected}
+        onClear={() => setSelected(new Set())}
+        onDone={refresh}
+        activeRepsCount={state.stats.available_reps}
+      />
 
       <AssignmentsTable
         assignments={filtered}

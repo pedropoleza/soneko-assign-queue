@@ -40,6 +40,8 @@ export const api = {
       'POST', '/skip', { assignment_id, target_rep_id, reason }),
   bulkSkip: (assignment_ids: string[], target_rep_id: string | null, reason?: string) =>
     call<{ ok: true; results: any[] }>('POST', '/bulk-skip', { assignment_ids, target_rep_id, reason }),
+  bulkRandom: (assignment_ids: string[]) =>
+    call<{ ok: true; results: any[]; summary: Record<string, number> }>('POST', '/bulk-random', { assignment_ids }),
   retry: (assignment_id: string) =>
     call<{ ok: true; rep: any; sync: string; error: string | null }>('POST', '/retry', { assignment_id }),
 
