@@ -70,9 +70,9 @@ export function Dashboard({ state, refresh }: { state: AppState; refresh: () => 
         <div className="lg:col-span-3 order-1 lg:order-2 space-y-4">
           <BulkActionsBar
             selected={selected}
+            reps={state.reps}
             onClear={() => setSelected(new Set())}
             onDone={refresh}
-            activeRepsCount={state.stats.available_reps}
           />
           <AssignmentsTable
             assignments={recent}

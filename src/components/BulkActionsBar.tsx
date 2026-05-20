@@ -1,42 +1,52 @@
 import { useState } from 'react';
 import { toast } from '@/lib/toast';
-import { Shuffle, SkipForward, X } from 'lucide-react';
+import { Shuffle, UserCheck, X } from 'lucide-react';
 import { Button } from './ui/Button';
 import { Dialog } from './ui/Dialog';
+import { Select } from './ui/Select';
+import { Avatar } from './ui/Avatar';
 import { api } from '@/lib/api';
+import type { SalesRep } from '@/types';
 
 export function BulkActionsBar({
   selected,
+  reps,
   onClear,
   onDone,
-  activeRepsCount,
 }: {
   selected: Set<string>;
+  reps: SalesRep[];
   onClear: () => void;
   onDone: () => void;
-  activeRepsCount: number;
 }) {
-  const [busy, setBusy] = useState<null | 'skip' | 'random'>(null);
-  const [confirmRandom, setConfirmRandom] = useState(false);
+  const [busy, setBusy] = useState<null | 'single' | 'random'>(null);
+  const [openSingle, setOpenSingle] = useState(false);
+  const [openRandom, setOpenRandom] = useState(false);
+  const [targetRep, setTargetRep] = useState<string | undefined>(undefined);
 
   if (selected.size === 0) return null;
   const ids = Array.from(selected);
+  const activeReps = reps.filter((r) => r.active);
 
-  async function bulkSkip() {
-    setBusy('skip');
+  async function sendToOne() {
+    if (!targetRep) { toast.error('Escolha um vendedor'); return; }
+    setBusy('single');
+    setOpenSingle(false);
     try {
-      const res = await api.bulkSkip(ids, null);
+      const res = await api.bulkSkip(ids, targetRep);
       const ok = res.results.filter((r) => r.sync === 'synced').length;
       const fail = res.results.length - ok;
-      toast.success(`${ok} reatribuídos${fail ? `, ${fail} falharam (retry automático)` : ''}`);
+      const repName = reps.find((r) => r.id === targetRep)?.name ?? 'vendedor';
+      toast.success(`${ok} enviados para ${repName}${fail ? `, ${fail} falharam` : ''}`);
+      setTargetRep(undefined);
       onClear(); onDone();
     } catch (e) { toast.error((e as Error).message); }
     finally { setBusy(null); }
   }
 
-  async function bulkRandom() {
+  async function divideAmong() {
     setBusy('random');
-    setConfirmRandom(false);
+    setOpenRandom(false);
     try {
       const res = await api.bulkRandom(ids);
       const ok = res.results.filter((r) => r.sync === 'synced').length;
@@ -46,7 +56,7 @@ export function BulkActionsBar({
         .map(([name, n]) => `${name} ×${n}`)
         .join(', ');
       toast.success(
-        `${ok} distribuídos aleatoriamente${fail ? `, ${fail} falharam` : ''}`,
+        `${ok} divididos entre vendedores${fail ? `, ${fail} falharam` : ''}`,
         { description: summary, duration: 5000 },
       );
       onClear(); onDone();
@@ -64,20 +74,55 @@ export function BulkActionsBar({
           <Button size="sm" variant="outline" onClick={onClear} disabled={!!busy}>
             <X className="h-3.5 w-3.5" /> Limpar
           </Button>
-          <Button size="sm" variant="outline" onClick={bulkSkip} loading={busy === 'skip'} disabled={!!busy}>
-            <SkipForward className="h-3.5 w-3.5" /> Pular pro próximo
+          <Button size="sm" variant="outline" onClick={() => setOpenSingle(true)} loading={busy === 'single'} disabled={!!busy}>
+            <UserCheck className="h-3.5 w-3.5" /> Enviar para 1 vendedor
           </Button>
-          <Button size="sm" onClick={() => setConfirmRandom(true)} loading={busy === 'random'} disabled={!!busy}>
-            <Shuffle className="h-3.5 w-3.5" /> Distribuir aleatório
+          <Button size="sm" onClick={() => setOpenRandom(true)} loading={busy === 'random'} disabled={!!busy}>
+            <Shuffle className="h-3.5 w-3.5" /> Dividir entre vendedores
           </Button>
         </div>
       </div>
 
+      {/* Send all to one specific rep */}
       <Dialog
-        open={confirmRandom}
-        onOpenChange={setConfirmRandom}
-        title="Distribuir aleatoriamente"
-        description={`${selected.size} lead${selected.size === 1 ? '' : 's'} ${selected.size === 1 ? 'será' : 'serão'} redistribuído${selected.size === 1 ? '' : 's'} entre os ${activeRepsCount} consultores disponíveis em ordem aleatória balanceada.`}
+        open={openSingle}
+        onOpenChange={setOpenSingle}
+        title="Enviar para 1 vendedor"
+        description={`Os ${selected.size} lead${selected.size === 1 ? '' : 's'} selecionado${selected.size === 1 ? '' : 's'} ${selected.size === 1 ? 'será atribuído' : 'serão atribuídos'} ao vendedor escolhido.`}
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="mb-1 block text-xs font-medium text-ink-600">Vendedor de destino</label>
+            <Select
+              value={targetRep}
+              onChange={setTargetRep}
+              options={activeReps.map((r) => ({ value: r.id, label: `${r.name} (${r.recent_leads} leads/7d)` }))}
+              placeholder="Escolher vendedor ativo..."
+            />
+          </div>
+          {targetRep && (
+            <div className="flex items-center gap-2 rounded-md bg-ink-50 px-3 py-2 text-sm">
+              <Avatar name={reps.find((r) => r.id === targetRep)?.name ?? '?'} size="xs" />
+              <span className="text-ink-700">
+                Todos os {selected.size} vão para <strong>{reps.find((r) => r.id === targetRep)?.name}</strong>
+              </span>
+            </div>
+          )}
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" onClick={() => setOpenSingle(false)}>Cancelar</Button>
+            <Button onClick={sendToOne} disabled={!targetRep}>
+              <UserCheck className="h-3.5 w-3.5" /> Enviar
+            </Button>
+          </div>
+        </div>
+      </Dialog>
+
+      {/* Divide randomly among active reps */}
+      <Dialog
+        open={openRandom}
+        onOpenChange={setOpenRandom}
+        title="Dividir entre vendedores"
+        description={`${selected.size} lead${selected.size === 1 ? '' : 's'} ${selected.size === 1 ? 'será distribuído' : 'serão distribuídos'} entre os ${activeReps.length} consultores ativos em ordem aleatória balanceada.`}
       >
         <div className="space-y-3">
           <div className="rounded-md bg-ink-50 px-3 py-2.5 text-xs text-ink-600">
@@ -87,9 +132,9 @@ export function BulkActionsBar({
             menos um antes de qualquer um receber o segundo.
           </div>
           <div className="flex justify-end gap-2">
-            <Button variant="ghost" onClick={() => setConfirmRandom(false)}>Cancelar</Button>
-            <Button onClick={bulkRandom}>
-              <Shuffle className="h-3.5 w-3.5" /> Distribuir
+            <Button variant="ghost" onClick={() => setOpenRandom(false)}>Cancelar</Button>
+            <Button onClick={divideAmong}>
+              <Shuffle className="h-3.5 w-3.5" /> Dividir
             </Button>
           </div>
         </div>

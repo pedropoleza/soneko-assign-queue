@@ -119,9 +119,9 @@ export function AssignmentsPage({ state, refresh }: { state: AppState; refresh: 
 
       <BulkActionsBar
         selected={selected}
+        reps={state.reps}
         onClear={() => setSelected(new Set())}
         onDone={refresh}
-        activeRepsCount={state.stats.available_reps}
       />
 
       <AssignmentsTable
