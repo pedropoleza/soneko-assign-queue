@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { toast } from '@/lib/toast';
-import { Bell, Clock, Loader2, Phone, Plus, Send, Trash2, Users, X } from 'lucide-react';
+import { Bell, Clock, FileText, Loader2, MessageSquare, Phone, Plus, Send, Trash2, Users, X } from 'lucide-react';
 import { Switch } from '@/components/ui/Switch';
 import { Avatar } from '@/components/ui/Avatar';
 import { Badge } from '@/components/ui/Badge';
@@ -214,6 +214,7 @@ function RecipientEditor({
     initial.schedule_day_of_week ? String(initial.schedule_day_of_week) : '1');
   const [scheduleDom, setScheduleDom] = useState<number>(initial.schedule_day_of_month ?? 1);
   const [enabled, setEnabled] = useState<boolean>(initial.enabled ?? false);
+  const [format, setFormat] = useState<'text' | 'pdf'>((initial.default_format as any) ?? 'text');
   const [users, setUsers] = useState<{ id: string; name: string; email: string; phone?: string }[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -251,7 +252,7 @@ function RecipientEditor({
         ghl_contact_id: initial.ghl_contact_id ?? null,
         default_period: defaultPeriod,
         default_source: defaultSource === '__all__' ? null : defaultSource,
-        default_format: 'text',
+        default_format: format,
         notes: notes || null,
         schedule_type: scheduleType,
         schedule_day_of_week: scheduleType === 'weekly' ? Number(scheduleDow) : null,
@@ -314,6 +315,36 @@ function RecipientEditor({
             <label className="mb-1 block text-xs font-medium text-ink-600">Canal padrão</label>
             <Select value={defaultSource} onChange={setDefaultSource}
                     options={channelOptions} />
+          </div>
+        </div>
+
+        <div>
+          <label className="mb-1 block text-xs font-medium text-ink-600">Formato da mensagem</label>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => setFormat('text')}
+              className={`rounded-md border px-3 py-2 text-left transition-colors ${
+                format === 'text' ? 'border-brand-500 bg-brand-50' : 'border-ink-200 hover:bg-ink-50'
+              }`}
+            >
+              <div className="flex items-center gap-2 text-sm font-medium text-ink-900">
+                <MessageSquare className="h-4 w-4 text-brand-600" /> Texto (SMS)
+              </div>
+              <div className="text-[11px] text-ink-500 mt-0.5">Resumo formatado direto no chat</div>
+            </button>
+            <button
+              type="button"
+              onClick={() => setFormat('pdf')}
+              className={`rounded-md border px-3 py-2 text-left transition-colors ${
+                format === 'pdf' ? 'border-brand-500 bg-brand-50' : 'border-ink-200 hover:bg-ink-50'
+              }`}
+            >
+              <div className="flex items-center gap-2 text-sm font-medium text-ink-900">
+                <FileText className="h-4 w-4 text-rose-600" /> PDF (WhatsApp)
+              </div>
+              <div className="text-[11px] text-ink-500 mt-0.5">Relatório com gráficos anexado</div>
+            </button>
           </div>
         </div>
 
@@ -399,23 +430,29 @@ function SendDialog({ recipient, onClose }: { recipient: Recipient; onClose: () 
   const channelOptions = useChannels();
   const [period, setPeriod] = useState(recipient.default_period);
   const [source, setSource] = useState<string | undefined>(recipient.default_source ?? '__all__');
+  const [format, setFormat] = useState<'text' | 'pdf'>((recipient.default_format as any) ?? 'text');
   const [preview, setPreview] = useState<string | null>(null);
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [previewing, setPreviewing] = useState(false);
   const [sending, setSending] = useState(false);
 
   async function doPreview() {
-    setPreviewing(true);
+    setPreviewing(true); setPdfUrl(null);
     try {
       const r = await api.notificationPreview({
         period,
         source: source === '__all__' ? null : source,
+        format,
+        recipient_id: recipient.id,
       });
       setPreview(r.message);
+      if (r.pdf_url) setPdfUrl(r.pdf_url);
+      if (r.pdf_error) toast.warning(`PDF: ${r.pdf_error}`);
     } catch (e) { toast.error((e as Error).message); }
     finally { setPreviewing(false); }
   }
 
-  useEffect(() => { doPreview(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [period, source]);
+  useEffect(() => { doPreview(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [period, source, format]);
 
   async function send() {
     setSending(true);
@@ -423,6 +460,7 @@ function SendDialog({ recipient, onClose }: { recipient: Recipient; onClose: () 
       await api.notificationSend({
         recipient_id: recipient.id, period,
         source: source === '__all__' ? null : source,
+        format,
       });
       toast.success(`Mensagem enviada para ${recipient.name}`);
       onClose();
@@ -450,6 +488,30 @@ function SendDialog({ recipient, onClose }: { recipient: Recipient; onClose: () 
         </div>
 
         <div>
+          <label className="mb-1 block text-xs font-medium text-ink-600">Formato</label>
+          <div className="grid grid-cols-2 gap-2">
+            <button type="button" onClick={() => setFormat('text')}
+                    className={`rounded-md border px-3 py-2 text-left transition-colors ${
+                      format === 'text' ? 'border-brand-500 bg-brand-50' : 'border-ink-200 hover:bg-ink-50'
+                    }`}>
+              <div className="flex items-center gap-2 text-sm font-medium text-ink-900">
+                <MessageSquare className="h-4 w-4 text-brand-600" /> Texto
+              </div>
+              <div className="text-[11px] text-ink-500 mt-0.5">SMS direto no chat</div>
+            </button>
+            <button type="button" onClick={() => setFormat('pdf')}
+                    className={`rounded-md border px-3 py-2 text-left transition-colors ${
+                      format === 'pdf' ? 'border-brand-500 bg-brand-50' : 'border-ink-200 hover:bg-ink-50'
+                    }`}>
+              <div className="flex items-center gap-2 text-sm font-medium text-ink-900">
+                <FileText className="h-4 w-4 text-rose-600" /> PDF
+              </div>
+              <div className="text-[11px] text-ink-500 mt-0.5">Anexado via WhatsApp</div>
+            </button>
+          </div>
+        </div>
+
+        <div>
           <label className="mb-1 block text-xs font-medium text-ink-600 flex items-center gap-2">
             Prévia do conteúdo
             {previewing && <Loader2 className="h-3 w-3 animate-spin text-ink-400" />}
@@ -460,6 +522,12 @@ function SendDialog({ recipient, onClose }: { recipient: Recipient; onClose: () 
           )}>
             {preview ?? 'Carregando prévia…'}
           </pre>
+          {format === 'pdf' && pdfUrl && (
+            <a href={pdfUrl} target="_blank" rel="noopener noreferrer"
+               className="mt-2 inline-flex items-center gap-1.5 text-xs text-brand-600 hover:underline">
+              <FileText className="h-3 w-3" /> Abrir prévia do PDF
+            </a>
+          )}
         </div>
 
         <div className="flex justify-end gap-2 pt-1">

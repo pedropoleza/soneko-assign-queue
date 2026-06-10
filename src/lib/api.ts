@@ -131,10 +131,10 @@ export const api = {
   }) => call<any>('POST', '/notifications/recipients', body),
   deleteRecipient: (id: string) => call<{ ok: true }>('DELETE', `/notifications/recipients/${id}`),
   ghlUsers: () => call<{ users: Array<{ id: string; name: string; email: string; phone?: string }> }>('GET', '/ghl-users'),
-  notificationPreview: (body: { period: string; source?: string | null; custom_start?: string; custom_end?: string }) =>
-    call<{ period: string; source: string | null; message: string }>('POST', '/notifications/preview', body),
-  notificationSend: (body: { recipient_id: string; period?: string; source?: string | null; custom_start?: string; custom_end?: string }) =>
-    call<{ ok: true; contactId: string }>('POST', '/notifications/send', body),
+  notificationPreview: (body: { period: string; source?: string | null; format?: 'text' | 'pdf'; recipient_id?: string; custom_start?: string; custom_end?: string }) =>
+    call<{ period: string; source: string | null; message: string; pdf_url?: string; pdf_error?: string }>('POST', '/notifications/preview', body),
+  notificationSend: (body: { recipient_id: string; period?: string; source?: string | null; format?: 'text' | 'pdf'; custom_start?: string; custom_end?: string }) =>
+    call<{ ok: true; contactId: string; pdf_url?: string }>('POST', '/notifications/send', body),
 
   // Pulls the actual channels seen in this location's assignments via supabase-js RPC.
   listChannels: async (): Promise<Array<{ source: string; count: number }>> => {
