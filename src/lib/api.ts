@@ -108,6 +108,13 @@ export const api = {
     ghl_user_id: string | null; ghl_contact_id: string | null;
     default_period: string; default_source: string | null;
     default_format: string; notes: string | null;
+    schedule_type: 'manual' | 'daily' | 'weekly' | 'monthly';
+    schedule_day_of_week: number | null;
+    schedule_day_of_month: number | null;
+    schedule_time: string;
+    schedule_timezone: string;
+    enabled: boolean;
+    next_run_at: string | null;
     last_sent_at: string | null; created_at: string;
   }>>('GET', '/notifications/recipients'),
   saveRecipient: (body: {
@@ -115,6 +122,12 @@ export const api = {
     ghl_user_id?: string | null; ghl_contact_id?: string | null;
     default_period?: string; default_source?: string | null;
     default_format?: string; notes?: string | null;
+    schedule_type?: 'manual' | 'daily' | 'weekly' | 'monthly';
+    schedule_day_of_week?: number | null;
+    schedule_day_of_month?: number | null;
+    schedule_time?: string;
+    schedule_timezone?: string;
+    enabled?: boolean;
   }) => call<any>('POST', '/notifications/recipients', body),
   deleteRecipient: (id: string) => call<{ ok: true }>('DELETE', `/notifications/recipients/${id}`),
   ghlUsers: () => call<{ users: Array<{ id: string; name: string; email: string; phone?: string }> }>('GET', '/ghl-users'),

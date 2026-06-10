@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { toast } from '@/lib/toast';
-import { Bell, Loader2, Phone, Plus, Send, Trash2, Users, X } from 'lucide-react';
+import { Bell, Clock, Loader2, Phone, Plus, Send, Trash2, Users, X } from 'lucide-react';
+import { Switch } from '@/components/ui/Switch';
 import { Avatar } from '@/components/ui/Avatar';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -29,6 +30,35 @@ const CHANNEL_OPTIONS = [
   { value: 'Formulário', label: 'Formulário' },
   { value: 'Manual', label: 'Manual' },
 ];
+
+const WEEKDAY_OPTIONS = [
+  { value: '1', label: 'Segunda' },
+  { value: '2', label: 'Terça' },
+  { value: '3', label: 'Quarta' },
+  { value: '4', label: 'Quinta' },
+  { value: '5', label: 'Sexta' },
+  { value: '6', label: 'Sábado' },
+  { value: '7', label: 'Domingo' },
+];
+
+const SCHEDULE_OPTIONS = [
+  { id: 'manual', label: 'Manual' },
+  { id: 'daily', label: 'Diário' },
+  { id: 'weekly', label: 'Semanal' },
+  { id: 'monthly', label: 'Mensal' },
+] as const;
+
+function scheduleLabel(r: { schedule_type: string; schedule_day_of_week: number | null; schedule_day_of_month: number | null; schedule_time: string }) {
+  const time = r.schedule_time?.slice(0, 5) ?? '09:00';
+  if (r.schedule_type === 'manual') return 'Manual';
+  if (r.schedule_type === 'daily') return `Todo dia às ${time}`;
+  if (r.schedule_type === 'weekly') {
+    const dow = WEEKDAY_OPTIONS.find((d) => d.value === String(r.schedule_day_of_week))?.label ?? '?';
+    return `Toda ${dow.toLowerCase()} às ${time}`;
+  }
+  if (r.schedule_type === 'monthly') return `Dia ${r.schedule_day_of_month ?? '?'} de cada mês às ${time}`;
+  return r.schedule_type;
+}
 
 type Recipient = Awaited<ReturnType<typeof api.listRecipients>>[number];
 
@@ -98,12 +128,21 @@ export function NotificationsPage() {
                       <Badge tone="neutral">
                         {r.default_source ?? 'Todos os canais'}
                       </Badge>
+                      <Badge tone={r.enabled && r.schedule_type !== 'manual' ? 'success' : 'neutral'}>
+                        <Clock className="h-3 w-3" /> {scheduleLabel(r)}
+                      </Badge>
                     </div>
-                    {r.last_sent_at && (
-                      <div className="text-[11px] text-ink-500 mt-2">
-                        Último envio: {formatRelative(r.last_sent_at)}
-                      </div>
-                    )}
+                    <div className="mt-1.5 text-[11px] text-ink-500 space-y-0.5">
+                      {r.last_sent_at && (
+                        <div>Último envio: {formatRelative(r.last_sent_at)}</div>
+                      )}
+                      {r.enabled && r.schedule_type !== 'manual' && r.next_run_at && (
+                        <div>Próximo envio: {new Date(r.next_run_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}</div>
+                      )}
+                      {!r.enabled && r.schedule_type !== 'manual' && (
+                        <div className="text-amber-600">Agendamento desativado</div>
+                      )}
+                    </div>
                   </div>
                 </div>
                 <div className="flex items-center gap-1">
@@ -154,6 +193,13 @@ function RecipientEditor({
   const [defaultPeriod, setDefaultPeriod] = useState(initial.default_period ?? 'yesterday');
   const [defaultSource, setDefaultSource] = useState<string | undefined>(initial.default_source ?? '__all__');
   const [notes, setNotes] = useState(initial.notes ?? '');
+  const [scheduleType, setScheduleType] = useState<'manual' | 'daily' | 'weekly' | 'monthly'>(
+    (initial.schedule_type as any) ?? 'manual');
+  const [scheduleTime, setScheduleTime] = useState(initial.schedule_time?.slice(0, 5) ?? '09:00');
+  const [scheduleDow, setScheduleDow] = useState<string | undefined>(
+    initial.schedule_day_of_week ? String(initial.schedule_day_of_week) : '1');
+  const [scheduleDom, setScheduleDom] = useState<number>(initial.schedule_day_of_month ?? 1);
+  const [enabled, setEnabled] = useState<boolean>(initial.enabled ?? false);
   const [users, setUsers] = useState<{ id: string; name: string; email: string; phone?: string }[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -193,6 +239,12 @@ function RecipientEditor({
         default_source: defaultSource === '__all__' ? null : defaultSource,
         default_format: 'text',
         notes: notes || null,
+        schedule_type: scheduleType,
+        schedule_day_of_week: scheduleType === 'weekly' ? Number(scheduleDow) : null,
+        schedule_day_of_month: scheduleType === 'monthly' ? scheduleDom : null,
+        schedule_time: scheduleTime,
+        schedule_timezone: 'America/Sao_Paulo',
+        enabled: scheduleType === 'manual' ? false : enabled,
       });
       toast.success(isNew ? 'Destinatário criado' : 'Destinatário atualizado');
       onSaved();
@@ -254,6 +306,62 @@ function RecipientEditor({
         <div>
           <label className="mb-1 block text-xs font-medium text-ink-600">Notas (opcional)</label>
           <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Ex: gerente comercial" />
+        </div>
+
+        <div className="rounded-lg border border-ink-200 p-3 space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-xs font-semibold text-ink-800 flex items-center gap-1.5">
+                <Clock className="h-3.5 w-3.5 text-brand-600" /> Agendamento
+              </div>
+              <div className="text-[11px] text-ink-500">Envio automático sob recorrência</div>
+            </div>
+            {scheduleType !== 'manual' && (
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] text-ink-600">{enabled ? 'Ativo' : 'Pausado'}</span>
+                <Switch checked={enabled} onCheckedChange={setEnabled} />
+              </div>
+            )}
+          </div>
+
+          <div className="grid grid-cols-4 gap-1.5">
+            {SCHEDULE_OPTIONS.map((s) => (
+              <button
+                key={s.id}
+                onClick={() => setScheduleType(s.id)}
+                className={`rounded-md border px-2 py-1.5 text-[12px] font-medium transition-colors ${
+                  scheduleType === s.id
+                    ? 'border-brand-500 bg-brand-50 text-brand-700'
+                    : 'border-ink-200 text-ink-700 hover:bg-ink-50'
+                }`}
+              >
+                {s.label}
+              </button>
+            ))}
+          </div>
+
+          {scheduleType !== 'manual' && (
+            <div className="grid grid-cols-2 gap-3">
+              {scheduleType === 'weekly' && (
+                <div>
+                  <label className="mb-1 block text-[11px] font-medium text-ink-600">Dia da semana</label>
+                  <Select value={scheduleDow} onChange={setScheduleDow} options={WEEKDAY_OPTIONS} />
+                </div>
+              )}
+              {scheduleType === 'monthly' && (
+                <div>
+                  <label className="mb-1 block text-[11px] font-medium text-ink-600">Dia do mês</label>
+                  <Input type="number" min={1} max={31} value={scheduleDom}
+                         onChange={(e) => setScheduleDom(Math.max(1, Math.min(31, +e.target.value || 1)))} />
+                </div>
+              )}
+              <div>
+                <label className="mb-1 block text-[11px] font-medium text-ink-600">Horário</label>
+                <Input type="time" value={scheduleTime}
+                       onChange={(e) => setScheduleTime(e.target.value)} />
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="rounded-md bg-ink-50 px-3 py-2 text-[11px] text-ink-500">
