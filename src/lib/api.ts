@@ -135,6 +135,17 @@ export const api = {
     call<{ period: string; source: string | null; message: string }>('POST', '/notifications/preview', body),
   notificationSend: (body: { recipient_id: string; period?: string; source?: string | null; custom_start?: string; custom_end?: string }) =>
     call<{ ok: true; contactId: string }>('POST', '/notifications/send', body),
+
+  // Pulls the actual channels seen in this location's assignments via supabase-js RPC.
+  listChannels: async (): Promise<Array<{ source: string; count: number }>> => {
+    const { supabase } = await import('@/lib/supabase');
+    const { getSecret } = await import('@/lib/config');
+    const secret = getSecret();
+    if (!supabase || !secret) return [];
+    const { data, error } = await supabase.rpc('soneko_list_channels', { p_secret: secret });
+    if (error) throw new Error(error.message);
+    return data ?? [];
+  },
 };
 
 export { ApiError };

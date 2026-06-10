@@ -20,16 +20,29 @@ const PERIOD_OPTIONS = [
   { value: 'last_month', label: 'Mês passado' },
 ];
 
-const CHANNEL_OPTIONS = [
+const NO_DATA_CHANNEL_OPTIONS = [
   { value: '__all__', label: 'Todos os canais' },
-  { value: 'WhatsApp', label: 'WhatsApp (inclui SMS)' },
-  { value: 'Instagram', label: 'Instagram' },
-  { value: 'TikTok', label: 'TikTok' },
-  { value: 'Facebook', label: 'Facebook' },
-  { value: 'Google', label: 'Google' },
-  { value: 'Formulário', label: 'Formulário' },
-  { value: 'Manual', label: 'Manual' },
 ];
+
+function useChannels() {
+  const [opts, setOpts] = useState(NO_DATA_CHANNEL_OPTIONS);
+  useEffect(() => {
+    api.listChannels()
+      .then((chs) => {
+        const list = chs
+          .filter((c) => c.source && c.source !== '— sem origem —')
+          .map((c) => ({
+            value: c.source,
+            label: c.source === 'WhatsApp'
+              ? `WhatsApp (inclui SMS) · ${c.count}`
+              : `${c.source} · ${c.count}`,
+          }));
+        setOpts([{ value: '__all__', label: 'Todos os canais' }, ...list]);
+      })
+      .catch(() => {});
+  }, []);
+  return opts;
+}
 
 const WEEKDAY_OPTIONS = [
   { value: '1', label: 'Segunda' },
@@ -187,6 +200,7 @@ function RecipientEditor({
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const channelOptions = useChannels();
   const [name, setName] = useState(initial.name ?? '');
   const [phone, setPhone] = useState(initial.phone ?? '');
   const [ghlUserId, setGhlUserId] = useState(initial.ghl_user_id ?? '');
@@ -299,7 +313,7 @@ function RecipientEditor({
           <div>
             <label className="mb-1 block text-xs font-medium text-ink-600">Canal padrão</label>
             <Select value={defaultSource} onChange={setDefaultSource}
-                    options={CHANNEL_OPTIONS} />
+                    options={channelOptions} />
           </div>
         </div>
 
@@ -382,6 +396,7 @@ function RecipientEditor({
 }
 
 function SendDialog({ recipient, onClose }: { recipient: Recipient; onClose: () => void }) {
+  const channelOptions = useChannels();
   const [period, setPeriod] = useState(recipient.default_period);
   const [source, setSource] = useState<string | undefined>(recipient.default_source ?? '__all__');
   const [preview, setPreview] = useState<string | null>(null);
@@ -430,7 +445,7 @@ function SendDialog({ recipient, onClose }: { recipient: Recipient; onClose: () 
           </div>
           <div>
             <label className="mb-1 block text-xs font-medium text-ink-600">Canal</label>
-            <Select value={source} onChange={setSource} options={CHANNEL_OPTIONS} />
+            <Select value={source} onChange={setSource} options={channelOptions} />
           </div>
         </div>
 
