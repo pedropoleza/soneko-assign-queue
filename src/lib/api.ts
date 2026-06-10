@@ -102,6 +102,26 @@ export const api = {
     call<{ ok: true }>('POST', '/tag-rules/upsert', { tag, rep_id, priority }),
   deleteTagRule: (id: string) =>
     call<{ ok: true }>('POST', '/tag-rules/delete', { id }),
+
+  listRecipients: () => call<Array<{
+    id: string; name: string; phone: string;
+    ghl_user_id: string | null; ghl_contact_id: string | null;
+    default_period: string; default_source: string | null;
+    default_format: string; notes: string | null;
+    last_sent_at: string | null; created_at: string;
+  }>>('GET', '/notifications/recipients'),
+  saveRecipient: (body: {
+    id?: string | null; name: string; phone: string;
+    ghl_user_id?: string | null; ghl_contact_id?: string | null;
+    default_period?: string; default_source?: string | null;
+    default_format?: string; notes?: string | null;
+  }) => call<any>('POST', '/notifications/recipients', body),
+  deleteRecipient: (id: string) => call<{ ok: true }>('DELETE', `/notifications/recipients/${id}`),
+  ghlUsers: () => call<{ users: Array<{ id: string; name: string; email: string; phone?: string }> }>('GET', '/ghl-users'),
+  notificationPreview: (body: { period: string; source?: string | null; custom_start?: string; custom_end?: string }) =>
+    call<{ period: string; source: string | null; message: string }>('POST', '/notifications/preview', body),
+  notificationSend: (body: { recipient_id: string; period?: string; source?: string | null; custom_start?: string; custom_end?: string }) =>
+    call<{ ok: true; contactId: string }>('POST', '/notifications/send', body),
 };
 
 export { ApiError };

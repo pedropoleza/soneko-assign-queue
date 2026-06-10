@@ -9,6 +9,7 @@ const Dashboard = lazy(() => import('@/pages/Dashboard').then((m) => ({ default:
 const AssignmentsPage = lazy(() => import('@/pages/AssignmentsPage').then((m) => ({ default: m.AssignmentsPage })));
 const RepsPage = lazy(() => import('@/pages/RepsPage').then((m) => ({ default: m.RepsPage })));
 const ReportPage = lazy(() => import('@/pages/ReportPage').then((m) => ({ default: m.ReportPage })));
+const NotificationsPage = lazy(() => import('@/pages/NotificationsPage').then((m) => ({ default: m.NotificationsPage })));
 
 export default function App() {
   const { state, error, isLoading, isRefreshing, refresh, mutateRep } = useAppState();
@@ -70,6 +71,7 @@ export default function App() {
           {tab === 'assignments' && <AssignmentsPage state={state} refresh={refresh} />}
           {tab === 'reps' && <RepsPage state={state} refresh={refresh} mutateRep={mutateRep} />}
           {tab === 'report' && <ReportPage state={state} />}
+          {tab === 'notifications' && <NotificationsPage />}
         </Suspense>
       </main>
     </div>

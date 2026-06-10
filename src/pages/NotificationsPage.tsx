@@ -1,0 +1,353 @@
+import { useEffect, useState } from 'react';
+import { toast } from '@/lib/toast';
+import { Bell, Loader2, Phone, Plus, Send, Trash2, Users, X } from 'lucide-react';
+import { Avatar } from '@/components/ui/Avatar';
+import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/components/ui/Button';
+import { Dialog } from '@/components/ui/Dialog';
+import { Input } from '@/components/ui/Input';
+import { Select } from '@/components/ui/Select';
+import { api } from '@/lib/api';
+import { cn, formatRelative } from '@/lib/utils';
+
+const PERIOD_OPTIONS = [
+  { value: 'today', label: 'Hoje' },
+  { value: 'yesterday', label: 'Ontem' },
+  { value: 'this_week', label: 'Esta semana' },
+  { value: 'last_week', label: 'Semana passada' },
+  { value: 'this_month', label: 'Este mês' },
+  { value: 'last_month', label: 'Mês passado' },
+];
+
+const CHANNEL_OPTIONS = [
+  { value: '__all__', label: 'Todos os canais' },
+  { value: 'WhatsApp', label: 'WhatsApp (inclui SMS)' },
+  { value: 'Instagram', label: 'Instagram' },
+  { value: 'TikTok', label: 'TikTok' },
+  { value: 'Facebook', label: 'Facebook' },
+  { value: 'Google', label: 'Google' },
+  { value: 'Formulário', label: 'Formulário' },
+  { value: 'Manual', label: 'Manual' },
+];
+
+type Recipient = Awaited<ReturnType<typeof api.listRecipients>>[number];
+
+export function NotificationsPage() {
+  const [list, setList] = useState<Recipient[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [editor, setEditor] = useState<Partial<Recipient> | null>(null);
+  const [sender, setSender] = useState<Recipient | null>(null);
+
+  async function reload() {
+    setLoading(true);
+    try { setList(await api.listRecipients()); }
+    catch (e) { toast.error((e as Error).message); }
+    finally { setLoading(false); }
+  }
+  useEffect(() => { reload(); }, []);
+
+  async function remove(id: string) {
+    try { await api.deleteRecipient(id); toast.success('Destinatário removido'); reload(); }
+    catch (e) { toast.error((e as Error).message); }
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="card p-4 flex items-center justify-between">
+        <div>
+          <div className="text-sm font-semibold text-ink-900 flex items-center gap-2">
+            <Bell className="h-4 w-4 text-brand-600" /> Notificações internas via GHL
+          </div>
+          <div className="text-xs text-ink-500 mt-1">
+            Configure quem recebe o resumo de leads por SMS/WhatsApp interno. Envio manual sob demanda.
+          </div>
+        </div>
+        <Button onClick={() => setEditor({})}>
+          <Plus className="h-3.5 w-3.5" /> Adicionar destinatário
+        </Button>
+      </div>
+
+      {loading && (
+        <div className="card p-12 grid place-items-center text-ink-400">
+          <Loader2 className="h-5 w-5 animate-spin" />
+        </div>
+      )}
+
+      {!loading && list.length === 0 && (
+        <div className="card p-12 text-center text-sm text-ink-500">
+          Nenhum destinatário ainda. Clique em <strong className="text-ink-700">Adicionar destinatário</strong> para começar.
+        </div>
+      )}
+
+      {!loading && list.length > 0 && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {list.map((r) => (
+            <div key={r.id} className="card p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-start gap-3 min-w-0">
+                  <Avatar name={r.name} size="md" />
+                  <div className="min-w-0">
+                    <div className="text-sm font-semibold text-ink-900 truncate">{r.name}</div>
+                    <div className="text-xs text-ink-500 flex items-center gap-1.5">
+                      <Phone className="h-3 w-3" /> {r.phone}
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      <Badge tone="brand">
+                        {PERIOD_OPTIONS.find((p) => p.value === r.default_period)?.label ?? r.default_period}
+                      </Badge>
+                      <Badge tone="neutral">
+                        {r.default_source ?? 'Todos os canais'}
+                      </Badge>
+                    </div>
+                    {r.last_sent_at && (
+                      <div className="text-[11px] text-ink-500 mt-2">
+                        Último envio: {formatRelative(r.last_sent_at)}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center gap-1">
+                  <Button size="sm" variant="ghost" onClick={() => setEditor(r)} title="Editar">
+                    <Users className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => remove(r.id)} title="Remover">
+                    <Trash2 className="h-3.5 w-3.5 text-rose-500" />
+                  </Button>
+                </div>
+              </div>
+              <Button className="mt-3 w-full" onClick={() => setSender(r)}>
+                <Send className="h-3.5 w-3.5" /> Enviar agora
+              </Button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {editor !== null && (
+        <RecipientEditor
+          initial={editor}
+          onClose={() => setEditor(null)}
+          onSaved={() => { setEditor(null); reload(); }}
+        />
+      )}
+
+      {sender !== null && (
+        <SendDialog
+          recipient={sender}
+          onClose={() => setSender(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+function RecipientEditor({
+  initial, onClose, onSaved,
+}: {
+  initial: Partial<Recipient>;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [name, setName] = useState(initial.name ?? '');
+  const [phone, setPhone] = useState(initial.phone ?? '');
+  const [ghlUserId, setGhlUserId] = useState(initial.ghl_user_id ?? '');
+  const [defaultPeriod, setDefaultPeriod] = useState(initial.default_period ?? 'yesterday');
+  const [defaultSource, setDefaultSource] = useState<string | undefined>(initial.default_source ?? '__all__');
+  const [notes, setNotes] = useState(initial.notes ?? '');
+  const [users, setUsers] = useState<{ id: string; name: string; email: string; phone?: string }[]>([]);
+  const [usersLoading, setUsersLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const isNew = !initial.id;
+
+  async function loadUsers() {
+    if (users.length > 0) return;
+    setUsersLoading(true);
+    try {
+      const r = await api.ghlUsers();
+      setUsers(r.users ?? []);
+    } catch (e) { toast.error((e as Error).message); }
+    finally { setUsersLoading(false); }
+  }
+  useEffect(() => { loadUsers(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
+
+  function pickUser(uid: string) {
+    setGhlUserId(uid);
+    const u = users.find((x) => x.id === uid);
+    if (u) {
+      if (!name) setName(u.name);
+      if (u.phone) setPhone(u.phone);
+      else toast.warning('Esse usuário não tem telefone no GHL — informe manualmente.');
+    }
+  }
+
+  async function save() {
+    if (!name.trim() || !phone.trim()) { toast.error('Nome e telefone são obrigatórios'); return; }
+    setSaving(true);
+    try {
+      await api.saveRecipient({
+        id: initial.id ?? null,
+        name: name.trim(), phone: phone.trim(),
+        ghl_user_id: ghlUserId || null,
+        ghl_contact_id: initial.ghl_contact_id ?? null,
+        default_period: defaultPeriod,
+        default_source: defaultSource === '__all__' ? null : defaultSource,
+        default_format: 'text',
+        notes: notes || null,
+      });
+      toast.success(isNew ? 'Destinatário criado' : 'Destinatário atualizado');
+      onSaved();
+    } catch (e) { toast.error((e as Error).message); }
+    finally { setSaving(false); }
+  }
+
+  return (
+    <Dialog
+      open={true}
+      onOpenChange={(v) => !v && onClose()}
+      title={isNew ? 'Novo destinatário' : `Editar ${initial.name}`}
+      description="Configure quem recebe o resumo de leads via SMS/WhatsApp interno do GHL."
+    >
+      <div className="space-y-3">
+        <div>
+          <label className="mb-1 block text-xs font-medium text-ink-600">Puxar de usuário GHL</label>
+          {usersLoading ? (
+            <div className="flex items-center gap-2 text-xs text-ink-400">
+              <Loader2 className="h-3 w-3 animate-spin" /> Carregando usuários…
+            </div>
+          ) : (
+            <Select
+              value={ghlUserId || undefined}
+              onChange={pickUser}
+              placeholder="Escolher usuário GHL (auto-preenche nome e telefone)..."
+              options={users.map((u) => ({
+                value: u.id,
+                label: `${u.name}${u.phone ? ` · ${u.phone}` : ' · sem telefone'}`,
+              }))}
+            />
+          )}
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="mb-1 block text-xs font-medium text-ink-600">Nome</label>
+            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nome do destinatário" />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-ink-600">Telefone</label>
+            <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+5511…" />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="mb-1 block text-xs font-medium text-ink-600">Período padrão</label>
+            <Select value={defaultPeriod} onChange={setDefaultPeriod}
+                    options={PERIOD_OPTIONS} />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-ink-600">Canal padrão</label>
+            <Select value={defaultSource} onChange={setDefaultSource}
+                    options={CHANNEL_OPTIONS} />
+          </div>
+        </div>
+
+        <div>
+          <label className="mb-1 block text-xs font-medium text-ink-600">Notas (opcional)</label>
+          <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Ex: gerente comercial" />
+        </div>
+
+        <div className="rounded-md bg-ink-50 px-3 py-2 text-[11px] text-ink-500">
+          Ao enviar, o app procura um contato no GHL com esse telefone; se não houver, cria um com a tag
+          <code className="mx-1 text-ink-700">soneko-internal-notification</code> e dispara a mensagem
+          via Conversations API.
+        </div>
+
+        <div className="flex justify-end gap-2 pt-1">
+          <Button variant="ghost" onClick={onClose}>Cancelar</Button>
+          <Button onClick={save} loading={saving}>
+            <Plus className="h-3.5 w-3.5" /> Salvar
+          </Button>
+        </div>
+      </div>
+    </Dialog>
+  );
+}
+
+function SendDialog({ recipient, onClose }: { recipient: Recipient; onClose: () => void }) {
+  const [period, setPeriod] = useState(recipient.default_period);
+  const [source, setSource] = useState<string | undefined>(recipient.default_source ?? '__all__');
+  const [preview, setPreview] = useState<string | null>(null);
+  const [previewing, setPreviewing] = useState(false);
+  const [sending, setSending] = useState(false);
+
+  async function doPreview() {
+    setPreviewing(true);
+    try {
+      const r = await api.notificationPreview({
+        period,
+        source: source === '__all__' ? null : source,
+      });
+      setPreview(r.message);
+    } catch (e) { toast.error((e as Error).message); }
+    finally { setPreviewing(false); }
+  }
+
+  useEffect(() => { doPreview(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [period, source]);
+
+  async function send() {
+    setSending(true);
+    try {
+      await api.notificationSend({
+        recipient_id: recipient.id, period,
+        source: source === '__all__' ? null : source,
+      });
+      toast.success(`Mensagem enviada para ${recipient.name}`);
+      onClose();
+    } catch (e) { toast.error((e as Error).message); }
+    finally { setSending(false); }
+  }
+
+  return (
+    <Dialog
+      open={true}
+      onOpenChange={(v) => !v && onClose()}
+      title={`Enviar para ${recipient.name}`}
+      description={`SMS interno via GHL para ${recipient.phone}`}
+    >
+      <div className="space-y-3">
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="mb-1 block text-xs font-medium text-ink-600">Período</label>
+            <Select value={period} onChange={setPeriod} options={PERIOD_OPTIONS} />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-ink-600">Canal</label>
+            <Select value={source} onChange={setSource} options={CHANNEL_OPTIONS} />
+          </div>
+        </div>
+
+        <div>
+          <label className="mb-1 block text-xs font-medium text-ink-600 flex items-center gap-2">
+            Prévia do conteúdo
+            {previewing && <Loader2 className="h-3 w-3 animate-spin text-ink-400" />}
+          </label>
+          <pre className={cn(
+            'rounded-md border border-ink-200 bg-ink-50 px-3 py-2 text-[12px] whitespace-pre-wrap',
+            'max-h-72 overflow-y-auto font-mono text-ink-800',
+          )}>
+            {preview ?? 'Carregando prévia…'}
+          </pre>
+        </div>
+
+        <div className="flex justify-end gap-2 pt-1">
+          <Button variant="ghost" onClick={onClose}>
+            <X className="h-3.5 w-3.5" /> Cancelar
+          </Button>
+          <Button onClick={send} loading={sending}>
+            <Send className="h-3.5 w-3.5" /> Enviar agora
+          </Button>
+        </div>
+      </div>
+    </Dialog>
+  );
+}
