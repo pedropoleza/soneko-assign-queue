@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from '@/lib/toast';
-import { BarChart3, Calendar, ChevronRight, Download, Tag, Trophy, TrendingUp } from 'lucide-react';
+import { BarChart3, Calendar, ChevronRight, Download, Radio, Tag, Trophy, TrendingUp } from 'lucide-react';
 import { Avatar } from '@/components/ui/Avatar';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -12,11 +12,12 @@ import { cn, colorFromString, formatAdaptive } from '@/lib/utils';
 import type { AppState } from '@/types';
 
 type PresetId =
-  | 'today' | 'this_week' | 'last_week' | 'this_month'
+  | 'today' | 'yesterday' | 'this_week' | 'last_week' | 'this_month'
   | 'last_month' | 'last_3_months' | 'this_year' | 'custom';
 
 const PRESETS: Array<{ id: PresetId; label: string }> = [
   { id: 'today', label: 'Hoje' },
+  { id: 'yesterday', label: 'Ontem' },
   { id: 'this_week', label: 'Esta semana' },
   { id: 'last_week', label: 'Semana passada' },
   { id: 'this_month', label: 'Este mês' },
@@ -33,6 +34,9 @@ function rangeFor(id: PresetId, custom?: { start: string; end: string }): { star
   switch (id) {
     case 'today':
       start.setHours(0, 0, 0, 0); break;
+    case 'yesterday':
+      start.setDate(now.getDate() - 1); start.setHours(0, 0, 0, 0);
+      end.setDate(now.getDate() - 1); end.setHours(23, 59, 59, 999); break;
     case 'this_week': {
       const day = now.getDay() === 0 ? 7 : now.getDay();
       start.setDate(now.getDate() - (day - 1));
@@ -66,6 +70,7 @@ export function ReportPage({ state: _state }: { state: AppState }) {
   const [preset, setPreset] = useState<PresetId>('this_month');
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
+  const [source, setSource] = useState<string | null>(null);
   const [report, setReport] = useState<Awaited<ReturnType<typeof api.report>> | null>(null);
   const [loading, setLoading] = useState(true);
   const [drawerRep, setDrawerRep] = useState<any | null>(null);
@@ -75,11 +80,11 @@ export function ReportPage({ state: _state }: { state: AppState }) {
   useEffect(() => {
     if (preset === 'custom' && (!customStart || !customEnd)) return;
     setLoading(true);
-    api.report(range.start.toISOString(), range.end.toISOString())
+    api.report(range.start.toISOString(), range.end.toISOString(), source)
       .then(setReport)
       .catch((e) => toast.error((e as Error).message))
       .finally(() => setLoading(false));
-  }, [range.start, range.end, preset, customStart, customEnd]);
+  }, [range.start, range.end, preset, customStart, customEnd, source]);
 
   const sortedReps = useMemo(() => (report?.by_rep ?? []).slice().sort((a, b) => b.total - a.total), [report]);
   const max = sortedReps[0]?.total ?? 1;
@@ -120,32 +125,59 @@ export function ReportPage({ state: _state }: { state: AppState }) {
   return (
     <div className="space-y-5">
       {/* Filters bar */}
-      <div className="card p-4 flex flex-wrap items-center gap-3">
-        <Calendar className="h-4 w-4 text-ink-400" />
-        <div className="flex flex-wrap gap-1.5">
-          {PRESETS.map((p) => (
-            <button key={p.id} onClick={() => setPreset(p.id)}
-                    className={cn(
-                      'rounded-md px-2.5 py-1 text-xs font-medium transition-colors',
-                      preset === p.id ? 'bg-brand-600 text-white shadow-sm' : 'bg-ink-100 text-ink-700 hover:bg-ink-200',
-                    )}>
-              {p.label}
-            </button>
-          ))}
+      <div className="card p-4 space-y-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <Calendar className="h-4 w-4 text-ink-400" />
+          <div className="flex flex-wrap gap-1.5">
+            {PRESETS.map((p) => (
+              <button key={p.id} onClick={() => setPreset(p.id)}
+                      className={cn(
+                        'rounded-md px-2.5 py-1 text-xs font-medium transition-colors',
+                        preset === p.id ? 'bg-brand-600 text-white shadow-sm' : 'bg-ink-100 text-ink-700 hover:bg-ink-200',
+                      )}>
+                {p.label}
+              </button>
+            ))}
+          </div>
+          {preset === 'custom' && (
+            <div className="flex items-center gap-2 ml-2">
+              <Input type="date" value={customStart} onChange={(e) => setCustomStart(e.target.value)} className="w-40 h-8 text-xs" />
+              <span className="text-xs text-ink-400">até</span>
+              <Input type="date" value={customEnd} onChange={(e) => setCustomEnd(e.target.value)} className="w-40 h-8 text-xs" />
+            </div>
+          )}
+          <div className="text-[11px] text-ink-500 ml-auto flex items-center gap-3">
+            <span>{fmtRange}</span>
+            <Button variant="outline" size="sm" onClick={exportCsv} disabled={!report}>
+              <Download className="h-3.5 w-3.5" /> CSV
+            </Button>
+          </div>
         </div>
-        {preset === 'custom' && (
-          <div className="flex items-center gap-2 ml-2">
-            <Input type="date" value={customStart} onChange={(e) => setCustomStart(e.target.value)} className="w-40 h-8 text-xs" />
-            <span className="text-xs text-ink-400">até</span>
-            <Input type="date" value={customEnd} onChange={(e) => setCustomEnd(e.target.value)} className="w-40 h-8 text-xs" />
+        {report && report.by_source.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1.5 pt-1 border-t border-ink-100">
+            <Radio className="h-3.5 w-3.5 text-ink-400 mr-1" />
+            <button onClick={() => setSource(null)}
+                    className={cn(
+                      'rounded-full px-2.5 py-0.5 text-[11px] font-medium transition-colors',
+                      source === null ? 'bg-brand-600 text-white' : 'bg-ink-100 text-ink-700 hover:bg-ink-200',
+                    )}>
+              Todos os canais
+            </button>
+            {report.by_source.map((s) => (
+              <button key={s.source} onClick={() => setSource(s.source)}
+                      className={cn(
+                        'rounded-full px-2.5 py-0.5 text-[11px] font-medium transition-colors inline-flex items-center gap-1.5',
+                        source === s.source ? 'bg-brand-600 text-white' : 'bg-ink-100 text-ink-700 hover:bg-ink-200',
+                      )}>
+                {s.source}
+                <span className={cn(
+                  'rounded-full px-1 text-[10px] tabular-nums',
+                  source === s.source ? 'bg-white/20' : 'bg-white/70',
+                )}>{s.count}</span>
+              </button>
+            ))}
           </div>
         )}
-        <div className="text-[11px] text-ink-500 ml-auto flex items-center gap-3">
-          <span>{fmtRange}</span>
-          <Button variant="outline" size="sm" onClick={exportCsv} disabled={!report}>
-            <Download className="h-3.5 w-3.5" /> CSV
-          </Button>
-        </div>
       </div>
 
       {/* Totals + comparison */}

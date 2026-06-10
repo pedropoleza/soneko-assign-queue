@@ -33,9 +33,10 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
 export const api = {
   getState: () => call<AppState>('GET', '/state'),
   distribution: (days = 30) => call<{ days: number; by_rep: DistributionByRep[] }>('GET', `/distribution?days=${days}`),
-  report: (startISO: string, endISO: string) => call<{
+  report: (startISO: string, endISO: string, source?: string | null) => call<{
     start: string; end: string;
     range_seconds: number;
+    source_filter: string | null;
     by_rep: Array<{
       rep_id: string; name: string; avatar_url: string | null; active: boolean;
       position: number;
@@ -45,6 +46,7 @@ export const api = {
       active_days: number;
     }>;
     by_day: Array<{ day: string; count: number }>;
+    by_source: Array<{ source: string; count: number }>;
     totals: { total: number; skipped: number; failed: number };
     previous: {
       start: string; end: string;
@@ -52,18 +54,19 @@ export const api = {
       by_rep: Record<string, number>;
     };
     top_tags: Array<{ tag: string; count: number }>;
-  }>('GET', `/report?start=${encodeURIComponent(startISO)}&end=${encodeURIComponent(endISO)}`),
-  repAssignments: (repId: string, startISO: string, endISO: string) => call<{
+  }>('GET', `/report?start=${encodeURIComponent(startISO)}&end=${encodeURIComponent(endISO)}${source ? `&source=${encodeURIComponent(source)}` : ''}`),
+  repAssignments: (repId: string, startISO: string, endISO: string, source?: string | null) => call<{
     total: number; limit: number;
     items: Array<{
       id: string; ghl_contact_id: string;
       contact_name: string | null; contact_email: string | null;
       contact_phone: string | null; contact_source: string | null;
+      normalized_source: string | null;
       contact_tags: string[] | null;
       was_skipped: boolean; ghl_sync_status: string; ghl_sync_error: string | null;
       created_at: string;
     }>;
-  }>('GET', `/report/rep/${encodeURIComponent(repId)}?start=${encodeURIComponent(startISO)}&end=${encodeURIComponent(endISO)}`),
+  }>('GET', `/report/rep/${encodeURIComponent(repId)}?start=${encodeURIComponent(startISO)}&end=${encodeURIComponent(endISO)}${source ? `&source=${encodeURIComponent(source)}` : ''}`),
   contact: (id: string) => call<any>('GET', `/contact/${id}`),
 
   skip: (assignment_id: string, target_rep_id: string | null, reason?: string) =>
