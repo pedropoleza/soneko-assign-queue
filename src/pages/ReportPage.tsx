@@ -390,24 +390,42 @@ export function ReportPage({ state: _state }: { state: AppState }) {
 }
 
 function DailyBars({ data }: { data: Array<{ day: string; count: number }> }) {
+  if (!data || data.length === 0) {
+    return <div className="py-8 text-center text-sm text-ink-500">Sem leads no período.</div>;
+  }
   const max = data.reduce((m, d) => Math.max(m, d.count), 1);
+  const total = data.reduce((s, d) => s + d.count, 0);
+  const trackPx = 160; // total bar track height
+  const fmtDay = (d: string) => new Date(d + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+  // Show every Nth label so they don't overlap
+  const labelEvery = Math.max(1, Math.ceil(data.length / 12));
   return (
-    <div className="flex items-end gap-1 h-32">
-      {data.map((d) => {
-        const pct = (d.count / max) * 100;
-        return (
-          <div key={d.day} className="flex-1 flex flex-col items-center gap-1 group min-w-0">
-            <div className="w-full bg-ink-100 rounded-t relative h-full flex flex-col justify-end">
-              <div className="bg-brand-500 rounded-t transition-all duration-500"
-                   style={{ height: `${pct}%` }}
-                   title={`${new Date(d.day).toLocaleDateString('pt-BR')}: ${d.count} leads`} />
+    <div className="space-y-2">
+      <div className="flex items-end gap-1" style={{ height: `${trackPx}px` }}>
+        {data.map((d) => {
+          const heightPx = Math.max(d.count > 0 ? 4 : 0, Math.round((d.count / max) * trackPx));
+          return (
+            <div key={d.day} className="flex-1 flex flex-col items-center gap-1 group min-w-0">
+              <span className="text-[10px] text-ink-600 tabular-nums opacity-0 group-hover:opacity-100 transition-opacity">
+                {d.count}
+              </span>
+              <div
+                className="w-full bg-brand-500 hover:bg-brand-600 rounded-t transition-colors"
+                style={{ height: `${heightPx}px` }}
+                title={`${fmtDay(d.day)}: ${d.count} leads`}
+              />
             </div>
-            <span className="text-[9px] text-ink-400 tabular-nums opacity-0 group-hover:opacity-100 transition-opacity">
-              {d.count}
-            </span>
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
+      <div className="flex items-center gap-1 text-[10px] text-ink-400 tabular-nums">
+        {data.map((d, i) => (
+          <span key={d.day} className="flex-1 text-center truncate">
+            {i % labelEvery === 0 ? fmtDay(d.day) : ''}
+          </span>
+        ))}
+      </div>
+      <div className="text-[11px] text-ink-500 text-center pt-1">{total} leads no período</div>
     </div>
   );
 }

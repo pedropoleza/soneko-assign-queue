@@ -65,7 +65,7 @@ export default function App() {
         isLive={!error}
         isRefreshing={isRefreshing}
       />
-      <main className="mx-auto max-w-screen-2xl px-6 py-6">
+      <main className="mx-auto max-w-screen-2xl px-6 py-6 pb-32">
         <Suspense fallback={<TableSkeleton rows={4} />}>
           {tab === 'dashboard' && <Dashboard state={state} refresh={refresh} />}
           {tab === 'assignments' && <AssignmentsPage state={state} refresh={refresh} />}
