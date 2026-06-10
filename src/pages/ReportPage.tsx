@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from '@/lib/toast';
-import { BarChart3, Calendar, Download, TrendingUp } from 'lucide-react';
+import { BarChart3, Calendar, ChevronRight, Download, Tag, Trophy, TrendingUp } from 'lucide-react';
 import { Avatar } from '@/components/ui/Avatar';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { TrendArrow } from '@/components/ui/TrendArrow';
+import { RepLeadsDrawer } from '@/components/RepLeadsDrawer';
 import { api } from '@/lib/api';
 import { cn, colorFromString, formatAdaptive } from '@/lib/utils';
 import type { AppState } from '@/types';
@@ -32,27 +34,23 @@ function rangeFor(id: PresetId, custom?: { start: string; end: string }): { star
     case 'today':
       start.setHours(0, 0, 0, 0); break;
     case 'this_week': {
-      const day = now.getDay() === 0 ? 7 : now.getDay(); // Mon=1..Sun=7
+      const day = now.getDay() === 0 ? 7 : now.getDay();
       start.setDate(now.getDate() - (day - 1));
-      start.setHours(0, 0, 0, 0);
-      break;
+      start.setHours(0, 0, 0, 0); break;
     }
     case 'last_week': {
       const day = now.getDay() === 0 ? 7 : now.getDay();
       start.setDate(now.getDate() - (day - 1) - 7);
       start.setHours(0, 0, 0, 0);
-      end.setTime(start.getTime() + 7 * 86400000 - 1);
-      break;
+      end.setTime(start.getTime() + 7 * 86400000 - 1); break;
     }
     case 'this_month':
       start.setDate(1); start.setHours(0, 0, 0, 0); break;
     case 'last_month':
       start.setMonth(now.getMonth() - 1, 1); start.setHours(0, 0, 0, 0);
-      end.setMonth(now.getMonth(), 0); end.setHours(23, 59, 59, 999);
-      break;
+      end.setMonth(now.getMonth(), 0); end.setHours(23, 59, 59, 999); break;
     case 'last_3_months':
-      start.setMonth(now.getMonth() - 3); start.setDate(1); start.setHours(0, 0, 0, 0);
-      break;
+      start.setMonth(now.getMonth() - 3); start.setDate(1); start.setHours(0, 0, 0, 0); break;
     case 'this_year':
       start.setMonth(0, 1); start.setHours(0, 0, 0, 0); break;
     case 'custom': {
@@ -70,6 +68,7 @@ export function ReportPage({ state: _state }: { state: AppState }) {
   const [customEnd, setCustomEnd] = useState('');
   const [report, setReport] = useState<Awaited<ReturnType<typeof api.report>> | null>(null);
   const [loading, setLoading] = useState(true);
+  const [drawerRep, setDrawerRep] = useState<any | null>(null);
 
   const range = useMemo(() => rangeFor(preset, { start: customStart, end: customEnd }), [preset, customStart, customEnd]);
 
@@ -82,23 +81,27 @@ export function ReportPage({ state: _state }: { state: AppState }) {
       .finally(() => setLoading(false));
   }, [range.start, range.end, preset, customStart, customEnd]);
 
-  const sortedReps = useMemo(() => {
-    return (report?.by_rep ?? []).slice().sort((a, b) => b.total - a.total);
-  }, [report]);
+  const sortedReps = useMemo(() => (report?.by_rep ?? []).slice().sort((a, b) => b.total - a.total), [report]);
   const max = sortedReps[0]?.total ?? 1;
+  const periodDays = report ? Math.max(1, Math.round(report.range_seconds / 86400)) : 1;
 
   function exportCsv() {
     if (!report) return;
-    const head = ['Consultor', 'Ativo', 'Total', 'Pulados', 'Falha sync', 'Primeiro', 'Último', '%'];
-    const rows = sortedReps.map((r) => [
-      r.name, r.active ? 'sim' : 'não',
-      r.total, r.skipped, r.failed,
-      r.first_at ?? '', r.last_at ?? '',
-      report.totals.total > 0 ? Math.round((r.total / report.totals.total) * 100) + '%' : '0%',
-    ]);
-    const csv = [head, ...rows]
-      .map((row) => row.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(','))
-      .join('\n');
+    const head = ['Rank', 'Consultor', 'Ativo', 'Total', '%', 'vs período anterior', 'Pulados', 'Falhas', 'Dias ativos', 'Melhor dia', 'Leads no melhor dia', 'Média/dia ativo', 'Primeiro', 'Último'];
+    const rows = sortedReps.map((r, i) => {
+      const prev = report.previous.by_rep[r.rep_id] ?? 0;
+      const change = prev > 0 ? Math.round(((r.total - prev) / prev) * 100) + '%' : (r.total > 0 ? 'novo' : '0%');
+      const avgPerActive = r.active_days > 0 ? (r.total / r.active_days).toFixed(1) : '0';
+      return [
+        i + 1, r.name, r.active ? 'sim' : 'não',
+        r.total,
+        report.totals.total > 0 ? Math.round((r.total / report.totals.total) * 100) + '%' : '0%',
+        change, r.skipped, r.failed, r.active_days,
+        r.best_day ?? '', r.best_day_count, avgPerActive,
+        r.first_at ?? '', r.last_at ?? '',
+      ];
+    });
+    const csv = [head, ...rows].map((row) => row.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -109,6 +112,10 @@ export function ReportPage({ state: _state }: { state: AppState }) {
   }
 
   const fmtRange = `${range.start.toLocaleDateString('pt-BR')} → ${range.end.toLocaleDateString('pt-BR')}`;
+  const champion = sortedReps[0];
+  const avgPerRepPerDay = sortedReps.length > 0 && periodDays > 0
+    ? (report?.totals.total ?? 0) / sortedReps.filter((r) => r.active).length / periodDays
+    : 0;
 
   return (
     <div className="space-y-5">
@@ -117,27 +124,20 @@ export function ReportPage({ state: _state }: { state: AppState }) {
         <Calendar className="h-4 w-4 text-ink-400" />
         <div className="flex flex-wrap gap-1.5">
           {PRESETS.map((p) => (
-            <button
-              key={p.id}
-              onClick={() => setPreset(p.id)}
-              className={cn(
-                'rounded-md px-2.5 py-1 text-xs font-medium transition-colors',
-                preset === p.id
-                  ? 'bg-brand-600 text-white shadow-sm'
-                  : 'bg-ink-100 text-ink-700 hover:bg-ink-200',
-              )}
-            >
+            <button key={p.id} onClick={() => setPreset(p.id)}
+                    className={cn(
+                      'rounded-md px-2.5 py-1 text-xs font-medium transition-colors',
+                      preset === p.id ? 'bg-brand-600 text-white shadow-sm' : 'bg-ink-100 text-ink-700 hover:bg-ink-200',
+                    )}>
               {p.label}
             </button>
           ))}
         </div>
         {preset === 'custom' && (
           <div className="flex items-center gap-2 ml-2">
-            <Input type="date" value={customStart} onChange={(e) => setCustomStart(e.target.value)}
-                   className="w-40 h-8 text-xs" />
+            <Input type="date" value={customStart} onChange={(e) => setCustomStart(e.target.value)} className="w-40 h-8 text-xs" />
             <span className="text-xs text-ink-400">até</span>
-            <Input type="date" value={customEnd} onChange={(e) => setCustomEnd(e.target.value)}
-                   className="w-40 h-8 text-xs" />
+            <Input type="date" value={customEnd} onChange={(e) => setCustomEnd(e.target.value)} className="w-40 h-8 text-xs" />
           </div>
         )}
         <div className="text-[11px] text-ink-500 ml-auto flex items-center gap-3">
@@ -148,21 +148,69 @@ export function ReportPage({ state: _state }: { state: AppState }) {
         </div>
       </div>
 
-      {/* Totals row */}
-      <div className="grid grid-cols-3 gap-4">
+      {/* Totals + comparison */}
+      <div className="grid grid-cols-4 gap-4">
         <div className="card p-4">
           <div className="text-[11px] uppercase tracking-wider text-ink-500">Total no período</div>
-          <div className="mt-1 text-3xl font-semibold tabular-nums text-ink-900">{report?.totals.total ?? '—'}</div>
+          <div className="mt-1 flex items-baseline gap-2">
+            <div className="text-3xl font-semibold tabular-nums text-ink-900">{report?.totals.total ?? '—'}</div>
+            {report && <TrendArrow current={report.totals.total} previous={report.previous.total} />}
+          </div>
+          <div className="mt-1 text-[11px] text-ink-500">vs anterior: {report?.previous.total ?? 0}</div>
         </div>
         <div className="card p-4">
           <div className="text-[11px] uppercase tracking-wider text-ink-500">Pulados</div>
           <div className="mt-1 text-3xl font-semibold tabular-nums text-amber-700">{report?.totals.skipped ?? '—'}</div>
+          <div className="mt-1 text-[11px] text-ink-500">
+            {report && report.totals.total > 0
+              ? `${Math.round((report.totals.skipped / report.totals.total) * 100)}% do total`
+              : '—'}
+          </div>
         </div>
         <div className="card p-4">
           <div className="text-[11px] uppercase tracking-wider text-ink-500">Falhas de sync</div>
           <div className="mt-1 text-3xl font-semibold tabular-nums text-rose-700">{report?.totals.failed ?? '—'}</div>
+          <div className="mt-1 text-[11px] text-ink-500">{periodDays} dia(s) no período</div>
+        </div>
+        <div className="card p-4 bg-gradient-to-br from-brand-50/40 to-white">
+          <div className="text-[11px] uppercase tracking-wider text-ink-500 flex items-center gap-1">
+            <Trophy className="h-3 w-3 text-amber-500" /> Líder do período
+          </div>
+          {champion ? (
+            <>
+              <div className="mt-1 flex items-center gap-2">
+                <Avatar name={champion.name} src={champion.avatar_url} size="sm" />
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold text-ink-900 truncate">{champion.name}</div>
+                  <div className="text-[11px] text-ink-500">{champion.total} leads</div>
+                </div>
+              </div>
+              <div className="mt-1 text-[11px] text-ink-500">
+                média {avgPerRepPerDay.toFixed(1)} leads/dia/ativo
+              </div>
+            </>
+          ) : (
+            <div className="mt-2 text-sm text-ink-400">—</div>
+          )}
         </div>
       </div>
+
+      {/* Top tags */}
+      {report && report.top_tags.length > 0 && (
+        <div className="card p-4">
+          <div className="text-[11px] uppercase tracking-wider text-ink-500 mb-2 flex items-center gap-1.5">
+            <Tag className="h-3 w-3" /> Tags mais frequentes
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {report.top_tags.map((t) => (
+              <Badge key={t.tag} tone="brand">
+                {t.tag}
+                <span className="ml-1 text-[10px] opacity-70">×{t.count}</span>
+              </Badge>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* By rep table */}
       <div className="card overflow-hidden">
@@ -171,36 +219,52 @@ export function ReportPage({ state: _state }: { state: AppState }) {
             <div className="card-title flex items-center gap-2">
               <BarChart3 className="h-4 w-4 text-ink-400" /> Leads por consultor
             </div>
-            <div className="text-xs text-ink-500">{sortedReps.length} consultor(es) no período</div>
+            <div className="text-xs text-ink-500">Click em uma linha para ver todos os leads desse consultor no período</div>
           </div>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-ink-50/60 text-left text-[11px] uppercase tracking-wider text-ink-500">
-                <th className="px-5 py-2.5 font-medium">Consultor</th>
+                <th className="px-5 py-2.5 font-medium w-10">#</th>
+                <th className="px-3 py-2.5 font-medium">Consultor</th>
                 <th className="px-3 py-2.5 font-medium">Total</th>
-                <th className="px-3 py-2.5 font-medium w-2/5">Volume</th>
+                <th className="px-3 py-2.5 font-medium">vs ant.</th>
+                <th className="px-3 py-2.5 font-medium w-1/3">Volume</th>
+                <th className="px-3 py-2.5 font-medium">Dias ativos</th>
+                <th className="px-3 py-2.5 font-medium">Melhor dia</th>
                 <th className="px-3 py-2.5 font-medium">Pulados</th>
                 <th className="px-3 py-2.5 font-medium">Falhas</th>
-                <th className="px-3 py-2.5 font-medium">Último</th>
+                <th className="px-3 py-2.5 font-medium w-8"></th>
               </tr>
             </thead>
             <tbody>
               {loading && (
-                <tr><td colSpan={6} className="p-8 text-center text-xs text-ink-400">Carregando…</td></tr>
+                <tr><td colSpan={10} className="p-8 text-center text-xs text-ink-400">Carregando…</td></tr>
               )}
               {!loading && sortedReps.length === 0 && (
-                <tr><td colSpan={6} className="p-8 text-center text-xs text-ink-400">Sem dados no período</td></tr>
+                <tr><td colSpan={10} className="p-8 text-center text-xs text-ink-400">Sem dados no período</td></tr>
               )}
-              {!loading && sortedReps.map((r) => {
+              {!loading && sortedReps.map((r, i) => {
                 const pct = r.total > 0 ? (r.total / max) * 100 : 0;
                 const totalPct = report && report.totals.total > 0
                   ? Math.round((r.total / report.totals.total) * 100) : 0;
                 const color = colorFromString(r.name);
+                const prev = report?.previous.by_rep[r.rep_id] ?? 0;
                 return (
-                  <tr key={r.rep_id} className="border-b border-ink-100 last:border-0 hover:bg-ink-50/50">
+                  <tr key={r.rep_id}
+                      onClick={() => setDrawerRep(r)}
+                      className="border-b border-ink-100 last:border-0 hover:bg-brand-50/40 cursor-pointer">
                     <td className="px-5 py-3">
+                      <span className={cn(
+                        'inline-flex items-center justify-center h-6 w-6 rounded-full text-[11px] font-semibold',
+                        i === 0 ? 'bg-amber-100 text-amber-800' :
+                        i === 1 ? 'bg-ink-200 text-ink-800' :
+                        i === 2 ? 'bg-orange-100 text-orange-800' :
+                                  'bg-ink-100 text-ink-600',
+                      )}>{i + 1}</span>
+                    </td>
+                    <td className="px-3 py-3">
                       <div className="flex items-center gap-3">
                         <Avatar name={r.name} src={r.avatar_url} size="sm"
                                 status={r.active ? 'available' : 'inactive'} />
@@ -214,6 +278,7 @@ export function ReportPage({ state: _state }: { state: AppState }) {
                       <span className="text-lg font-semibold text-ink-900 tabular-nums">{r.total}</span>
                       <span className="ml-1 text-[10px] text-ink-500">({totalPct}%)</span>
                     </td>
+                    <td className="px-3 py-3"><TrendArrow current={r.total} previous={prev} /></td>
                     <td className="px-3 py-3">
                       <div className="h-5 rounded bg-ink-100/80 overflow-hidden relative">
                         {r.total > 0 && (
@@ -222,9 +287,20 @@ export function ReportPage({ state: _state }: { state: AppState }) {
                         )}
                       </div>
                     </td>
+                    <td className="px-3 py-3 text-ink-700 tabular-nums text-xs">{r.active_days}</td>
+                    <td className="px-3 py-3 text-xs text-ink-700">
+                      {r.best_day ? (
+                        <span>
+                          <span className="font-semibold">{r.best_day_count}</span>
+                          <span className="ml-1 text-[10px] text-ink-500">
+                            {new Date(r.best_day).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
+                          </span>
+                        </span>
+                      ) : '—'}
+                    </td>
                     <td className="px-3 py-3 text-amber-700 tabular-nums">{r.skipped}</td>
                     <td className="px-3 py-3 text-rose-700 tabular-nums">{r.failed}</td>
-                    <td className="px-3 py-3 text-xs text-ink-600">{r.last_at ? formatAdaptive(r.last_at) : '—'}</td>
+                    <td className="px-3 py-3"><ChevronRight className="h-4 w-4 text-ink-300" /></td>
                   </tr>
                 );
               })}
@@ -249,6 +325,34 @@ export function ReportPage({ state: _state }: { state: AppState }) {
           </div>
         </div>
       )}
+
+      {/* Last activity */}
+      {sortedReps.length > 0 && (
+        <div className="card overflow-hidden">
+          <div className="card-header">
+            <div className="card-title">Última atividade</div>
+          </div>
+          <div className="px-5 py-3 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 text-xs">
+            {sortedReps.filter((r) => r.last_at).slice(0, 12).map((r) => (
+              <div key={r.rep_id} className="flex items-center gap-2 min-w-0">
+                <Avatar name={r.name} src={r.avatar_url} size="xs" />
+                <div className="min-w-0">
+                  <div className="font-medium text-ink-800 truncate">{r.name}</div>
+                  <div className="text-[10px] text-ink-500">{r.last_at ? formatAdaptive(r.last_at) : '—'}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <RepLeadsDrawer
+        open={!!drawerRep}
+        onClose={() => setDrawerRep(null)}
+        rep={drawerRep}
+        startISO={range.start.toISOString()}
+        endISO={range.end.toISOString()}
+      />
     </div>
   );
 }
@@ -260,11 +364,11 @@ function DailyBars({ data }: { data: Array<{ day: string; count: number }> }) {
       {data.map((d) => {
         const pct = (d.count / max) * 100;
         return (
-          <div key={d.day} className="flex-1 flex flex-col items-center gap-1 group">
+          <div key={d.day} className="flex-1 flex flex-col items-center gap-1 group min-w-0">
             <div className="w-full bg-ink-100 rounded-t relative h-full flex flex-col justify-end">
               <div className="bg-brand-500 rounded-t transition-all duration-500"
                    style={{ height: `${pct}%` }}
-                   title={`${d.day}: ${d.count} leads`} />
+                   title={`${new Date(d.day).toLocaleDateString('pt-BR')}: ${d.count} leads`} />
             </div>
             <span className="text-[9px] text-ink-400 tabular-nums opacity-0 group-hover:opacity-100 transition-opacity">
               {d.count}

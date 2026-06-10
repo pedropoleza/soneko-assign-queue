@@ -35,14 +35,35 @@ export const api = {
   distribution: (days = 30) => call<{ days: number; by_rep: DistributionByRep[] }>('GET', `/distribution?days=${days}`),
   report: (startISO: string, endISO: string) => call<{
     start: string; end: string;
+    range_seconds: number;
     by_rep: Array<{
       rep_id: string; name: string; avatar_url: string | null; active: boolean;
-      total: number; skipped: number; failed: number;
+      position: number;
+      total: number; skipped: number; failed: number; synced: number;
       first_at: string | null; last_at: string | null;
+      best_day: string | null; best_day_count: number;
+      active_days: number;
     }>;
     by_day: Array<{ day: string; count: number }>;
     totals: { total: number; skipped: number; failed: number };
+    previous: {
+      start: string; end: string;
+      total: number;
+      by_rep: Record<string, number>;
+    };
+    top_tags: Array<{ tag: string; count: number }>;
   }>('GET', `/report?start=${encodeURIComponent(startISO)}&end=${encodeURIComponent(endISO)}`),
+  repAssignments: (repId: string, startISO: string, endISO: string) => call<{
+    total: number; limit: number;
+    items: Array<{
+      id: string; ghl_contact_id: string;
+      contact_name: string | null; contact_email: string | null;
+      contact_phone: string | null; contact_source: string | null;
+      contact_tags: string[] | null;
+      was_skipped: boolean; ghl_sync_status: string; ghl_sync_error: string | null;
+      created_at: string;
+    }>;
+  }>('GET', `/report/rep/${encodeURIComponent(repId)}?start=${encodeURIComponent(startISO)}&end=${encodeURIComponent(endISO)}`),
   contact: (id: string) => call<any>('GET', `/contact/${id}`),
 
   skip: (assignment_id: string, target_rep_id: string | null, reason?: string) =>
