@@ -33,6 +33,16 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
 export const api = {
   getState: () => call<AppState>('GET', '/state'),
   distribution: (days = 30) => call<{ days: number; by_rep: DistributionByRep[] }>('GET', `/distribution?days=${days}`),
+  report: (startISO: string, endISO: string) => call<{
+    start: string; end: string;
+    by_rep: Array<{
+      rep_id: string; name: string; avatar_url: string | null; active: boolean;
+      total: number; skipped: number; failed: number;
+      first_at: string | null; last_at: string | null;
+    }>;
+    by_day: Array<{ day: string; count: number }>;
+    totals: { total: number; skipped: number; failed: number };
+  }>('GET', `/report?start=${encodeURIComponent(startISO)}&end=${encodeURIComponent(endISO)}`),
   contact: (id: string) => call<any>('GET', `/contact/${id}`),
 
   skip: (assignment_id: string, target_rep_id: string | null, reason?: string) =>

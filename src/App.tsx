@@ -8,6 +8,7 @@ import { useShortcuts } from '@/hooks/useShortcuts';
 const Dashboard = lazy(() => import('@/pages/Dashboard').then((m) => ({ default: m.Dashboard })));
 const AssignmentsPage = lazy(() => import('@/pages/AssignmentsPage').then((m) => ({ default: m.AssignmentsPage })));
 const RepsPage = lazy(() => import('@/pages/RepsPage').then((m) => ({ default: m.RepsPage })));
+const ReportPage = lazy(() => import('@/pages/ReportPage').then((m) => ({ default: m.ReportPage })));
 
 export default function App() {
   const { state, error, isLoading, isRefreshing, refresh, mutateRep } = useAppState();
@@ -18,6 +19,7 @@ export default function App() {
     { key: '1', handler: () => setTab('dashboard') },
     { key: '2', handler: () => setTab('assignments') },
     { key: '3', handler: () => setTab('reps') },
+    { key: '4', handler: () => setTab('report') },
     { key: '?', shift: true, handler: () => {
       toast.info('Atalhos: 1/2/3 (navegar abas) · R (recarregar) · ? (ajuda)', { duration: 6000 });
     } },
@@ -67,6 +69,7 @@ export default function App() {
           {tab === 'dashboard' && <Dashboard state={state} refresh={refresh} />}
           {tab === 'assignments' && <AssignmentsPage state={state} refresh={refresh} />}
           {tab === 'reps' && <RepsPage state={state} refresh={refresh} mutateRep={mutateRep} />}
+          {tab === 'report' && <ReportPage state={state} />}
         </Suspense>
       </main>
     </div>
