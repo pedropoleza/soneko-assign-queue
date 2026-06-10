@@ -273,6 +273,7 @@ function RecipientEditor({
       onOpenChange={(v) => !v && onClose()}
       title={isNew ? 'Novo destinatário' : `Editar ${initial.name}`}
       description="Configure quem recebe o resumo de leads via SMS/WhatsApp interno do GHL."
+      size="lg"
     >
       <div className="space-y-3">
         <div>
@@ -474,43 +475,64 @@ function SendDialog({ recipient, onClose }: { recipient: Recipient; onClose: () 
       onOpenChange={(v) => !v && onClose()}
       title={`Enviar para ${recipient.name}`}
       description={`SMS interno via GHL para ${recipient.phone}`}
+      size="xl"
     >
-      <div className="space-y-3">
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="mb-1 block text-xs font-medium text-ink-600">Período</label>
-            <Select value={period} onChange={setPeriod} options={PERIOD_OPTIONS} />
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Left column: settings */}
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="mb-1 block text-xs font-medium text-ink-600">Período</label>
+              <Select value={period} onChange={setPeriod} options={PERIOD_OPTIONS} />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-ink-600">Canal</label>
+              <Select value={source} onChange={setSource} options={channelOptions} />
+            </div>
           </div>
+
           <div>
-            <label className="mb-1 block text-xs font-medium text-ink-600">Canal</label>
-            <Select value={source} onChange={setSource} options={channelOptions} />
+            <label className="mb-1 block text-xs font-medium text-ink-600">Formato</label>
+            <div className="grid grid-cols-2 gap-2">
+              <button type="button" onClick={() => setFormat('text')}
+                      className={`rounded-md border px-3 py-2 text-left transition-colors ${
+                        format === 'text' ? 'border-brand-500 bg-brand-50' : 'border-ink-200 hover:bg-ink-50'
+                      }`}>
+                <div className="flex items-center gap-2 text-sm font-medium text-ink-900">
+                  <MessageSquare className="h-4 w-4 text-brand-600" /> Texto
+                </div>
+                <div className="text-[11px] text-ink-500 mt-0.5">SMS direto no chat</div>
+              </button>
+              <button type="button" onClick={() => setFormat('pdf')}
+                      className={`rounded-md border px-3 py-2 text-left transition-colors ${
+                        format === 'pdf' ? 'border-brand-500 bg-brand-50' : 'border-ink-200 hover:bg-ink-50'
+                      }`}>
+                <div className="flex items-center gap-2 text-sm font-medium text-ink-900">
+                  <FileText className="h-4 w-4 text-rose-600" /> PDF
+                </div>
+                <div className="text-[11px] text-ink-500 mt-0.5">Anexado via WhatsApp</div>
+              </button>
+            </div>
+          </div>
+
+          {format === 'pdf' && pdfUrl && (
+            <a href={pdfUrl} target="_blank" rel="noopener noreferrer"
+               className="inline-flex items-center gap-1.5 text-xs text-brand-600 hover:underline">
+              <FileText className="h-3 w-3" /> Abrir prévia do PDF
+            </a>
+          )}
+
+          <div className="flex justify-end gap-2 pt-2 border-t border-ink-100">
+            <Button variant="ghost" onClick={onClose}>
+              <X className="h-3.5 w-3.5" /> Cancelar
+            </Button>
+            <Button onClick={send} loading={sending}>
+              <Send className="h-3.5 w-3.5" /> Enviar agora
+            </Button>
           </div>
         </div>
 
-        <div>
-          <label className="mb-1 block text-xs font-medium text-ink-600">Formato</label>
-          <div className="grid grid-cols-2 gap-2">
-            <button type="button" onClick={() => setFormat('text')}
-                    className={`rounded-md border px-3 py-2 text-left transition-colors ${
-                      format === 'text' ? 'border-brand-500 bg-brand-50' : 'border-ink-200 hover:bg-ink-50'
-                    }`}>
-              <div className="flex items-center gap-2 text-sm font-medium text-ink-900">
-                <MessageSquare className="h-4 w-4 text-brand-600" /> Texto
-              </div>
-              <div className="text-[11px] text-ink-500 mt-0.5">SMS direto no chat</div>
-            </button>
-            <button type="button" onClick={() => setFormat('pdf')}
-                    className={`rounded-md border px-3 py-2 text-left transition-colors ${
-                      format === 'pdf' ? 'border-brand-500 bg-brand-50' : 'border-ink-200 hover:bg-ink-50'
-                    }`}>
-              <div className="flex items-center gap-2 text-sm font-medium text-ink-900">
-                <FileText className="h-4 w-4 text-rose-600" /> PDF
-              </div>
-              <div className="text-[11px] text-ink-500 mt-0.5">Anexado via WhatsApp</div>
-            </button>
-          </div>
-        </div>
-
+        {/* Right column: preview */}
         <div>
           <label className="mb-1 block text-xs font-medium text-ink-600 flex items-center gap-2">
             Prévia do conteúdo
@@ -518,25 +540,10 @@ function SendDialog({ recipient, onClose }: { recipient: Recipient; onClose: () 
           </label>
           <pre className={cn(
             'rounded-md border border-ink-200 bg-ink-50 px-3 py-2 text-[12px] whitespace-pre-wrap',
-            'max-h-72 overflow-y-auto font-mono text-ink-800',
+            'h-[420px] overflow-y-auto font-mono text-ink-800 leading-relaxed',
           )}>
             {preview ?? 'Carregando prévia…'}
           </pre>
-          {format === 'pdf' && pdfUrl && (
-            <a href={pdfUrl} target="_blank" rel="noopener noreferrer"
-               className="mt-2 inline-flex items-center gap-1.5 text-xs text-brand-600 hover:underline">
-              <FileText className="h-3 w-3" /> Abrir prévia do PDF
-            </a>
-          )}
-        </div>
-
-        <div className="flex justify-end gap-2 pt-1">
-          <Button variant="ghost" onClick={onClose}>
-            <X className="h-3.5 w-3.5" /> Cancelar
-          </Button>
-          <Button onClick={send} loading={sending}>
-            <Send className="h-3.5 w-3.5" /> Enviar agora
-          </Button>
         </div>
       </div>
     </Dialog>
