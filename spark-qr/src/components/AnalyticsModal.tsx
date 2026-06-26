@@ -24,7 +24,7 @@ function BarChart({ data }: { data: Array<{ day: string; count: number }> }) {
   return (
     <div className="flex h-44 items-end gap-0.5">
       {data.map((d) => (
-        <div key={d.day} className="group relative flex flex-1 flex-col items-center justify-end">
+        <div key={d.day} className="group relative flex h-full flex-1 flex-col items-center justify-end">
           <div
             className="w-full rounded-sm bg-brand-500 transition-colors group-hover:bg-brand-600"
             style={{ height: `${Math.max(3, (d.count / max) * 100)}%` }}

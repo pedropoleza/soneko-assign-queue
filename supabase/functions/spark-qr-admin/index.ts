@@ -12,13 +12,11 @@
 //   GET    /check-slug?slug=&exclude=   -> { available, reason }
 //   GET    /qrs/:id/analytics?days=30   -> analytics json
 //
-// Auth: this is an internal single-tenant panel, so no login is required —
-// when no `x-spark-secret` header (or ?secret=) is supplied, the function
-// resolves the admin secret server-side from qr.app_config and authorizes
-// itself. Supplying a secret still works if you later choose to lock it down
-// (e.g. front the panel with a Vercel/Cloudflare password instead).
+// Auth: every request MUST carry the admin secret via `x-spark-secret` header
+// (or ?secret=). No secret → 401; wrong secret → the RPC's assert_secret raises
+// invalid_secret → 401. There is no anonymous/keyless access.
 //
-// verify_jwt MUST be false.
+// verify_jwt MUST be false (custom secret auth).
 
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
@@ -42,17 +40,6 @@ const supabase = createClient(
   { auth: { persistSession: false } },
 );
 
-// The admin secret lives in qr.app_config. Cache it so we resolve it once per
-// warm instance instead of on every request.
-let cachedSecret: string | null = null;
-async function resolveSecret(provided: string): Promise<string> {
-  if (provided) return provided;
-  if (cachedSecret) return cachedSecret;
-  const { data } = await supabase.rpc('spark_qr_config');
-  cachedSecret = (data as { admin_secret?: string } | null)?.admin_secret ?? '';
-  return cachedSecret;
-}
-
 // Map Postgres errors to HTTP status + a stable error code for the UI.
 function fail(error: { message?: string; code?: string }) {
   const msg = error?.message ?? 'error';
@@ -73,14 +60,23 @@ Deno.serve(async (req: Request) => {
 
   if (path === '/warmup') return json(200, { ok: true, ts: Date.now() });
 
-  const provided =
+  const secret =
     req.headers.get('x-spark-secret') ?? url.searchParams.get('secret') ?? '';
-  const secret = await resolveSecret(provided);
-  if (!secret) return json(500, { error: 'config_unavailable' });
+  if (!secret) return json(401, { error: 'missing_secret' });
 
   const rpc = (fn: string, args: Record<string, unknown>) => supabase.rpc(fn, args);
 
   try {
+    // GET /overview?days=30  — dashboard aggregate
+    if (req.method === 'GET' && path === '/overview') {
+      const days = parseInt(url.searchParams.get('days') ?? '30', 10);
+      const { data, error } = await rpc('spark_qr_overview', {
+        p_secret: secret, p_days: isNaN(days) ? 30 : days,
+      });
+      if (error) return fail(error);
+      return json(200, data);
+    }
+
     // GET /check-slug?slug=&exclude=
     if (req.method === 'GET' && path === '/check-slug') {
       const slug = url.searchParams.get('slug') ?? '';

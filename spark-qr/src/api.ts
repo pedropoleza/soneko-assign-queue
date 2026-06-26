@@ -1,5 +1,5 @@
 import { API_URL, getSecret } from './config';
-import type { Analytics, CreateInput, QrCode, SlugCheck, UpdateInput } from './types';
+import type { Analytics, CreateInput, Overview, QrCode, SlugCheck, UpdateInput } from './types';
 
 export class ApiError extends Error {
   constructor(public code: string, public status: number) {
@@ -8,16 +8,17 @@ export class ApiError extends Error {
 }
 
 async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
-  // Secret is optional: the admin function authorizes itself server-side when
-  // no secret is supplied. Sending one (?secret= / localStorage) still works if
-  // you later choose to lock the API down.
+  // Every call must carry the admin secret (delivered via the GHL menu link
+  // ?secret=… and kept in localStorage). No secret → no access.
   const secret = getSecret();
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  if (secret) headers['x-spark-secret'] = secret;
+  if (!secret) throw new ApiError('missing_secret', 401);
 
   const res = await fetch(`${API_URL}${path}`, {
     method,
-    headers,
+    headers: {
+      'Content-Type': 'application/json',
+      'x-spark-secret': secret,
+    },
     body: body ? JSON.stringify(body) : undefined,
   });
 
@@ -30,6 +31,7 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
 }
 
 export const api = {
+  overview: (days = 30) => call<Overview>('GET', `/overview?days=${days}`),
   list: () => call<QrCode[]>('GET', '/qrs'),
   get: (id: string) => call<QrCode>('GET', `/qrs/${id}`),
   create: (input: CreateInput) => call<QrCode>('POST', '/qrs', input),

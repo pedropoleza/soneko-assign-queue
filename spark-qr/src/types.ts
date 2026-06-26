@@ -30,6 +30,17 @@ export type Analytics = {
   top_cities: Array<{ city: string; count: number }>;
 };
 
+export type Overview = {
+  days: number;
+  total_qrs: number;
+  active_qrs: number;
+  total_scans: number;
+  scans_in_range: number;
+  unique_in_range: number;
+  by_day: Array<{ day: string; count: number }>;
+  top: Array<{ id: string; slug: string; name: string; is_active: boolean; scans: number }>;
+};
+
 export type CreateInput = { slug: string; target_url: string; name: string };
 export type UpdateInput = Partial<{
   slug: string;
