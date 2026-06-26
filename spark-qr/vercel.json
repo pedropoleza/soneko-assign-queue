@@ -1,0 +1,9 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "rewrites": [
+    {
+      "source": "/:slug",
+      "destination": "https://tbziahcpkrfiksqhuhpe.supabase.co/functions/v1/spark-qr-redirect/:slug"
+    }
+  ]
+}

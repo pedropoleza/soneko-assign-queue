@@ -72,7 +72,7 @@ export function QrFormModal({ open, onClose, onSaved, editing }: Props) {
   useEffect(() => {
     let alive = true;
     if (!liveUrl) { setPreview(null); return; }
-    qrPngDataUrl(liveUrl, 320).then((d) => { if (alive) setPreview(d); }).catch(() => {});
+    qrPngDataUrl(liveUrl, 512).then((d) => { if (alive) setPreview(d); }).catch(() => {});
     return () => { alive = false; };
   }, [liveUrl]);
 
@@ -116,14 +116,14 @@ export function QrFormModal({ open, onClose, onSaved, editing }: Props) {
         <>
           <button className="btn-ghost" onClick={onClose}>Cancelar</button>
           <button className="btn-primary" onClick={save} disabled={!canSave}>
-            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+            {saving ? <Loader2 className="h-6 w-6 animate-spin" /> : null}
             {isEdit ? 'Salvar' : 'Criar QR'}
           </button>
         </>
       }
     >
-      <div className="grid gap-5 sm:grid-cols-[1fr_auto]">
-        <div className="space-y-4">
+      <div className="grid gap-8 sm:grid-cols-[1fr_auto]">
+        <div className="space-y-6">
           <div>
             <label className="label">Nome (interno)</label>
             <input className="input" value={name} placeholder="Ex: Cartaz vitrine loja 1"
@@ -132,26 +132,26 @@ export function QrFormModal({ open, onClose, onSaved, editing }: Props) {
 
           <div>
             <label className="label">Slug</label>
-            <div className="flex items-stretch overflow-hidden rounded-md border border-ink-200 focus-within:border-brand-400 focus-within:ring-2 focus-within:ring-brand-100">
-              <span className="flex items-center bg-ink-50 px-2.5 text-xs text-ink-400 border-r border-ink-200">/</span>
+            <div className="flex items-stretch overflow-hidden rounded-xl border border-ink-200 focus-within:border-brand-400 focus-within:ring-4 focus-within:ring-brand-100">
+              <span className="flex items-center bg-ink-50 px-4 text-lg text-ink-400 border-r border-ink-200">/</span>
               <input
-                className="w-full px-3 py-2 text-sm outline-none placeholder:text-ink-400"
+                className="w-full px-5 py-3.5 text-lg outline-none placeholder:text-ink-400"
                 value={slug}
                 placeholder="minha-promo"
                 onChange={(e) => { setSlugTouched(true); setSlug(slugify(e.target.value)); }}
               />
-              <span className="flex items-center pr-2.5">
-                {checking ? <Loader2 className="h-4 w-4 animate-spin text-ink-400" />
+              <span className="flex items-center pr-4">
+                {checking ? <Loader2 className="h-6 w-6 animate-spin text-ink-400" />
                   : check == null ? null
-                  : slugOk ? <Check className="h-4 w-4 text-emerald-600" />
-                  : <X className="h-4 w-4 text-rose-500" />}
+                  : slugOk ? <Check className="h-6 w-6 text-emerald-600" />
+                  : <X className="h-6 w-6 text-rose-500" />}
               </span>
             </div>
             {slugTouched && check && !slugOk && check.reason && (
-              <p className="mt-1 text-xs text-rose-600">{SLUG_REASON[check.reason] ?? 'Slug inválido.'}</p>
+              <p className="mt-2 text-base text-rose-600">{SLUG_REASON[check.reason] ?? 'Slug inválido.'}</p>
             )}
             {slugOk && slug && (
-              <p className="mt-1 truncate text-xs text-ink-400">{publicUrl(slug)}</p>
+              <p className="mt-2 truncate text-base text-ink-400">{publicUrl(slug)}</p>
             )}
           </div>
 
@@ -160,27 +160,27 @@ export function QrFormModal({ open, onClose, onSaved, editing }: Props) {
             <input className="input" value={targetUrl} placeholder="https://..."
               onChange={(e) => setTargetUrl(e.target.value)} />
             {targetUrl && !/^https?:\/\//i.test(targetUrl.trim()) && (
-              <p className="mt-1 text-xs text-rose-600">Comece com http:// ou https://</p>
+              <p className="mt-2 text-base text-rose-600">Comece com http:// ou https://</p>
             )}
           </div>
         </div>
 
-        <div className="flex flex-col items-center gap-3 sm:w-52">
-          <div className="grid h-44 w-44 place-items-center rounded-lg border border-ink-200 bg-white p-2">
+        <div className="flex flex-col items-center gap-4 sm:w-72">
+          <div className="grid h-64 w-64 place-items-center rounded-2xl border border-ink-200 bg-white p-3">
             {preview ? <img src={preview} alt="QR preview" className="h-full w-full object-contain" />
-              : <span className="text-xs text-ink-400">prévia do QR</span>}
+              : <span className="text-base text-ink-400">prévia do QR</span>}
           </div>
-          <div className="flex w-full gap-2">
-            <button className="btn-outline flex-1" disabled={!slugOk || !slug}
+          <div className="flex w-full gap-3">
+            <button className="btn-outline flex-1 px-3" disabled={!slugOk || !slug}
               onClick={() => downloadPng(publicUrl(slug), slug)}>
-              <Download className="h-3.5 w-3.5" /> PNG
+              <Download className="h-5 w-5" /> PNG
             </button>
-            <button className="btn-outline flex-1" disabled={!slugOk || !slug}
+            <button className="btn-outline flex-1 px-3" disabled={!slugOk || !slug}
               onClick={() => downloadSvg(publicUrl(slug), slug)}>
-              <Download className="h-3.5 w-3.5" /> SVG
+              <Download className="h-5 w-5" /> SVG
             </button>
           </div>
-          <p className="text-center text-[11px] leading-tight text-ink-400">
+          <p className="text-center text-sm leading-snug text-ink-400">
             O QR codifica o slug. Editar o destino depois não muda a imagem.
           </p>
         </div>
