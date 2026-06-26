@@ -22,6 +22,10 @@ function relTime(iso: string | null | undefined): string {
   return `${d}d`;
 }
 
+function shortLink(slug: string): string {
+  return publicUrl(slug).replace(/^https?:\/\//, '');
+}
+
 export default function App() {
   const [items, setItems] = useState<QrCode[] | null>(null);
   const [loading, setLoading] = useState(false);
@@ -79,36 +83,36 @@ export default function App() {
   return (
     <div className="min-h-screen bg-ink-50">
       <header className="sticky top-0 z-30 border-b border-ink-200 bg-white/90 backdrop-blur">
-        <div className="mx-auto flex h-24 max-w-7xl items-center justify-between gap-4 px-6 sm:px-10">
-          <div className="flex items-center gap-4">
-            <span className="grid h-12 w-12 place-items-center rounded-2xl bg-brand-600 text-white">
-              <Zap className="h-7 w-7" />
+        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-6">
+          <div className="flex items-center gap-3">
+            <span className="grid h-10 w-10 place-items-center rounded-xl bg-brand-600 text-white">
+              <Zap className="h-5 w-5" />
             </span>
-            <span className="text-3xl font-bold tracking-tight text-ink-900">Spark QR</span>
+            <span className="text-2xl font-bold tracking-tight text-ink-900">Spark QR</span>
             {items && (
               <span className="pill ml-1 hidden sm:inline-flex">
                 {items.length} QR{items.length === 1 ? '' : 's'} · {totalScans} scans
               </span>
             )}
           </div>
-          <div className="flex items-center gap-3">
-            <button className="btn-ghost h-14 w-14 px-0" onClick={load} title="Recarregar">
-              <RefreshCw className={`h-6 w-6 ${loading ? 'animate-spin' : ''}`} />
+          <div className="flex items-center gap-2">
+            <button className="btn-ghost h-11 w-11 px-0" onClick={load} title="Recarregar">
+              <RefreshCw className={`h-5 w-5 ${loading ? 'animate-spin' : ''}`} />
             </button>
             <button className="btn-primary" onClick={() => { setEditing(null); setFormOpen(true); }}>
-              <Plus className="h-6 w-6" /> Novo QR
+              <Plus className="h-5 w-5" /> Novo QR
             </button>
           </div>
         </div>
       </header>
 
-      <main className="mx-auto max-w-7xl px-6 py-10 sm:px-10">
-        <div className="mb-6 flex items-center gap-3">
-          <div className="relative w-full max-w-md">
-            <Search className="pointer-events-none absolute left-4 top-1/2 h-6 w-6 -translate-y-1/2 text-ink-400" />
+      <main className="mx-auto max-w-6xl px-6 py-8">
+        <div className="mb-5 flex items-center gap-3">
+          <div className="relative w-full max-w-sm">
+            <Search className="pointer-events-none absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-ink-400" />
             <input
-              className="input pl-12"
-              placeholder="Buscar por nome, slug ou destino…"
+              className="input pl-11"
+              placeholder="Buscar por nome, link ou destino…"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
             />
@@ -116,77 +120,77 @@ export default function App() {
         </div>
 
         {items === null ? (
-          <div className="grid place-items-center py-32 text-ink-400">
-            <Loader2 className="h-10 w-10 animate-spin" />
+          <div className="grid place-items-center py-28 text-ink-400">
+            <Loader2 className="h-8 w-8 animate-spin" />
           </div>
         ) : filtered.length === 0 ? (
-          <div className="card grid place-items-center gap-5 py-28 text-center">
-            <span className="grid h-20 w-20 place-items-center rounded-3xl bg-brand-50 text-brand-600">
-              <QrIcon className="h-10 w-10" />
+          <div className="card grid place-items-center gap-4 py-24 text-center">
+            <span className="grid h-16 w-16 place-items-center rounded-2xl bg-brand-50 text-brand-600">
+              <QrIcon className="h-8 w-8" />
             </span>
             <div>
-              <div className="text-xl font-semibold text-ink-900">
+              <div className="text-lg font-semibold text-ink-900">
                 {query ? 'Nenhum QR encontrado' : 'Nenhum QR ainda'}
               </div>
-              <div className="mt-1 text-base text-ink-500">
+              <div className="mt-1 text-sm text-ink-500">
                 {query ? 'Tente outro termo de busca.' : 'Crie seu primeiro QR dinâmico.'}
               </div>
             </div>
             {!query && (
               <button className="btn-primary" onClick={() => { setEditing(null); setFormOpen(true); }}>
-                <Plus className="h-6 w-6" /> Novo QR
+                <Plus className="h-5 w-5" /> Novo QR
               </button>
             )}
           </div>
         ) : (
           <div className="card divide-y divide-ink-100 overflow-hidden">
             {filtered.map((qr) => (
-              <div key={qr.id} className="flex items-center gap-5 px-6 py-5 hover:bg-ink-50/60 sm:px-8">
-                <span className={`grid h-14 w-14 shrink-0 place-items-center rounded-2xl ${qr.is_active ? 'bg-brand-50 text-brand-600' : 'bg-ink-100 text-ink-400'}`}>
-                  <QrIcon className="h-7 w-7" />
+              <div key={qr.id} className="flex items-center gap-4 px-5 py-4 transition-colors hover:bg-ink-50/70">
+                <span className={`grid h-12 w-12 shrink-0 place-items-center rounded-xl ${qr.is_active ? 'bg-brand-50 text-brand-600' : 'bg-ink-100 text-ink-400'}`}>
+                  <QrIcon className="h-6 w-6" />
                 </span>
 
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-3">
-                    <span className="truncate text-xl font-semibold text-ink-900">{qr.name || qr.slug}</span>
-                    {!qr.is_active && <span className="pill text-ink-400">inativo</span>}
+                  <div className="flex items-center gap-2">
+                    <span className="truncate text-lg font-semibold text-ink-900">{qr.name || 'Sem nome'}</span>
+                    {!qr.is_active && <span className="pill">inativo</span>}
                   </div>
-                  <div className="mt-1 flex items-center gap-2 text-base text-ink-500">
-                    <span className="font-mono font-medium text-brand-600">/{qr.slug}</span>
+                  <div className="mt-0.5 flex items-center gap-2 text-sm">
+                    <span className="shrink-0 font-mono font-medium text-brand-600">{shortLink(qr.slug)}</span>
                     <span className="text-ink-300">→</span>
-                    <span className="truncate">{qr.target_url}</span>
+                    <span className="truncate text-ink-500">{qr.target_url}</span>
                   </div>
                 </div>
 
-                <div className="hidden shrink-0 text-right sm:block">
-                  <div className="text-3xl font-bold tabular-nums text-ink-900">{qr.scans ?? 0}</div>
-                  <div className="text-sm text-ink-400">
+                <div className="hidden shrink-0 px-2 text-right sm:block">
+                  <div className="text-2xl font-bold tabular-nums text-ink-900">{qr.scans ?? 0}</div>
+                  <div className="text-xs text-ink-400">
                     {qr.scans_7d ? `+${qr.scans_7d} 7d · ` : ''}{relTime(qr.last_scan_at)}
                   </div>
                 </div>
 
-                <div className="flex shrink-0 items-center gap-1">
-                  <button className="btn-ghost h-12 w-12 px-0" title="Copiar link" onClick={() => copyLink(qr)}>
-                    <Copy className="h-6 w-6" />
+                <div className="flex shrink-0 items-center gap-0.5">
+                  <button className="btn-ghost h-10 w-10 px-0" title="Copiar link" onClick={() => copyLink(qr)}>
+                    <Copy className="h-5 w-5" />
                   </button>
-                  <a className="btn-ghost h-12 w-12 px-0" title="Abrir link" href={publicUrl(qr.slug)} target="_blank" rel="noreferrer">
-                    <ExternalLink className="h-6 w-6" />
+                  <a className="btn-ghost h-10 w-10 px-0" title="Abrir link" href={publicUrl(qr.slug)} target="_blank" rel="noreferrer">
+                    <ExternalLink className="h-5 w-5" />
                   </a>
-                  <button className="btn-ghost h-12 w-12 px-0" title="Analytics" onClick={() => setAnalytics(qr)}>
-                    <BarChart3 className="h-6 w-6" />
+                  <button className="btn-ghost h-10 w-10 px-0" title="Analytics" onClick={() => setAnalytics(qr)}>
+                    <BarChart3 className="h-5 w-5" />
                   </button>
-                  <button className="btn-ghost h-12 w-12 px-0" title="Editar" onClick={() => { setEditing(qr); setFormOpen(true); }}>
-                    <Pencil className="h-6 w-6" />
+                  <button className="btn-ghost h-10 w-10 px-0" title="Editar" onClick={() => { setEditing(qr); setFormOpen(true); }}>
+                    <Pencil className="h-5 w-5" />
                   </button>
                   <button
-                    className={`btn-ghost h-12 w-12 px-0 ${qr.is_active ? 'text-emerald-600' : 'text-ink-400'}`}
+                    className={`btn-ghost h-10 w-10 px-0 ${qr.is_active ? 'text-emerald-600' : 'text-ink-400'}`}
                     title={qr.is_active ? 'Desativar' : 'Ativar'}
                     onClick={() => toggleActive(qr)}
                   >
-                    <Power className="h-6 w-6" />
+                    <Power className="h-5 w-5" />
                   </button>
-                  <button className="btn-ghost h-12 w-12 px-0 text-rose-500 hover:bg-rose-50" title="Excluir" onClick={() => remove(qr)}>
-                    <Trash2 className="h-6 w-6" />
+                  <button className="btn-ghost h-10 w-10 px-0 text-rose-500 hover:bg-rose-50" title="Excluir" onClick={() => remove(qr)}>
+                    <Trash2 className="h-5 w-5" />
                   </button>
                 </div>
               </div>

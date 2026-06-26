@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { Check, Download, Loader2, X } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Download, Link2, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Modal } from './Modal';
 import { api, ApiError } from '@/api';
 import { publicUrl } from '@/config';
 import { downloadPng, downloadSvg, qrPngDataUrl } from '@/lib/qr';
-import type { QrCode, SlugCheck } from '@/types';
+import type { QrCode } from '@/types';
 
 type Props = {
   open: boolean;
@@ -14,61 +14,34 @@ type Props = {
   editing: QrCode | null;
 };
 
-const SLUG_REASON: Record<string, string> = {
-  invalid_format: 'Use 2-50 caracteres: letras minúsculas, números e hífens.',
-  reserved: 'Esse slug é reservado pelo sistema.',
-  taken: 'Esse slug já está em uso.',
-};
-
-function slugify(v: string): string {
-  return v.toLowerCase().trim()
-    .replace(/[^a-z0-9-]+/g, '-')
-    .replace(/-+/g, '-')
-    .replace(/^-+/, '')
-    .slice(0, 50);
+// Short, clean, collision-safe code (e.g. "k3p9zq"). The user never sees or
+// manages a slug — the system mints the short link for them.
+function genSlug(len = 6): string {
+  const alphabet = 'abcdefghijkmnpqrstuvwxyz23456789'; // no ambiguous chars
+  const bytes = crypto.getRandomValues(new Uint8Array(len));
+  return Array.from(bytes, (b) => alphabet[b % alphabet.length]).join('');
 }
 
 export function QrFormModal({ open, onClose, onSaved, editing }: Props) {
   const isEdit = !!editing;
   const [name, setName] = useState('');
-  const [slug, setSlug] = useState('');
   const [targetUrl, setTargetUrl] = useState('');
-  const [slugTouched, setSlugTouched] = useState(false);
-  const [check, setCheck] = useState<SlugCheck | null>(null);
-  const [checking, setChecking] = useState(false);
+  const [slug, setSlug] = useState('');
   const [saving, setSaving] = useState(false);
   const [preview, setPreview] = useState<string | null>(null);
 
-  // Reset when (re)opened.
+  // Reset on open: in create mode mint a fresh short code so the preview is live.
   useEffect(() => {
     if (!open) return;
     setName(editing?.name ?? '');
-    setSlug(editing?.slug ?? '');
     setTargetUrl(editing?.target_url ?? '');
-    setSlugTouched(false);
-    setCheck(null);
+    setSlug(editing?.slug ?? genSlug());
   }, [open, editing]);
 
-  // Live slug availability (debounced).
-  const debounceRef = useRef<number | null>(null);
-  useEffect(() => {
-    if (!open) return;
-    if (isEdit && slug === editing?.slug) { setCheck({ slug, available: true, reason: null }); return; }
-    if (!slug) { setCheck(null); return; }
-    setChecking(true);
-    if (debounceRef.current) window.clearTimeout(debounceRef.current);
-    debounceRef.current = window.setTimeout(async () => {
-      try {
-        const r = await api.checkSlug(slug, editing?.id ?? null);
-        setCheck(r);
-      } catch { setCheck(null); }
-      finally { setChecking(false); }
-    }, 350);
-    return () => { if (debounceRef.current) window.clearTimeout(debounceRef.current); };
-  }, [slug, open, isEdit, editing]);
-
-  // Live QR preview of the public URL.
   const liveUrl = useMemo(() => (slug ? publicUrl(slug) : ''), [slug]);
+  const prettyUrl = liveUrl.replace(/^https?:\/\//, '');
+
+  // Live QR preview.
   useEffect(() => {
     let alive = true;
     if (!liveUrl) { setPreview(null); return; }
@@ -76,23 +49,28 @@ export function QrFormModal({ open, onClose, onSaved, editing }: Props) {
     return () => { alive = false; };
   }, [liveUrl]);
 
-  const slugOk = check?.available === true;
-  const canSave =
-    !!targetUrl.trim() && /^https?:\/\//i.test(targetUrl.trim()) && slugOk && !saving;
+  const urlOk = /^https?:\/\//i.test(targetUrl.trim());
+  const canSave = urlOk && !saving;
 
   async function save() {
     if (!canSave) return;
     setSaving(true);
     try {
       if (isEdit && editing) {
-        await api.update(editing.id, {
-          name: name.trim(),
-          slug,
-          target_url: targetUrl.trim(),
-        });
+        await api.update(editing.id, { name: name.trim(), target_url: targetUrl.trim() });
         toast.success('QR atualizado.');
       } else {
-        await api.create({ name: name.trim(), slug, target_url: targetUrl.trim() });
+        // Retry once with a fresh code on the (astronomically rare) collision.
+        let attempt = slug;
+        for (let i = 0; i < 2; i++) {
+          try {
+            await api.create({ name: name.trim(), slug: attempt, target_url: targetUrl.trim() });
+            break;
+          } catch (e) {
+            if (e instanceof ApiError && e.code === 'slug_taken' && i === 0) { attempt = genSlug(); continue; }
+            throw e;
+          }
+        }
         toast.success('QR criado.');
       }
       onSaved();
@@ -110,78 +88,63 @@ export function QrFormModal({ open, onClose, onSaved, editing }: Props) {
       open={open}
       onClose={onClose}
       title={isEdit ? 'Editar QR' : 'Novo QR'}
-      subtitle={isEdit ? 'Trocar o destino mantém o mesmo QR — não precisa reimprimir.' : 'Slug curto + destino. O QR aponta pro slug; o destino é editável depois.'}
+      subtitle={isEdit
+        ? 'Trocar o destino mantém o mesmo QR — não precisa reimprimir.'
+        : 'Dê um nome e cole o destino. O link curto é gerado automaticamente.'}
       wide
       footer={
         <>
           <button className="btn-ghost" onClick={onClose}>Cancelar</button>
           <button className="btn-primary" onClick={save} disabled={!canSave}>
-            {saving ? <Loader2 className="h-6 w-6 animate-spin" /> : null}
+            {saving ? <Loader2 className="h-5 w-5 animate-spin" /> : null}
             {isEdit ? 'Salvar' : 'Criar QR'}
           </button>
         </>
       }
     >
-      <div className="grid gap-8 sm:grid-cols-[1fr_auto]">
-        <div className="space-y-6">
+      <div className="grid gap-7 sm:grid-cols-[1fr_auto]">
+        <div className="space-y-5">
           <div>
-            <label className="label">Nome (interno)</label>
+            <label className="label">Nome</label>
             <input className="input" value={name} placeholder="Ex: Cartaz vitrine loja 1"
-              onChange={(e) => setName(e.target.value)} />
-          </div>
-
-          <div>
-            <label className="label">Slug</label>
-            <div className="flex items-stretch overflow-hidden rounded-xl border border-ink-200 focus-within:border-brand-400 focus-within:ring-4 focus-within:ring-brand-100">
-              <span className="flex items-center bg-ink-50 px-4 text-lg text-ink-400 border-r border-ink-200">/</span>
-              <input
-                className="w-full px-5 py-3.5 text-lg outline-none placeholder:text-ink-400"
-                value={slug}
-                placeholder="minha-promo"
-                onChange={(e) => { setSlugTouched(true); setSlug(slugify(e.target.value)); }}
-              />
-              <span className="flex items-center pr-4">
-                {checking ? <Loader2 className="h-6 w-6 animate-spin text-ink-400" />
-                  : check == null ? null
-                  : slugOk ? <Check className="h-6 w-6 text-emerald-600" />
-                  : <X className="h-6 w-6 text-rose-500" />}
-              </span>
-            </div>
-            {slugTouched && check && !slugOk && check.reason && (
-              <p className="mt-2 text-base text-rose-600">{SLUG_REASON[check.reason] ?? 'Slug inválido.'}</p>
-            )}
-            {slugOk && slug && (
-              <p className="mt-2 truncate text-base text-ink-400">{publicUrl(slug)}</p>
-            )}
+              autoFocus onChange={(e) => setName(e.target.value)} />
           </div>
 
           <div>
             <label className="label">URL de destino</label>
             <input className="input" value={targetUrl} placeholder="https://..."
               onChange={(e) => setTargetUrl(e.target.value)} />
-            {targetUrl && !/^https?:\/\//i.test(targetUrl.trim()) && (
-              <p className="mt-2 text-base text-rose-600">Comece com http:// ou https://</p>
+            {targetUrl && !urlOk && (
+              <p className="mt-1.5 text-sm text-rose-600">Comece com http:// ou https://</p>
             )}
+          </div>
+
+          <div className="rounded-xl border border-ink-100 bg-ink-50/60 px-4 py-3">
+            <div className="flex items-center gap-2 text-sm text-ink-500">
+              <Link2 className="h-4 w-4 shrink-0 text-brand-500" />
+              <span className="truncate font-mono text-ink-700">{prettyUrl}</span>
+            </div>
+            <p className="mt-1 text-xs text-ink-400">
+              Link curto do QR. {isEdit ? 'Fixo — o destino acima é o que muda.' : 'Gerado para você.'}
+            </p>
           </div>
         </div>
 
-        <div className="flex flex-col items-center gap-4 sm:w-72">
-          <div className="grid h-64 w-64 place-items-center rounded-2xl border border-ink-200 bg-white p-3">
+        <div className="flex flex-col items-center gap-3 sm:w-60">
+          <div className="grid h-56 w-56 place-items-center rounded-2xl border border-ink-200 bg-white p-3">
             {preview ? <img src={preview} alt="QR preview" className="h-full w-full object-contain" />
-              : <span className="text-base text-ink-400">prévia do QR</span>}
+              : <span className="text-sm text-ink-400">prévia do QR</span>}
           </div>
-          <div className="flex w-full gap-3">
-            <button className="btn-outline flex-1 px-3" disabled={!slugOk || !slug}
-              onClick={() => downloadPng(publicUrl(slug), slug)}>
-              <Download className="h-5 w-5" /> PNG
+          <div className="flex w-full gap-2">
+            <button className="btn-outline flex-1 px-3 text-sm" onClick={() => downloadPng(liveUrl, slug)}>
+              <Download className="h-4 w-4" /> PNG
             </button>
-            <button className="btn-outline flex-1 px-3" disabled={!slugOk || !slug}
-              onClick={() => downloadSvg(publicUrl(slug), slug)}>
-              <Download className="h-5 w-5" /> SVG
+            <button className="btn-outline flex-1 px-3 text-sm" onClick={() => downloadSvg(liveUrl, slug)}>
+              <Download className="h-4 w-4" /> SVG
             </button>
           </div>
-          <p className="text-center text-sm leading-snug text-ink-400">
-            O QR codifica o slug. Editar o destino depois não muda a imagem.
+          <p className="text-center text-xs leading-snug text-ink-400">
+            Editar o destino depois não muda esta imagem.
           </p>
         </div>
       </div>
