@@ -167,7 +167,7 @@ async function runScan(cfg: Config) {
   for (const c of recent) {
     const { data: seen } = await supabase.rpc('ghl_purge_already', { p_contact_id: c.id });
     if (seen) continue;
-    results.push(await processContact(c.id, cfg, null, false));
+    results.push(await processContact(c.id, cfg, null, true));
   }
   return json(200, { mode: 'scan', scanned: recent.length, acted: results.length, dry_run: cfg.dry_run, results });
 }
