@@ -4,10 +4,9 @@ import {
   Power, RefreshCw, Search, Trash2, Zap,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { api, ApiError } from './api';
-import { clearSecret, getSecret, publicUrl } from './config';
+import { api } from './api';
+import { publicUrl } from './config';
 import type { QrCode } from './types';
-import { SecretGate } from './components/SecretGate';
 import { QrFormModal } from './components/QrFormModal';
 import { AnalyticsModal } from './components/AnalyticsModal';
 
@@ -24,7 +23,6 @@ function relTime(iso: string | null | undefined): string {
 }
 
 export default function App() {
-  const [authed, setAuthed] = useState(() => !!getSecret());
   const [items, setItems] = useState<QrCode[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [query, setQuery] = useState('');
@@ -36,15 +34,14 @@ export default function App() {
     setLoading(true);
     try {
       setItems(await api.list());
-    } catch (e) {
-      if (e instanceof ApiError && e.status === 401) { clearSecret(); setAuthed(false); }
-      else toast.error('Falha ao carregar QRs.');
+    } catch {
+      toast.error('Falha ao carregar QRs.');
     } finally {
       setLoading(false);
     }
   }, []);
 
-  useEffect(() => { if (authed) load(); }, [authed, load]);
+  useEffect(() => { load(); }, [load]);
 
   const filtered = useMemo(() => {
     if (!items) return [];
@@ -76,8 +73,6 @@ export default function App() {
       () => toast.error('Não foi possível copiar.'),
     );
   }
-
-  if (!authed) return <SecretGate onUnlock={() => setAuthed(true)} />;
 
   const totalScans = items?.reduce((a, i) => a + (i.scans ?? 0), 0) ?? 0;
 

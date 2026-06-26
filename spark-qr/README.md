@@ -17,10 +17,16 @@ Celular escaneia ──► qr.sparkleads.com/{slug} ──► Edge Function spar
 
 - **Backend** — Supabase, projeto `GHL Token` (`tbziahcpkrfiksqhuhpe`), schema isolado `qr`.
   - Tabelas: `qr.qr_codes`, `qr.qr_scans`, `qr.app_config`, `qr.reserved_slugs`.
-  - Acesso só via RPCs `public.spark_qr_*` (SECURITY DEFINER, gated por secret) — o schema `qr` nunca é exposto no PostgREST.
+  - Acesso só via RPCs `public.spark_qr_*` (SECURITY DEFINER) — o schema `qr` nunca é exposto no PostgREST.
   - Edge Function `spark-qr-redirect` (pública) — o núcleo do redirect.
-  - Edge Function `spark-qr-admin` (gated por `x-spark-secret`) — CRUD + analytics.
+  - Edge Function `spark-qr-admin` — CRUD + analytics.
 - **Frontend** — este app Vite + React + Tailwind (separado do painel soneko).
+
+## Acesso
+
+É uma ferramenta interna single-tenant: **sem login**. O painel abre e já funciona — a function admin se autoriza sozinha (lê o secret do próprio `qr.app_config`).
+
+> Tradeoff: a API de escrita fica acessível a quem souber a URL da function. O redirect público não é afetado. Pra trancar depois sem mexer no código, basta pôr o painel atrás de uma senha (Vercel/Cloudflare Access) — a function ainda aceita `x-spark-secret`/`?secret=` se você quiser reativar a checagem.
 
 ## Privacidade / performance
 
@@ -33,17 +39,9 @@ Celular escaneia ──► qr.sparkleads.com/{slug} ──► Edge Function spar
 ```bash
 cd spark-qr
 npm install
-cp .env.example .env   # ajuste as URLs/secret se precisar
-npm run dev            # http://localhost:5174/?secret=<admin secret>
+cp .env.example .env   # ajuste as URLs se precisar
+npm run dev            # http://localhost:5174  (abre direto, sem login)
 ```
-
-Pegue o admin secret gerado na migration:
-
-```sql
-select public.spark_qr_config();   -- { "admin_secret": "..." }
-```
-
-O secret entra via `?secret=...` (salvo em localStorage) ou na tela de login.
 
 ## Deploy
 

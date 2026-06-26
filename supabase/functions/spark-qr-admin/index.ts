@@ -1,8 +1,8 @@
 // Spark QR — admin API (panel backend).
 //
-// Secret-gated CRUD over qr.qr_codes + analytics. Mirrors the soneko-api
-// pattern: service-role client, all logic behind public spark_qr_* RPCs that
-// take the app secret as their first argument.
+// CRUD over qr.qr_codes + analytics. Mirrors the soneko-api pattern:
+// service-role client, all logic behind public spark_qr_* RPCs that take the
+// app secret as their first argument.
 //
 //   GET    /qrs                 -> list (with scan counts)
 //   GET    /qrs/:id             -> single
@@ -12,10 +12,13 @@
 //   GET    /check-slug?slug=&exclude=   -> { available, reason }
 //   GET    /qrs/:id/analytics?days=30   -> analytics json
 //
-// Auth: header `x-spark-secret` (or ?secret= for convenience). The secret is
-// the value generated in qr.app_config (call public.spark_qr_config() to read it).
+// Auth: this is an internal single-tenant panel, so no login is required —
+// when no `x-spark-secret` header (or ?secret=) is supplied, the function
+// resolves the admin secret server-side from qr.app_config and authorizes
+// itself. Supplying a secret still works if you later choose to lock it down
+// (e.g. front the panel with a Vercel/Cloudflare password instead).
 //
-// verify_jwt MUST be false (custom secret auth).
+// verify_jwt MUST be false.
 
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
@@ -39,6 +42,17 @@ const supabase = createClient(
   { auth: { persistSession: false } },
 );
 
+// The admin secret lives in qr.app_config. Cache it so we resolve it once per
+// warm instance instead of on every request.
+let cachedSecret: string | null = null;
+async function resolveSecret(provided: string): Promise<string> {
+  if (provided) return provided;
+  if (cachedSecret) return cachedSecret;
+  const { data } = await supabase.rpc('spark_qr_config');
+  cachedSecret = (data as { admin_secret?: string } | null)?.admin_secret ?? '';
+  return cachedSecret;
+}
+
 // Map Postgres errors to HTTP status + a stable error code for the UI.
 function fail(error: { message?: string; code?: string }) {
   const msg = error?.message ?? 'error';
@@ -59,9 +73,10 @@ Deno.serve(async (req: Request) => {
 
   if (path === '/warmup') return json(200, { ok: true, ts: Date.now() });
 
-  const secret =
+  const provided =
     req.headers.get('x-spark-secret') ?? url.searchParams.get('secret') ?? '';
-  if (!secret) return json(401, { error: 'missing_secret' });
+  const secret = await resolveSecret(provided);
+  if (!secret) return json(500, { error: 'config_unavailable' });
 
   const rpc = (fn: string, args: Record<string, unknown>) => supabase.rpc(fn, args);
 

@@ -8,15 +8,16 @@ export class ApiError extends Error {
 }
 
 async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
+  // Secret is optional: the admin function authorizes itself server-side when
+  // no secret is supplied. Sending one (?secret= / localStorage) still works if
+  // you later choose to lock the API down.
   const secret = getSecret();
-  if (!secret) throw new ApiError('missing_secret', 401);
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (secret) headers['x-spark-secret'] = secret;
 
   const res = await fetch(`${API_URL}${path}`, {
     method,
-    headers: {
-      'Content-Type': 'application/json',
-      'x-spark-secret': secret,
-    },
+    headers,
     body: body ? JSON.stringify(body) : undefined,
   });
 
