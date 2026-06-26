@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Loader2, QrCode as QrIcon, ScanLine, Power, Users } from 'lucide-react';
-import { api } from '@/api';
 import type { Overview } from '@/types';
+import { ScansBarChart } from './ScansBarChart';
 
 const PRESETS = [
   { label: 'Semana', days: 7 },
@@ -21,46 +21,26 @@ function StatCard({ icon, label, value, hint }: { icon: React.ReactNode; label: 
   );
 }
 
-function ScansChart({ data }: { data: Array<{ day: string; count: number }> }) {
-  const max = Math.max(...data.map((d) => d.count), 1);
-  if (data.length === 0) {
-    return <div className="grid h-32 place-items-center text-sm text-ink-400">Sem scans no período.</div>;
-  }
-  return (
-    <div className="flex h-32 items-end gap-1">
-      {data.map((d) => (
-        <div key={d.day} className="group relative flex h-full flex-1 flex-col items-center justify-end">
-          <div className="w-full rounded-sm bg-brand-500 transition-colors group-hover:bg-brand-600"
-            style={{ height: `${Math.max(3, (d.count / max) * 100)}%` }} />
-          <div className="pointer-events-none absolute -top-8 z-10 hidden whitespace-nowrap rounded-md bg-ink-900 px-2 py-0.5 text-xs text-white group-hover:block">
-            {d.day.slice(5)} · {d.count}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-export function Dashboard({ refreshKey }: { refreshKey: number }) {
-  const [days, setDays] = useState<number>(7);   // weekly by default
+export function Dashboard({
+  data, days, loading, onDays,
+}: {
+  data: Overview | null;
+  days: number;
+  loading: boolean;
+  onDays: (d: number) => void;
+}) {
   const [customOpen, setCustomOpen] = useState(false);
   const [customDays, setCustomDays] = useState<number>(14);
-  const [data, setData] = useState<Overview | null>(null);
-  const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    setLoading(true);
-    api.overview(days).then(setData).catch(() => setData(null)).finally(() => setLoading(false));
-  }, [days, refreshKey]);
-
-  const isPreset = (d: number) => PRESETS.some((p) => p.days === d) && !customOpen;
-  const periodLabel = customOpen ? `${days}d` : (PRESETS.find((p) => p.days === days)?.label ?? `${days}d`);
-
-  function applyCustom(v: number) {
+  const onPreset = (d: number) => { setCustomOpen(false); onDays(d); };
+  const openCustom = () => { setCustomOpen(true); onDays(customDays); };
+  const applyCustom = (v: number) => {
     const n = Math.max(1, Math.min(365, Math.round(v || 0)));
     setCustomDays(n);
-    setDays(n);
-  }
+    onDays(n);
+  };
+
+  const periodLabel = customOpen ? `${days}d` : (PRESETS.find((p) => p.days === days)?.label ?? `${days}d`);
 
   return (
     <div className="mb-6 space-y-4">
@@ -83,17 +63,16 @@ export function Dashboard({ refreshKey }: { refreshKey: number }) {
             {PRESETS.map((p) => (
               <button
                 key={p.days}
-                onClick={() => { setCustomOpen(false); setDays(p.days); }}
+                onClick={() => onPreset(p.days)}
                 className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
-                  isPreset(days) && days === p.days
-                    ? 'bg-brand-50 text-brand-700' : 'text-ink-500 hover:bg-ink-100'
+                  !customOpen && days === p.days ? 'bg-brand-50 text-brand-700' : 'text-ink-500 hover:bg-ink-100'
                 }`}
               >
                 {p.label}
               </button>
             ))}
             <button
-              onClick={() => { setCustomOpen(true); setDays(customDays); }}
+              onClick={openCustom}
               className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
                 customOpen ? 'bg-brand-50 text-brand-700' : 'text-ink-500 hover:bg-ink-100'
               }`}
@@ -113,7 +92,7 @@ export function Dashboard({ refreshKey }: { refreshKey: number }) {
             )}
           </div>
         </div>
-        <ScansChart data={data?.by_day ?? []} />
+        <ScansBarChart byDay={data?.by_day ?? []} days={days} heightClass="h-32" />
       </div>
     </div>
   );

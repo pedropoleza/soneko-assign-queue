@@ -3,7 +3,7 @@ import { Loader2, Lock, Plus, QrCode as QrIcon, RefreshCw, Search, Zap } from 'l
 import { toast } from 'sonner';
 import { api } from './api';
 import { isEmbedded, ancestorAllowed } from './lib/embed';
-import type { QrCode } from './types';
+import type { Overview, QrCode } from './types';
 import { Dashboard } from './components/Dashboard';
 import { QrCard } from './components/QrCard';
 import { QrFormModal } from './components/QrFormModal';
@@ -30,12 +30,18 @@ export default function App() {
   const allowed = useMemo(() => isEmbedded() && ancestorAllowed(), []);
 
   const [items, setItems] = useState<QrCode[] | null>(null);
-  const [version, setVersion] = useState(0); // bumps → Dashboard refetches overview
+  const [version, setVersion] = useState(0); // bumps after mutations → refetch overview
   const [loading, setLoading] = useState(false);
   const [query, setQuery] = useState('');
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<QrCode | null>(null);
   const [analytics, setAnalytics] = useState<QrCode | null>(null);
+
+  // Dashboard overview lives here (not inside Dashboard) so its data survives
+  // re-renders. Weekly by default; refetches when the window or version changes.
+  const [ovDays, setOvDays] = useState(7);
+  const [overview, setOverview] = useState<Overview | null>(null);
+  const [ovLoading, setOvLoading] = useState(false);
 
   const bump = useCallback(() => setVersion((v) => v + 1), []);
 
@@ -43,15 +49,24 @@ export default function App() {
     setLoading(true);
     try {
       setItems(await api.list());
-      bump();
     } catch {
       toast.error('Falha ao carregar. Verifique o acesso pelo GHL.');
     } finally {
       setLoading(false);
     }
-  }, [bump]);
+  }, []);
 
   useEffect(() => { if (allowed) load(); }, [allowed, load]);
+
+  // Fetch the dashboard overview for the selected window; refetch on mutations.
+  useEffect(() => {
+    if (!allowed) return;
+    setOvLoading(true);
+    api.overview(ovDays)
+      .then(setOverview)
+      .catch(() => setOverview(null))
+      .finally(() => setOvLoading(false));
+  }, [allowed, ovDays, version]);
 
   const filtered = useMemo(() => {
     if (!items) return [];
@@ -91,7 +106,7 @@ export default function App() {
             <span className="text-2xl font-bold tracking-tight text-ink-900">Spark QR</span>
           </div>
           <div className="flex items-center gap-2">
-            <button className="btn-ghost h-11 w-11 px-0" onClick={load} title="Recarregar">
+            <button className="btn-ghost h-11 w-11 px-0" onClick={() => { load(); bump(); }} title="Recarregar">
               <RefreshCw className={`h-5 w-5 ${loading ? 'animate-spin' : ''}`} />
             </button>
             <button className="btn-primary" onClick={() => { setEditing(null); setFormOpen(true); }}>
@@ -108,7 +123,7 @@ export default function App() {
           </div>
         ) : (
           <>
-            <Dashboard refreshKey={version} />
+            <Dashboard data={overview} days={ovDays} loading={ovLoading} onDays={setOvDays} />
 
             <div className="mb-4 flex items-center justify-between gap-3">
               <h2 className="text-lg font-semibold text-ink-900">
@@ -166,7 +181,7 @@ export default function App() {
         open={formOpen}
         editing={editing}
         onClose={() => setFormOpen(false)}
-        onSaved={load}
+        onSaved={() => { load(); bump(); }}
       />
       <AnalyticsModal qr={analytics} onClose={() => setAnalytics(null)} />
     </div>

@@ -1,39 +1,18 @@
 import { useEffect, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { Modal } from './Modal';
+import { ScansBarChart } from './ScansBarChart';
 import { api } from '@/api';
 import { publicUrl } from '@/config';
 import type { Analytics, QrCode } from '@/types';
 
 const RANGES = [7, 30, 90] as const;
 
-function Stat({ label, value }: { label: string; value: string | number }) {
+function Stat({ label, value, small = false }: { label: string; value: string | number; small?: boolean }) {
   return (
     <div className="rounded-xl border border-ink-200 bg-ink-50/50 px-4 py-3">
-      <div className="text-3xl font-bold tabular-nums text-ink-900">{value}</div>
+      <div className={`${small ? 'text-lg' : 'text-3xl'} truncate font-bold tabular-nums text-ink-900`}>{value}</div>
       <div className="mt-0.5 text-xs uppercase tracking-wide text-ink-400">{label}</div>
-    </div>
-  );
-}
-
-function BarChart({ data }: { data: Array<{ day: string; count: number }> }) {
-  if (data.length === 0) {
-    return <div className="grid h-44 place-items-center text-sm text-ink-400">Sem scans no período.</div>;
-  }
-  const max = Math.max(...data.map((d) => d.count), 1);
-  return (
-    <div className="flex h-44 items-end gap-0.5">
-      {data.map((d) => (
-        <div key={d.day} className="group relative flex h-full flex-1 flex-col items-center justify-end">
-          <div
-            className="w-full rounded-sm bg-brand-500 transition-colors group-hover:bg-brand-600"
-            style={{ height: `${Math.max(3, (d.count / max) * 100)}%` }}
-          />
-          <div className="pointer-events-none absolute -top-8 hidden whitespace-nowrap rounded-md bg-ink-900 px-2 py-0.5 text-xs text-white group-hover:block">
-            {d.day.slice(5)} · {d.count}
-          </div>
-        </div>
-      ))}
     </div>
   );
 }
@@ -108,6 +87,7 @@ export function AnalyticsModal({ qr, onClose }: { qr: QrCode | null; onClose: ()
             <Stat label={`Scans ${days}d`} value={data?.in_range ?? '—'} />
             <Stat label={`Únicos ${days}d`} value={data?.unique_visitors ?? '—'} />
             <Stat
+              small
               label="Último scan"
               value={data?.last_scan_at ? new Date(data.last_scan_at).toLocaleDateString('pt-BR') : '—'}
             />
@@ -115,7 +95,7 @@ export function AnalyticsModal({ qr, onClose }: { qr: QrCode | null; onClose: ()
 
           <div>
             <h4 className="mb-2.5 text-xs font-semibold uppercase tracking-wide text-ink-400">Scans por dia</h4>
-            <BarChart data={data?.by_day ?? []} />
+            <ScansBarChart byDay={data?.by_day ?? []} days={days} heightClass="h-44" />
           </div>
 
           <div className="grid gap-6 sm:grid-cols-2">
