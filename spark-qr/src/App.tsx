@@ -3,7 +3,7 @@ import { Loader2, Lock, Plus, QrCode as QrIcon, RefreshCw, Search, Zap } from 'l
 import { toast } from 'sonner';
 import { api } from './api';
 import { isEmbedded, ancestorAllowed } from './lib/embed';
-import type { Overview, QrCode } from './types';
+import type { QrCode } from './types';
 import { Dashboard } from './components/Dashboard';
 import { QrCard } from './components/QrCard';
 import { QrFormModal } from './components/QrFormModal';
@@ -30,25 +30,26 @@ export default function App() {
   const allowed = useMemo(() => isEmbedded() && ancestorAllowed(), []);
 
   const [items, setItems] = useState<QrCode[] | null>(null);
-  const [overview, setOverview] = useState<Overview | null>(null);
+  const [version, setVersion] = useState(0); // bumps → Dashboard refetches overview
   const [loading, setLoading] = useState(false);
   const [query, setQuery] = useState('');
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<QrCode | null>(null);
   const [analytics, setAnalytics] = useState<QrCode | null>(null);
 
+  const bump = useCallback(() => setVersion((v) => v + 1), []);
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [list, ov] = await Promise.all([api.list(), api.overview(30).catch(() => null)]);
-      setItems(list);
-      setOverview(ov);
+      setItems(await api.list());
+      bump();
     } catch {
       toast.error('Falha ao carregar. Verifique o acesso pelo GHL.');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [bump]);
 
   useEffect(() => { if (allowed) load(); }, [allowed, load]);
 
@@ -73,7 +74,7 @@ export default function App() {
       await api.remove(qr.id);
       setItems((prev) => prev?.filter((i) => i.id !== qr.id) ?? null);
       toast.success('QR excluído.');
-      api.overview(30).then(setOverview).catch(() => {});
+      bump();
     } catch { toast.error('Falha ao excluir.'); }
   }
 
@@ -82,7 +83,7 @@ export default function App() {
   return (
     <div className="min-h-screen bg-ink-50">
       <header className="sticky top-0 z-30 border-b border-ink-200 bg-white/90 backdrop-blur">
-        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-6">
+        <div className="mx-auto flex h-16 max-w-screen-2xl items-center justify-between gap-4 px-6 lg:px-8">
           <div className="flex items-center gap-3">
             <span className="grid h-10 w-10 place-items-center rounded-xl bg-brand-600 text-white">
               <Zap className="h-5 w-5" />
@@ -100,14 +101,14 @@ export default function App() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-6xl px-6 py-8">
+      <main className="mx-auto max-w-screen-2xl px-6 py-8 lg:px-8">
         {items === null ? (
           <div className="grid place-items-center py-28 text-ink-400">
             <Loader2 className="h-8 w-8 animate-spin" />
           </div>
         ) : (
           <>
-            <Dashboard data={overview} />
+            <Dashboard refreshKey={version} />
 
             <div className="mb-4 flex items-center justify-between gap-3">
               <h2 className="text-lg font-semibold text-ink-900">
@@ -144,7 +145,7 @@ export default function App() {
                 )}
               </div>
             ) : (
-              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
                 {filtered.map((qr) => (
                   <QrCard
                     key={qr.id}
