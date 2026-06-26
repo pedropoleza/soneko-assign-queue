@@ -1,23 +1,24 @@
-// GHL purge-inbound — delete ONLY contacts that entered via a channel CONVERSATION.
+// GHL purge-inbound — delete ONLY contacts auto-created by a channel integration.
 //
-// GoHighLevel creates a contact (+ conversation) on any inbound message and
-// there's no native way to stop it. This is a self-contained cleaner — NO GHL
-// workflow required:
+// GoHighLevel creates a contact on any inbound message and there's no native way
+// to stop it. Self-contained cleaner — NO GHL workflow required:
 //
-//   • A scheduled scan (pg_cron → POST {mode:"scan"}) lists contacts created in
-//     the last `scan_window_sec`, and evaluates each one (deduped via purge_log).
-//     (A GHL "Contact Created" webhook posting {contact_id} also works, if used.)
-//   • Decisive signal: does the contact have an inbound CONVERSATION on a blocked
-//     channel (WhatsApp/IG/FB/SMS/…)? Contacts added in "New" by hand or via
-//     IMPORT have no conversation → kept. Form submissions aren't conversations →
-//     kept. Only channel-created contacts have one → deleted.
+//   • A scheduled scan (pg_cron → POST {mode:"scan"}) lists recently-created
+//     contacts and evaluates each (deduped via purge_log). A "Contact Created"
+//     webhook posting {contact_id} also works.
+//   • Decisive signal = GHL's native `createdBy.source`: channel-auto-created
+//     contacts (WhatsApp/IG/FB/SMS via the connected integration) are
+//     "INTEGRATION"; "New" = "MANUAL", import = "BULK_ACTION", form = "FORM".
+//     We delete ONLY when createdBy.source is in purge_created_by_sources, so
+//     manual / import / form are ALWAYS kept. By default we additionally require a
+//     blocked-channel conversation (guards non-messaging integrations).
 //
-// Safe-by-default: anything not positively a channel conversation is kept.
-// Dry-run by default; every decision is written to ghl.purge_log.
+// Safe-by-default. Dry-run by default; every decision goes to ghl.purge_log.
 //
-// Config (ghl.purge_config / ghl_purge_config RPC), tunable from SQL:
-//   pit_token (Contacts + Conversations scopes), purge_secret, dry_run,
-//   max_age_sec, keep_tags, purge_channel_types, scan_window_sec.
+// Config (ghl.purge_config / ghl_purge_config RPC): pit_token (Contacts +
+// Conversations scopes), purge_secret, dry_run, max_age_sec, keep_tags,
+// purge_channel_types, scan_window_sec, purge_created_by_sources,
+// require_channel_conversation.
 //
 // verify_jwt MUST be false (authenticated via purge_secret).
 
@@ -41,6 +42,8 @@ type Config = {
   keep_tags: string[];
   purge_channel_types: string[];
   scan_window_sec: number;
+  purge_created_by_sources: string[];
+  require_channel_conversation: boolean;
 };
 
 function json(status: number, body: unknown) {
@@ -74,32 +77,41 @@ function blockedConversation(conv: any, patterns: string[]): string | null {
   return hit ? (conv.type ?? conv.lastMessageType ?? hit) : null;
 }
 
-async function decide(contact: any, cfg: Config, allowRetry: boolean): Promise<{ purge: boolean; reason: string }> {
+// Primary signal = GHL's native createdBy.source. Channel-auto-created contacts
+// (WhatsApp/IG/FB/SMS via the connected integration) are "INTEGRATION"; contacts
+// added in "New" are "MANUAL", imports "BULK_ACTION", forms "FORM", etc. We only
+// delete when createdBy.source is in the configured delete-list — so manual /
+// import / form are ALWAYS kept. A blocked-channel conversation is required as
+// confirmation (guards against non-messaging integrations like Zapier).
+async function decide(contact: any, cfg: Config, allowRetry: boolean): Promise<{ purge: boolean; reason: string; createdBy: string }> {
+  const createdBy = String(contact?.createdBy?.source ?? '').toUpperCase();
+
   const keep = cfg.keep_tags.map((t) => t.toLowerCase());
   const tags = (contact.tags ?? []).map((t: unknown) => String(t).toLowerCase());
-  if (keep.some((k) => tags.includes(k))) return { purge: false, reason: 'keep_tag' };
+  if (keep.some((k) => tags.includes(k))) return { purge: false, reason: 'keep_tag', createdBy };
 
-  const source = String(contact.source ?? '').toLowerCase();
-  if (/form|survey|manual|import|csv|bulk|opportunity/.test(source)) return { purge: false, reason: `source:${source}` };
+  const delList = cfg.purge_created_by_sources.map((s) => s.toUpperCase());
+  if (!delList.includes(createdBy)) return { purge: false, reason: `created_by:${createdBy || 'none'}`, createdBy };
 
   const addedAt = Date.parse(contact.dateAdded ?? contact.createdAt ?? contact.dateCreated ?? '');
   if (!Number.isNaN(addedAt) && (Date.now() - addedAt) / 1000 > cfg.max_age_sec) {
-    return { purge: false, reason: 'too_old' };
+    return { purge: false, reason: 'too_old', createdBy };
   }
 
-  const patterns = cfg.purge_channel_types.map((p) => p.toLowerCase()).filter(Boolean);
-  let convs = await fetchConversations(cfg, contact.id);
-  let hit = convs.map((c) => blockedConversation(c, patterns)).find(Boolean);
-
-  // The conversation can lag the creation event — retry once (webhook path only).
-  if (allowRetry && !hit && convs.length === 0) {
-    await new Promise((r) => setTimeout(r, 4000));
-    convs = await fetchConversations(cfg, contact.id);
-    hit = convs.map((c) => blockedConversation(c, patterns)).find(Boolean);
+  if (cfg.require_channel_conversation) {
+    const patterns = cfg.purge_channel_types.map((p) => p.toLowerCase()).filter(Boolean);
+    let convs = await fetchConversations(cfg, contact.id);
+    let hit = convs.map((c) => blockedConversation(c, patterns)).find(Boolean);
+    if (allowRetry && !hit && convs.length === 0) {
+      await new Promise((r) => setTimeout(r, 4000));
+      convs = await fetchConversations(cfg, contact.id);
+      hit = convs.map((c) => blockedConversation(c, patterns)).find(Boolean);
+    }
+    if (!hit) return { purge: false, reason: 'no_channel_conversation', createdBy };
+    return { purge: true, reason: `${createdBy}+conversation:${hit}`, createdBy };
   }
 
-  if (hit) return { purge: true, reason: `conversation:${hit}` };
-  return { purge: false, reason: convs.length ? 'conversation_not_blocked' : 'no_conversation' };
+  return { purge: true, reason: `created_by:${createdBy}`, createdBy };
 }
 
 async function processContact(contactId: string, cfg: Config, channel: string | null, allowRetry: boolean) {
@@ -113,7 +125,7 @@ async function processContact(contactId: string, cfg: Config, channel: string | 
   if (!contact?.id) return { contact_id: contactId, action: 'not_found', reason: 'not_found' };
 
   const decision = await decide(contact, cfg, allowRetry);
-  const source = contact.source ?? null;
+  const source = decision.createdBy || contact.source || null;
   let action = decision.purge ? (cfg.dry_run ? 'would_delete' : 'deleted') : 'kept';
 
   if (decision.purge && !cfg.dry_run) {
