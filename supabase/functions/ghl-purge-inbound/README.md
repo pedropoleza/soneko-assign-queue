@@ -1,90 +1,72 @@
 # ghl-purge-inbound
 
-Mantém **apenas** contatos criados **manualmente** ou por **formulário**. Qualquer
-contato gerado por mensagem recebida (WhatsApp, Instagram DM, Facebook, SMS, …) é
-**apagado** logo após a criação (apagar o contato remove a conversa junto).
+Mantém **apenas** contatos criados **manualmente** (em "New"), por **importação**
+ou por **formulário**. Contatos gerados automaticamente por uma **conversa de
+canal** (WhatsApp, Instagram DM, Facebook, SMS, …) são **apagados** (apagar o
+contato remove a conversa junto).
 
 > O GoHighLevel sempre cria contato + conversa em qualquer inbound — não dá pra
 > impedir nativamente. Por isso o mecanismo é "criar e limpar".
 
 Location alvo: `jIqId5fQTEscL0KB2neG`
 
-## Segurança
+## Como decide (inteligente, seguro por padrão)
 
-- **Dry-run por padrão** (`PURGE_DRY_RUN` != `false`): a função só **loga** o que
-  apagaria, sem apagar nada. Só troque para `false` depois de validar os logs.
-- **Guarda de recência** (`PURGE_MAX_AGE_SEC`, padrão 300s): só apaga contatos
-  recém-criados. Assim, um contato manual/form que **mais tarde** responde num
-  canal **não** é apagado.
-- **Tags de proteção** (`PURGE_KEEP_TAGS`, padrão `keep,manual,form`) e padrões de
-  `source` (form/survey/manual/import/api) sempre são preservados.
+O sinal decisivo é **a presença de uma conversa de canal inbound**, não o `source`:
 
-## Config (tabela `ghl.purge_config`, ajustável por SQL)
+| Origem do contato | Tem conversa de canal na criação? | Resultado |
+|---|---|---|
+| "New" manual | não | **mantém** |
+| Importação | não | **mantém** |
+| Formulário | não (form não é conversa) | **mantém** |
+| WhatsApp / IG / FB / SMS | sim | **apaga** |
 
-Tudo vive numa linha única em `ghl.purge_config` (lida pela RPC `ghl_purge_config`).
-Cada decisão é gravada em `ghl.purge_log` (auditoria do dry-run).
+Na dúvida (sem conversa / canal não reconhecido) → **mantém**. Nunca apaga um
+legítimo; no pior caso um indesejado escapa e a gente ajusta `purge_channel_types`.
 
-| Coluna | Descrição |
-|--------|-----------|
-| `pit_token` | Private Integration Token da location (escopo: contacts read+write) |
-| `purge_secret` | segredo compartilhado; o workflow envia em `x-purge-secret` (auto-gerado) |
-| `dry_run` | `true` (padrão) só loga; `false` apaga de verdade |
-| `max_age_sec` | padrão `300` — só apaga contatos mais novos que isso |
-| `keep_tags` | padrão `{keep,manual,form}` |
+## Automação — NÃO precisa de workflow no GHL
+
+Um **cron** (pg_cron, a cada 5 min) chama a função em modo `scan`, que lista os
+contatos criados na última janela (`scan_window_sec`), deduplica via `purge_log` e
+avalia cada um. Tudo self-contained neste projeto.
+
+> Opcional: também funciona como webhook de um workflow "Contact Created"
+> (`POST {"contact_id":"{{contact.id}}"}` com header `x-purge-secret`) — mas com o
+> cron isso é dispensável.
+
+## Config (`ghl.purge_config`, ajustável por SQL)
+
+| Coluna | Padrão | Descrição |
+|--------|--------|-----------|
+| `pit_token` | — | Private Integration Token (escopos **Contacts** + **Conversations**, read+write) |
+| `purge_secret` | auto | usado pelo cron / webhook |
+| `dry_run` | `true` | `true` só loga; `false` apaga de verdade |
+| `max_age_sec` | `300` | proteção de replay (só age em contatos novos) |
+| `keep_tags` | `{keep,manual,form}` | tags que sempre protegem |
+| `purge_channel_types` | `{phone,sms,whatsapp,fb,messenger,ig,instagram,facebook,gmb,live_chat,call}` | tipos de conversa que contam como canal |
+| `scan_window_sec` | `1800` | janela do scan (30 min) |
 
 ```sql
--- setar o token:
+-- 1) setar o token:
 update ghl.purge_config set pit_token = '<PIT_TOKEN>';
--- armar (sair do dry-run) quando estiver confiante:
-update ghl.purge_config set dry_run = false;
--- ver o que foi decidido:
+
+-- 2) acompanhar as decisões (dry-run):
 select created_at, action, reason, source, channel, contact_id
 from ghl.purge_log order by created_at desc limit 50;
-```
 
-Function URL: `https://tbziahcpkrfiksqhuhpe.supabase.co/functions/v1/ghl-purge-inbound`
+-- 3) ver os tipos de conversa que apareceram (pra afinar):
+select reason, count(*) from ghl.purge_log group by reason order by 2 desc;
 
-## Setup no GoHighLevel
-
-### 1) Workflow de proteção (forms) — "Marcar form como keep"
-- **Trigger:** Form Submitted **e** Survey Submitted (todos).
-- **Ação:** Add Tag → `keep`.
-- Garante que contatos de formulário nunca sejam apagados, mesmo que mandem msg depois.
-
-### 2) (Opcional) Contatos manuais
-- Oriente a equipe a adicionar a tag `keep` ao criar contato manual, **ou** confie
-  na guarda de recência (contato manual só correria risco se mandasse inbound nos
-  primeiros minutos após ser criado).
-
-### 3) Workflow de purga — "Bloquear inbound não-form"
-- **Trigger:** **`Contact Created`** ← isso é o essencial. Dispara só na criação,
-  então contatos manual/form que já existem e mandam mensagem nos canais **nunca**
-  entram aqui. (NÃO use "Customer Replied"/"Inbound Message" — esses pegariam
-  legítimos que interagem pelos canais.)
-- **Ação:** Webhook → `POST`:
-  - URL: `https://tbziahcpkrfiksqhuhpe.supabase.co/functions/v1/ghl-purge-inbound`
-  - Header: `x-purge-secret: <PURGE_SECRET>`
-  - Body (Custom JSON):
-    ```json
-    { "contact_id": "{{contact.id}}" }
-    ```
-
-A discriminação é **segura por padrão**: a função só apaga quando o `source` do
-contato bate com um canal de inbound (`purge_source_patterns`). Form/manual/import/
-em branco/desconhecido → sempre mantido. Use o dry-run pra descobrir os `source`
-reais de cada canal e afinar a lista:
-
-```sql
--- ver os source que apareceram:
-select source, count(*), array_agg(distinct action) from ghl.purge_log group by source;
--- afinar quais source devem ser apagados:
-update ghl.purge_config
-set purge_source_patterns = '{whatsapp,instagram,facebook,messenger,sms}';
+-- 4) armar quando estiver confiante:
+update ghl.purge_config set dry_run = false;
 ```
 
 ## Rollout seguro
 
-1. Deploy com `PURGE_DRY_RUN=true`.
-2. Ligue os workflows e observe os logs da função (Supabase → Functions → Logs):
-   procure `WOULD_DELETE` vs `KEPT` e confirme que nenhum contato legítimo cairia.
-3. Quando estiver confiante, troque `PURGE_DRY_RUN=false`.
+1. **Agora:** deployado em **dry-run**, cron rodando a cada 5 min — só grava em
+   `ghl.purge_log` o que *apagaria* (`would_delete`) vs *manteria* (`kept`).
+2. Setar o `pit_token`; criar 1 contato de teste por canal e 1 manual/import/form.
+3. Conferir no `purge_log` que só os de canal viram `would_delete`.
+4. `update ghl.purge_config set dry_run = false;` pra armar.
+
+Function URL: `https://tbziahcpkrfiksqhuhpe.supabase.co/functions/v1/ghl-purge-inbound`
