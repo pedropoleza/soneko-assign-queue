@@ -57,16 +57,30 @@ Function URL: `https://tbziahcpkrfiksqhuhpe.supabase.co/functions/v1/ghl-purge-i
   primeiros minutos após ser criado).
 
 ### 3) Workflow de purga — "Bloquear inbound não-form"
-- **Trigger:** `Customer Replied` (ou `Inbound Message`) cobrindo os canais:
-  WhatsApp, Instagram, Facebook, SMS/outros.
-- **Filtro (recomendado):** Contact Tag **is not** `keep`.
+- **Trigger:** **`Contact Created`** ← isso é o essencial. Dispara só na criação,
+  então contatos manual/form que já existem e mandam mensagem nos canais **nunca**
+  entram aqui. (NÃO use "Customer Replied"/"Inbound Message" — esses pegariam
+  legítimos que interagem pelos canais.)
 - **Ação:** Webhook → `POST`:
-  - URL: `https://<PROJECT>.supabase.co/functions/v1/ghl-purge-inbound`
+  - URL: `https://tbziahcpkrfiksqhuhpe.supabase.co/functions/v1/ghl-purge-inbound`
   - Header: `x-purge-secret: <PURGE_SECRET>`
   - Body (Custom JSON):
     ```json
-    { "contact_id": "{{contact.id}}", "channel": "{{message.type}}" }
+    { "contact_id": "{{contact.id}}" }
     ```
+
+A discriminação é **segura por padrão**: a função só apaga quando o `source` do
+contato bate com um canal de inbound (`purge_source_patterns`). Form/manual/import/
+em branco/desconhecido → sempre mantido. Use o dry-run pra descobrir os `source`
+reais de cada canal e afinar a lista:
+
+```sql
+-- ver os source que apareceram:
+select source, count(*), array_agg(distinct action) from ghl.purge_log group by source;
+-- afinar quais source devem ser apagados:
+update ghl.purge_config
+set purge_source_patterns = '{whatsapp,instagram,facebook,messenger,sms}';
+```
 
 ## Rollout seguro
 

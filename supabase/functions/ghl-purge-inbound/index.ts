@@ -1,20 +1,19 @@
-// GHL purge-inbound — keep ONLY contacts created manually or via forms.
+// GHL purge-inbound — delete ONLY contacts auto-created by an inbound channel.
 //
-// GoHighLevel always creates a contact (+ conversation) on any inbound message
-// (WhatsApp, Instagram DM, Facebook, SMS, …). There is no native way to stop
-// that, so this function is the cleanup: a GHL Workflow fires a webhook here on
-// inbound messages, and we DELETE the just-created contact (deleting a contact
-// removes its conversations too) — unless it's a keeper (form/manual).
+// GoHighLevel creates a contact (+ conversation) on any inbound message and
+// there's no native way to stop it. The fix is the TRIGGER: the GHL workflow
+// fires this webhook on **Contact Created** (not on every inbound message), so it
+// only ever evaluates BRAND-NEW contacts — a pre-existing manual/form contact who
+// later messages on a channel never triggers it and is never touched.
 //
-// Config lives in ghl.purge_config (read via the ghl_purge_config RPC), so it can
-// be populated / tuned / armed entirely from SQL:
-//   pit_token     Private Integration token (contacts read+write) of the location
-//   purge_secret  shared secret; the workflow sends it as x-purge-secret
-//   dry_run       true (default) logs only; false actually deletes
-//   max_age_sec   only purge contacts created within this window (recency guard)
-//   keep_tags     tags that always protect a contact
+// The function is then safe-by-default: it deletes a contact ONLY when its source
+// positively matches a configured inbound-channel pattern (WhatsApp/IG/FB/SMS).
+// Form / manual / imported / blank / unknown sources are always kept.
 //
-// Every decision is written to ghl.purge_log for easy auditing during dry-run.
+// Config lives in ghl.purge_config (ghl_purge_config RPC), tunable from SQL:
+//   pit_token, purge_secret, dry_run (default true), max_age_sec,
+//   keep_tags, purge_source_patterns.
+// Every decision is written to ghl.purge_log for auditing during dry-run.
 //
 // verify_jwt MUST be false (authenticated via purge_secret).
 
@@ -36,6 +35,7 @@ type Config = {
   dry_run: boolean;
   max_age_sec: number;
   keep_tags: string[];
+  purge_source_patterns: string[];
 };
 
 function json(status: number, body: unknown) {
@@ -54,23 +54,29 @@ async function ghl(pit: string, path: string, method = 'GET') {
   return data;
 }
 
+// Safe-by-default: a contact is ONLY deleted when its source positively matches
+// one of the configured inbound-channel patterns. Forms, manual, imports, blank
+// or any unrecognized source are always kept — so a legitimate contact is never
+// removed (the worst case is an unwanted one slipping through, which we then tune
+// for via the dry-run logs by adding its source string to purge_source_patterns).
 function evaluate(contact: any, cfg: Config): { purge: boolean; reason: string } {
   const keep = cfg.keep_tags.map((t) => t.toLowerCase());
   const tags = (contact.tags ?? []).map((t: unknown) => String(t).toLowerCase());
   if (keep.some((k) => tags.includes(k))) return { purge: false, reason: 'keep_tag' };
 
-  // Recency guard — an existing contact who merely replied is never purged.
+  const source = String(contact.source ?? '').toLowerCase();
+  const patterns = cfg.purge_source_patterns.map((p) => p.toLowerCase()).filter(Boolean);
+  const hit = patterns.find((p) => source.includes(p));
+  if (!hit) return { purge: false, reason: `source_not_channel:${source || 'blank'}` };
+
+  // Replay protection: never delete an old contact (the trigger is Contact
+  // Created, so a real inbound contact is always brand-new).
   const addedAt = Date.parse(contact.dateAdded ?? contact.createdAt ?? contact.dateCreated ?? '');
-  if (!Number.isNaN(addedAt)) {
-    const ageSec = (Date.now() - addedAt) / 1000;
-    if (ageSec > cfg.max_age_sec) return { purge: false, reason: `too_old_${Math.round(ageSec)}s` };
+  if (!Number.isNaN(addedAt) && (Date.now() - addedAt) / 1000 > cfg.max_age_sec) {
+    return { purge: false, reason: 'too_old' };
   }
 
-  // Positive protection for form / manual / imported origins.
-  const source = String(contact.source ?? '').toLowerCase();
-  if (/form|survey|manual|import|csv|bulk|api/.test(source)) return { purge: false, reason: `source:${source}` };
-
-  return { purge: true, reason: `inbound:${source || 'unknown'}` };
+  return { purge: true, reason: `inbound_channel:${hit}` };
 }
 
 Deno.serve(async (req: Request) => {
