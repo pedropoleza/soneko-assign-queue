@@ -1,10 +1,38 @@
 # stevo-dnd-middleware
 
-Middleware backend (Node.js + TypeScript + Express) que recebe webhooks de automações do **GoHighLevel (GHL)** e bloqueia/desbloqueia contatos no WhatsApp via **Stevo / StevoManager V2**.
+Middleware que recebe webhooks de automações do **GoHighLevel (GHL)** e bloqueia/desbloqueia contatos no WhatsApp via **Stevo / StevoManager V2**.
 
-Fluxo: contato marcado como DND (ou tag adicionada) no GHL → workflow dispara Custom Webhook → este middleware identifica o cliente pela `locationId` → chama a API do Stevo na(s) instância(s) correta(s) → registra auditoria → responde ao GHL com sucesso, falha parcial ou erro.
+Fluxo: contato marcado como DND (ou tag adicionada) no GHL → workflow dispara Custom Webhook → o middleware identifica o cliente pela `locationId` → chama a API do Stevo na(s) instância(s) correta(s) → registra auditoria → responde ao GHL com sucesso, falha parcial ou erro.
 
-> Este é um subprojeto isolado dentro do repositório — não depende do frontend `soneko-assign-queue`.
+## ⚡ Versão em produção: Supabase Edge Functions + páginas no app
+
+A versão ativa roda no projeto Supabase **GHL Token** (`tbziahcpkrfiksqhuhpe`) — código em `supabase/` neste diretório:
+
+| Componente | URL | O que é |
+|---|---|---|
+| Webhook (GHL chama) | `https://tbziahcpkrfiksqhuhpe.supabase.co/functions/v1/stevo-dnd` | `POST` block/unblock; `GET` = health check |
+| Painel admin | `https://SEU_APP/?page=stevo` | Página do app soneko-assign-queue: cadastra clientes, gera links de setup, vê auditoria |
+| Setup do cliente | `https://SEU_APP/?page=stevo-setup&token=...` | Link único gerado no admin; cadastra as credenciais Stevo com teste de conexão |
+| API admin | `.../functions/v1/stevo-admin` | JSON, protegida por admin secret (hash em `stevo_settings`) |
+| API setup | `.../functions/v1/stevo-setup` | JSON, protegida por token de setup com expiração (7 dias) |
+
+Dados em Postgres (schema `public`, RLS habilitado sem policies — só as edge functions com service role acessam): `stevo_clients` (com `webhook_secret` **por cliente**), `stevo_instances`, `stevo_setup_tokens`, `stevo_audit_log`, `stevo_settings`.
+
+**Fluxo de onboarding de um cliente novo:**
+1. Abra o admin (`/?page=stevo`), entre com o admin secret.
+2. "Novo cliente": nome + Location ID do GHL → gera o link de setup (válido 7 dias).
+3. Envie o link (ou abra você mesmo): a página pede URL do servidor + API Key de cada instância Stevo, com botão **Testar conexão** que valida contra a API real.
+4. Ao salvar, a página mostra a configuração pronta do GHL: URL do webhook, header `x-webhook-secret` (secret exclusivo daquele cliente) e os bodies de block/unblock para colar nos workflows.
+
+> As telas ficam no app (e não nas functions) porque o domínio compartilhado `*.supabase.co` reescreve `text/html` para `text/plain` de propósito (anti-phishing) — documentado em <https://supabase.com/docs/guides/functions/development-tips>.
+
+**Rotação do admin secret:** gere um novo (`openssl rand -hex 24`), calcule o hash (`echo -n "SECRET" | sha256sum`) e atualize `stevo_settings.admin_secret_hash` via SQL.
+
+---
+
+## Versão alternativa: servidor Node standalone
+
+O restante deste README documenta a versão Node.js + Express (`src/`), funcionalmente equivalente ao webhook (config via `.env` em vez de banco). Útil se preferir hospedar em VPS/Railway/Render em vez do Supabase.
 
 ---
 
