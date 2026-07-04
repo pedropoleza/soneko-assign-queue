@@ -1,5 +1,5 @@
 // stevo-admin — API JSON do painel do administrador.
-// A tela fica no app (soneko-assign-queue: /?page=stevo); o domínio
+// A tela fica no front-end estático independente (pasta web/); o domínio
 // compartilhado *.supabase.co não serve HTML, então esta função expõe
 // apenas JSON. Protegida por admin secret (hash SHA-256 em
 // stevo_settings.admin_secret_hash).
@@ -62,7 +62,7 @@ async function createSetupToken(clientId: string): Promise<string> {
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS_HEADERS });
   if (req.method === 'GET') {
-    return json({ service: 'stevo-admin', hint: 'Abra o painel no app (/?page=stevo)' });
+    return json({ service: 'stevo-admin', hint: 'Abra o painel web do Stevo DND' });
   }
   if (req.method !== 'POST') return json({ error: 'Método não permitido' }, 405);
 

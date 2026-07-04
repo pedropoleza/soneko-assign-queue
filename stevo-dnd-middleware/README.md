@@ -11,20 +11,29 @@ A versão ativa roda no projeto Supabase **GHL Token** (`tbziahcpkrfiksqhuhpe`) 
 | Componente | URL | O que é |
 |---|---|---|
 | Webhook (GHL chama) | `https://tbziahcpkrfiksqhuhpe.supabase.co/functions/v1/stevo-dnd` | `POST` block/unblock; `GET` = health check |
-| Painel admin | `https://SEU_APP/?page=stevo` | Página do app soneko-assign-queue: cadastra clientes, gera links de setup, vê auditoria |
-| Setup do cliente | `https://SEU_APP/?page=stevo-setup&token=...` | Link único gerado no admin; cadastra as credenciais Stevo com teste de conexão |
+| Painel admin | `https://SUA_URL/` | Front-end estático **independente** (pasta `web/`): cadastra clientes, gera links de setup, vê auditoria |
+| Setup do cliente | `https://SUA_URL/?token=...` | Link único gerado no admin; cadastra as credenciais Stevo com teste de conexão |
 | API admin | `.../functions/v1/stevo-admin` | JSON, protegida por admin secret (hash em `stevo_settings`) |
 | API setup | `.../functions/v1/stevo-setup` | JSON, protegida por token de setup com expiração (7 dias) |
+
+### Hospedando o painel (pasta `web/`)
+
+O painel é **um único `index.html` autocontido** (sem build, sem dependências) e totalmente separado de qualquer outro app. Publique a pasta `web/` em qualquer host estático, na URL que preferir:
+
+- **Vercel / Netlify / Cloudflare Pages:** aponte para a pasta `stevo-dnd-middleware/web` (sem comando de build) — ou simplesmente arraste a pasta no painel deles.
+- Qualquer outro host (S3, Nginx, cPanel...) também funciona.
+
+Os links de setup gerados usam automaticamente o domínio onde a página estiver publicada (`https://sua-url/?token=...`) — nada precisa ser reconfigurado ao trocar de domínio. As chamadas vão direto para as edge functions (CORS liberado), e nenhum segredo fica no HTML.
 
 Dados em Postgres (schema `public`, RLS habilitado sem policies — só as edge functions com service role acessam): `stevo_clients` (com `webhook_secret` **por cliente**), `stevo_instances`, `stevo_setup_tokens`, `stevo_audit_log`, `stevo_settings`.
 
 **Fluxo de onboarding de um cliente novo:**
-1. Abra o admin (`/?page=stevo`), entre com o admin secret.
+1. Abra o painel (`https://SUA_URL/`), entre com o admin secret.
 2. "Novo cliente": nome + Location ID do GHL → gera o link de setup (válido 7 dias).
 3. Envie o link (ou abra você mesmo): a página pede URL do servidor + API Key de cada instância Stevo, com botão **Testar conexão** que valida contra a API real.
 4. Ao salvar, a página mostra a configuração pronta do GHL: URL do webhook, header `x-webhook-secret` (secret exclusivo daquele cliente) e os bodies de block/unblock para colar nos workflows.
 
-> As telas ficam no app (e não nas functions) porque o domínio compartilhado `*.supabase.co` reescreve `text/html` para `text/plain` de propósito (anti-phishing) — documentado em <https://supabase.com/docs/guides/functions/development-tips>.
+> As telas ficam em um front-end estático separado (e não nas functions) porque o domínio compartilhado `*.supabase.co` reescreve `text/html` para `text/plain` de propósito (anti-phishing) — documentado em <https://supabase.com/docs/guides/functions/development-tips>.
 
 **Rotação do admin secret:** gere um novo (`openssl rand -hex 24`), calcule o hash (`echo -n "SECRET" | sha256sum`) e atualize `stevo_settings.admin_secret_hash` via SQL.
 

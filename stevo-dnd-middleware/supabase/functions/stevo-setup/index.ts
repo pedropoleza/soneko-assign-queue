@@ -1,5 +1,5 @@
 // stevo-setup — API JSON do fluxo de onboarding por link único (token).
-// A tela fica no app (soneko-assign-queue: /?page=stevo-setup&token=...);
+// A tela fica no front-end estático independente (pasta web/ deste projeto);
 // o domínio compartilhado *.supabase.co não serve HTML (reescreve para
 // text/plain), então esta função expõe apenas JSON.
 //
@@ -97,7 +97,7 @@ interface IncomingInstance {
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS_HEADERS });
   if (req.method === 'GET') {
-    return json({ service: 'stevo-setup', hint: 'Abra o link de setup no app (/?page=stevo-setup&token=...)' });
+    return json({ service: 'stevo-setup', hint: 'Abra o link de setup no painel web do Stevo DND (/?token=...)' });
   }
   if (req.method !== 'POST') return json({ error: 'Método não permitido' }, 405);
 

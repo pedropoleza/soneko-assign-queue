@@ -1,0 +1,411 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stevo DND — Bloqueio WhatsApp</title>
+<!--
+  Front-end estático e independente do middleware Stevo DND.
+  Hospede esta pasta em qualquer host estático (Vercel, Netlify, Cloudflare
+  Pages, S3...) na URL que preferir — os links de setup gerados usam
+  automaticamente o domínio onde a página estiver publicada.
+
+  Rotas (query string, sem rewrites):
+    /            -> painel admin (login por admin secret)
+    /?token=...  -> página de setup do cliente (link gerado no admin)
+
+  As APIs ficam nas Supabase Edge Functions (stevo-admin / stevo-setup);
+  o webhook que o GHL chama é a function stevo-dnd.
+-->
+<style>
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; background: #f3f5f8; color: #1a2433; }
+  .wrap { max-width: 960px; margin: 40px auto; padding: 0 16px; }
+  .wrap-narrow { max-width: 760px; }
+  .card { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 24px; margin-bottom: 16px; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  h2 { font-size: 15px; margin: 0 0 12px; }
+  .muted { color: #64748b; font-size: 13px; margin: 4px 0 0; }
+  label { display: block; font-size: 12px; font-weight: 600; color: #475569; margin: 10px 0 4px; }
+  input { width: 100%; padding: 9px 10px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px; }
+  input:focus { outline: 2px solid #2563eb33; border-color: #2563eb; }
+  button { cursor: pointer; border: 0; border-radius: 8px; padding: 9px 14px; font-size: 13px; font-weight: 600; }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  .btn-primary { background: #2563eb; color: #fff; }
+  .btn-primary:hover { background: #1d4ed8; }
+  .btn-secondary { background: #eef2f7; color: #1a2433; }
+  .btn-secondary:hover { background: #e2e8f0; }
+  .btn-danger { background: #fee2e2; color: #b91c1c; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
+  .row > div { flex: 1; min-width: 200px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #eef2f7; vertical-align: top; }
+  th { color: #64748b; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
+  .pill { display: inline-block; padding: 2px 8px; border-radius: 99px; font-size: 11px; font-weight: 600; }
+  .pill-on { background: #dcfce7; color: #166534; }
+  .pill-off { background: #fee2e2; color: #b91c1c; }
+  .link-box { background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 8px; padding: 10px; font-size: 12px; word-break: break-all; margin-top: 10px; }
+  .instance { border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px; margin-bottom: 12px; background: #fafbfc; }
+  .instance-header { display: flex; justify-content: space-between; align-items: center; }
+  .test-result { font-size: 12px; margin-top: 8px; padding: 6px 10px; border-radius: 6px; display: none; }
+  .test-ok { background: #dcfce7; color: #166534; display: block; }
+  .test-fail { background: #fee2e2; color: #b91c1c; display: block; }
+  .actions { display: flex; gap: 10px; margin-top: 16px; align-items: center; flex-wrap: wrap; }
+  pre { background: #0f172a; color: #e2e8f0; padding: 12px; border-radius: 8px; font-size: 12px; overflow-x: auto; }
+  code.inline { background: #eef2f7; padding: 2px 6px; border-radius: 4px; font-size: 12px; }
+  .error-text { color: #b91c1c; font-size: 13px; }
+  .ok-text { color: #166534; font-size: 13px; }
+  .config-label { display: flex; justify-content: space-between; align-items: center; margin: 14px 0 4px; }
+  .toast { position: fixed; top: 16px; right: 16px; background: #0f172a; color: #fff; padding: 10px 16px; border-radius: 8px; font-size: 13px; opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 50; }
+  .toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+<div class="wrap" id="root"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+'use strict';
+
+// ── Config ─────────────────────────────────────────────────────────────────
+const API_BASE = 'https://tbziahcpkrfiksqhuhpe.supabase.co/functions/v1';
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+const $ = (id) => document.getElementById(id);
+const root = $('root');
+
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+function toast(msg) {
+  const el = $('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 2200);
+}
+
+function copyText(text) {
+  navigator.clipboard.writeText(text).then(() => toast('Copiado'));
+}
+
+async function api(fn, payload) {
+  try {
+    const res = await fetch(`${API_BASE}/${fn}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    return { status: res.status, data: await res.json() };
+  } catch {
+    return { status: 0, data: { error: 'Falha de rede — verifique sua conexão' } };
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ADMIN
+// ═══════════════════════════════════════════════════════════════════════════
+let adminSecret = sessionStorage.getItem('stevo_admin_secret') || '';
+
+function renderAdminLogin(autoTry = true) {
+  root.classList.remove('wrap-narrow');
+  root.innerHTML = `
+    <div class="card" style="max-width:420px;margin:80px auto">
+      <h1>Stevo DND — Admin</h1>
+      <p class="muted">Bloqueio de WhatsApp via Stevo, acionado pelo GHL.</p>
+      <label>Admin secret</label>
+      <input id="secret-input" type="password" placeholder="cole o admin secret">
+      <div class="actions">
+        <button class="btn-primary" id="login-btn">Entrar</button>
+        <span id="login-msg" class="error-text"></span>
+      </div>
+    </div>`;
+  $('login-btn').onclick = doLogin;
+  $('secret-input').onkeydown = (e) => { if (e.key === 'Enter') doLogin(); };
+  if (autoTry && adminSecret) {
+    api('stevo-admin', { secret: adminSecret, action: 'list' }).then(({ status }) => {
+      if (status === 200) renderAdminApp();
+    });
+  }
+}
+
+async function doLogin() {
+  adminSecret = $('secret-input').value.trim();
+  if (!adminSecret) return;
+  $('login-btn').disabled = true;
+  const { status } = await api('stevo-admin', { secret: adminSecret, action: 'list' });
+  $('login-btn').disabled = false;
+  if (status !== 200) {
+    $('login-msg').textContent = 'Secret inválido';
+    return;
+  }
+  sessionStorage.setItem('stevo_admin_secret', adminSecret);
+  renderAdminApp();
+}
+
+function renderAdminApp() {
+  root.innerHTML = `
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <h1>Stevo DND — Admin</h1>
+          <p class="muted">Webhook do GHL: <code class="inline">${esc(API_BASE)}/stevo-dnd</code></p>
+        </div>
+        <button class="btn-secondary" id="refresh-btn">Atualizar</button>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Novo cliente</h2>
+      <div class="row">
+        <div><label>Nome do cliente</label><input id="new-name" placeholder="Cliente 1"></div>
+        <div><label>Location ID (GHL)</label><input id="new-location" placeholder="ex.: ve9EPM428h8vShlRW1KT"></div>
+        <div style="flex:0;min-width:auto"><button class="btn-primary" id="create-btn">Criar + gerar link</button></div>
+      </div>
+      <div id="create-result"></div>
+    </div>
+    <div class="card"><h2>Clientes</h2><div id="clients"></div></div>
+    <div class="card"><h2>Auditoria — últimas 50 operações</h2><div id="audit"></div></div>`;
+  $('refresh-btn').onclick = refreshAdmin;
+  $('create-btn').onclick = createClient;
+  refreshAdmin();
+}
+
+async function refreshAdmin() {
+  const [clientsRes, auditRes] = await Promise.all([
+    api('stevo-admin', { secret: adminSecret, action: 'list' }),
+    api('stevo-admin', { secret: adminSecret, action: 'audit' }),
+  ]);
+  renderClients(clientsRes.data.clients || []);
+  renderAudit(auditRes.data.entries || []);
+}
+
+function setupUrlFromToken(token) {
+  return `${window.location.origin}${window.location.pathname}?token=${token}`;
+}
+
+async function createClient() {
+  const clientName = $('new-name').value.trim();
+  const ghlLocationId = $('new-location').value.trim();
+  if (!clientName || !ghlLocationId) { toast('Informe o nome e o Location ID'); return; }
+  $('create-btn').disabled = true;
+  const { data } = await api('stevo-admin', { secret: adminSecret, action: 'create', clientName, ghlLocationId });
+  $('create-btn').disabled = false;
+  if (data.error || !data.setupToken) {
+    $('create-result').innerHTML = `<p class="error-text">${esc(data.error || 'Erro ao criar cliente')}</p>`;
+    return;
+  }
+  const url = setupUrlFromToken(data.setupToken);
+  $('create-result').innerHTML = `
+    <div class="link-box"><strong>Link de setup (válido por ${data.expiresInDays} dias):</strong><br>
+      <span id="new-link">${esc(url)}</span>
+      <button class="btn-secondary" style="margin-left:8px" onclick="copyText(document.getElementById('new-link').textContent)">Copiar</button>
+    </div>`;
+  $('new-name').value = '';
+  $('new-location').value = '';
+  refreshAdmin();
+}
+
+async function newSetupLink(clientId, boxId) {
+  const { data } = await api('stevo-admin', { secret: adminSecret, action: 'setupLink', clientId });
+  if (data.error || !data.setupToken) { toast(data.error || 'Erro ao gerar link'); return; }
+  const url = setupUrlFromToken(data.setupToken);
+  $(boxId).innerHTML = `<div class="link-box"><span>${esc(url)}</span>
+    <button class="btn-secondary" style="margin-left:8px" onclick="copyText('${url}')">Copiar</button></div>`;
+}
+
+async function toggleClient(clientId, active) {
+  await api('stevo-admin', { secret: adminSecret, action: 'toggleClient', clientId, active });
+  refreshAdmin();
+}
+
+function renderClients(clients) {
+  const el = $('clients');
+  if (!clients.length) { el.innerHTML = '<p class="muted">Nenhum cliente ainda — crie o primeiro acima.</p>'; return; }
+  el.innerHTML = `<div style="overflow-x:auto"><table>
+    <tr><th>Cliente</th><th>Location ID</th><th>Instâncias</th><th>Status</th><th></th></tr>
+    ${clients.map((c, i) => {
+      const inst = c.instances.length === 0
+        ? '<span class="muted">nenhuma (setup pendente)</span>'
+        : c.instances.map((x) => esc(x.name) + (x.active ? '' : ' (inativa)')).join(', ');
+      return `<tr>
+        <td><strong>${esc(c.clientName)}</strong></td>
+        <td><code class="inline">${esc(c.locationId)}</code></td>
+        <td>${inst}</td>
+        <td><span class="pill ${c.active ? 'pill-on' : 'pill-off'}">${c.active ? 'ativo' : 'inativo'}</span></td>
+        <td>
+          <button class="btn-secondary" onclick="newSetupLink('${esc(c.id)}','link-${i}')">Novo link de setup</button>
+          <button class="btn-secondary" onclick="toggleClient('${esc(c.id)}',${!c.active})">${c.active ? 'Desativar' : 'Ativar'}</button>
+          <div id="link-${i}"></div>
+        </td></tr>`;
+    }).join('')}
+  </table></div>`;
+}
+
+function renderAudit(entries) {
+  const el = $('audit');
+  if (!entries.length) { el.innerHTML = '<p class="muted">Nenhuma operação registrada ainda.</p>'; return; }
+  el.innerHTML = `<div style="overflow-x:auto"><table>
+    <tr><th>Quando</th><th>Ação</th><th>Location</th><th>Telefone</th><th>Instância</th><th>Resultado</th><th>Origem</th></tr>
+    ${entries.map((e) => `<tr>
+      <td style="white-space:nowrap">${new Date(e.created_at).toLocaleString('pt-BR')}</td>
+      <td>${esc(e.action)}</td>
+      <td><code class="inline">${esc(e.ghl_location_id)}</code></td>
+      <td>${esc(e.phone)}</td>
+      <td>${esc(e.instance_name)}</td>
+      <td>${e.success ? '<span class="pill pill-on">OK</span>' : `<span class="pill pill-off">falha</span> <span class="muted">${esc(e.message)}</span>`}</td>
+      <td>${esc(e.source)}</td>
+    </tr>`).join('')}
+  </table></div>`;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SETUP (cliente)
+// ═══════════════════════════════════════════════════════════════════════════
+let instSeq = 0;
+
+async function renderSetup(token) {
+  root.classList.add('wrap-narrow');
+  root.innerHTML = '<div class="card"><p class="muted">Carregando…</p></div>';
+  const { status, data } = await api('stevo-setup', { token, action: 'load' });
+  if (status !== 200 || data.error) {
+    root.innerHTML = `<div class="card"><h1>Link inválido ou expirado</h1>
+      <p class="muted">Peça um novo link de configuração ao administrador.</p></div>`;
+    return;
+  }
+  root.innerHTML = `
+    <div class="card">
+      <h1>Configuração Stevo — ${esc(data.clientName)}</h1>
+      <p class="muted">Location GHL: <code class="inline">${esc(data.locationId)}</code></p>
+    </div>
+    <div class="card">
+      <h2>Instâncias Stevo (números de WhatsApp)</h2>
+      <p class="muted">A URL do servidor (https://smv2-N.stevo.chat) e a API Key aparecem no painel da instância no StevoManager V2.</p>
+      <div id="instances" style="margin-top:14px"></div>
+      <button class="btn-secondary" id="add-btn">+ Adicionar instância</button>
+      <div class="actions">
+        <button class="btn-primary" id="save-btn">Salvar configuração</button>
+        <span id="save-status"></span>
+      </div>
+    </div>
+    <div class="card" id="result-card" style="display:none">
+      <h2>✅ Configuração salva — agora configure o GHL</h2>
+      <div id="ghl-config"></div>
+    </div>`;
+  $('add-btn').onclick = () => addInstance();
+  $('save-btn').onclick = () => saveInstances(token);
+  const list = data.instances || [];
+  if (list.length) list.forEach((i) => addInstance(i));
+  else addInstance();
+}
+
+function addInstance(existing) {
+  const id = 'inst-' + (++instSeq);
+  const div = document.createElement('div');
+  div.className = 'instance';
+  div.id = id;
+  if (existing && existing.id) div.dataset.existingId = existing.id;
+  div.innerHTML = `
+    <div class="instance-header">
+      <strong>Instância</strong>
+      <button class="btn-danger" data-remove>Remover</button>
+    </div>
+    <label>Nome (ex.: Número Principal)</label>
+    <input class="f-name" value="${existing ? esc(existing.name) : ''}" placeholder="Número Principal">
+    <div class="row">
+      <div>
+        <label>URL do servidor Stevo</label>
+        <input class="f-server" value="${existing ? esc(existing.serverUrl) : ''}" placeholder="https://smv2-1.stevo.chat">
+      </div>
+      <div>
+        <label>API Key ${existing && existing.maskedKey ? `(atual: ${esc(existing.maskedKey)} — deixe em branco para manter)` : ''}</label>
+        <input class="f-key" type="password" placeholder="${existing ? 'manter a atual' : 'cole a API Key da instância'}">
+      </div>
+    </div>
+    <div style="margin-top:10px">
+      <button class="btn-secondary" data-test>Testar conexão</button>
+      <div class="test-result"></div>
+    </div>`;
+  div.querySelector('[data-remove]').onclick = () => div.remove();
+  div.querySelector('[data-test]').onclick = () => testInstance(div);
+  $('instances').appendChild(div);
+}
+
+function readInstance(div) {
+  return {
+    id: div.dataset.existingId || undefined,
+    name: div.querySelector('.f-name').value.trim(),
+    serverUrl: div.querySelector('.f-server').value.trim(),
+    apiKey: div.querySelector('.f-key').value.trim(),
+    active: true,
+  };
+}
+
+async function testInstance(div) {
+  const inst = readInstance(div);
+  const box = div.querySelector('.test-result');
+  box.className = 'test-result';
+  box.style.display = 'block';
+  box.textContent = 'Testando...';
+  const { data } = await api('stevo-setup', {
+    token: setupToken, action: 'test',
+    serverUrl: inst.serverUrl, apiKey: inst.apiKey, instanceId: inst.id,
+  });
+  box.className = 'test-result ' + (data.ok ? 'test-ok' : 'test-fail');
+  box.textContent = data.message || data.error || 'Erro no teste';
+}
+
+async function saveInstances(token) {
+  const instances = [...document.querySelectorAll('.instance')].map(readInstance);
+  const status = $('save-status');
+  status.className = '';
+  status.textContent = 'Salvando...';
+  $('save-btn').disabled = true;
+  const { data } = await api('stevo-setup', { token, action: 'save', instances });
+  $('save-btn').disabled = false;
+  if (data.error || !data.ghlConfig) {
+    status.className = 'error-text';
+    status.textContent = data.error || 'Erro ao salvar';
+    return;
+  }
+  status.className = 'ok-text';
+  status.textContent = 'Salvo!';
+  showGhlConfig(data.ghlConfig);
+}
+
+function showGhlConfig(cfg) {
+  const blocks = [
+    ['URL (method POST)', cfg.webhookUrl],
+    ['Headers', `${cfg.secretHeader}: ${cfg.secretValue}\nContent-Type: application/json`],
+    ['Body — bloqueio', JSON.stringify(cfg.blockBody, null, 2)],
+    ['Body — desbloqueio', JSON.stringify(cfg.unblockBody, null, 2)],
+  ];
+  $('ghl-config').innerHTML = `
+    <p><strong>1. Workflow de bloqueio</strong> — trigger: DND WhatsApp habilitado ou tag <code class="inline">stevo_block_whatsapp</code>.</p>
+    <p><strong>2. Workflow de desbloqueio</strong> — trigger: DND removido ou tag <code class="inline">stevo_unblock_whatsapp</code>.</p>
+    <p>Nos dois, adicione a ação <strong>Custom Webhook</strong> com:</p>
+    ${blocks.map(([label, value], i) => `
+      <div class="config-label">
+        <span style="font-size:12px;font-weight:600;color:#475569">${label}</span>
+        <button class="btn-secondary" data-copy="${i}">Copiar</button>
+      </div>
+      <pre id="cfg-${i}">${esc(value)}</pre>`).join('')}
+    <p class="muted">Guarde o secret com cuidado — ele autoriza bloqueios nesta location.</p>`;
+  document.querySelectorAll('[data-copy]').forEach((btn) => {
+    btn.onclick = () => copyText($('cfg-' + btn.dataset.copy).textContent);
+  });
+  $('result-card').style.display = 'block';
+  $('result-card').scrollIntoView({ behavior: 'smooth' });
+}
+
+// ── Roteamento por query string (fica no fim: usa as funções acima) ────────
+const params = new URLSearchParams(window.location.search);
+const setupToken = params.get('token');
+if (setupToken) {
+  renderSetup(setupToken);
+} else {
+  renderAdminLogin();
+}
+</script>
+</body>
+</html>
