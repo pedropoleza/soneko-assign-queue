@@ -66,19 +66,19 @@ interface StevoResult {
   error?: string;
 }
 
-async function stevoBlockCall(
+/** Chamada genérica à API do Stevo, com timeout e erro normalizado (sem vazar apiKey). */
+async function stevoFetch(
   instance: InstanceRow,
-  action: 'block' | 'unblock',
-  phone: string
-): Promise<StevoResult> {
-  const url = `${instance.server_url.replace(/\/+$/, '')}/user/${action}`;
+  path: string,
+  bodyObj: Record<string, unknown>
+): Promise<{ ok: boolean; status: number; data: unknown; error?: string }> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), STEVO_TIMEOUT_MS);
   try {
-    const response = await fetch(url, {
+    const response = await fetch(`${instance.server_url.replace(/\/+$/, '')}${path}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', apikey: instance.api_key },
-      body: JSON.stringify({ number: phone }),
+      body: JSON.stringify(bodyObj),
       signal: controller.signal,
     });
     const text = await response.text();
@@ -93,15 +93,16 @@ async function stevoBlockCall(
         data && typeof data === 'object' && 'error' in (data as Record<string, unknown>)
           ? String((data as Record<string, unknown>).error)
           : `HTTP ${response.status}`;
-      // Nunca repassar a apiKey em mensagens de erro
       const safe = apiMessage.split(instance.api_key).join('[REDACTED]').slice(0, 300);
-      return { success: false, error: safe };
+      return { ok: false, status: response.status, data, error: safe };
     }
-    return { success: true };
+    return { ok: true, status: response.status, data };
   } catch (err) {
     const isTimeout = err instanceof Error && err.name === 'AbortError';
     return {
-      success: false,
+      ok: false,
+      status: 0,
+      data: null,
       error: isTimeout
         ? `Timeout após ${STEVO_TIMEOUT_MS}ms ao chamar a instância Stevo`
         : 'Falha de rede ao chamar a instância Stevo',
@@ -109,6 +110,39 @@ async function stevoBlockCall(
   } finally {
     clearTimeout(timeout);
   }
+}
+
+/**
+ * Resolve o número no WhatsApp via /user/check. Retorna o LID (identificador
+ * interno do WhatsApp, aceito pelo block/unblock), o JID por telefone e se o
+ * número existe. Trata o 9º dígito brasileiro. Se a checagem falhar, devolve {}.
+ */
+async function resolveWhatsappJid(
+  instance: InstanceRow,
+  phone: string
+): Promise<{ lid?: string; jid?: string; onWhatsapp?: boolean }> {
+  const res = await stevoFetch(instance, '/user/check', { number: [phone], formatJid: true });
+  if (!res.ok || !res.data || typeof res.data !== 'object') return {};
+  const users = (res.data as { data?: { Users?: Array<{ IsInWhatsapp?: boolean; JID?: string; LID?: string }> } })?.data?.Users;
+  const u = Array.isArray(users) ? users[0] : undefined;
+  if (!u) return {};
+  return { lid: u.LID, jid: u.JID, onWhatsapp: u.IsInWhatsapp };
+}
+
+async function stevoBlockCall(
+  instance: InstanceRow,
+  action: 'block' | 'unblock',
+  phone: string
+): Promise<StevoResult> {
+  // Resolve para o identificador aceito pelo Stevo. O LID (@lid) é o que a API
+  // aceita de forma confiável; caímos para JID/telefone se o LID não vier.
+  const resolved = await resolveWhatsappJid(instance, phone);
+  if (resolved.onWhatsapp === false) {
+    return { success: false, error: `Número ${phone} não está no WhatsApp` };
+  }
+  const number = resolved.lid ?? resolved.jid ?? phone;
+  const res = await stevoFetch(instance, `/user/${action}`, { number });
+  return res.ok ? { success: true } : { success: false, error: res.error ?? 'Erro desconhecido na instância' };
 }
 
 Deno.serve(async (req) => {

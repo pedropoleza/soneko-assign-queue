@@ -4,6 +4,20 @@ Middleware que recebe webhooks de automações do **GoHighLevel (GHL)** e bloque
 
 Fluxo: contato marcado como DND (ou tag adicionada) no GHL → workflow dispara Custom Webhook → o middleware identifica o cliente pela `locationId` → chama a API do Stevo na(s) instância(s) correta(s) → registra auditoria → responde ao GHL com sucesso, falha parcial ou erro.
 
+## Comportamento do bloqueio (importante)
+
+- Antes de bloquear/desbloquear, o middleware chama `POST /user/check` na instância
+  para resolver o número no WhatsApp. Isso **trata o 9º dígito brasileiro**
+  (ex.: `5538984216014` → WhatsApp usa `553884216014`) e valida se o número
+  existe no WhatsApp. Usa o **LID** (`@lid`, identificador interno) retornado,
+  que é o formato aceito de forma confiável por `/user/block` e `/user/unblock`.
+- **Pré-requisito:** a instância precisa estar **conectada e logada** no Stevo.
+  Se a resposta trouxer `client disconnected` (em check/block/unblock/status),
+  a sessão do WhatsApp daquele número caiu — reconecte/reescaneie o QR no painel
+  do StevoManager V2. Enquanto estiver desconectada, nenhuma operação funciona.
+- Erro `info query returned status 400: bad-request` no block costuma indicar
+  sessão degradada/instável — reconecte a instância e tente de novo.
+
 ## ⚡ Versão em produção: Supabase Edge Functions + páginas no app
 
 A versão ativa roda no projeto Supabase **GHL Token** (`tbziahcpkrfiksqhuhpe`) — código em `supabase/` neste diretório:
