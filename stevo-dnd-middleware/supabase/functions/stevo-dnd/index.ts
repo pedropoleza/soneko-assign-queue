@@ -171,8 +171,14 @@ Deno.serve(async (req) => {
     return errorResponse(`Location "${locationId}" não está configurada neste middleware`, 404);
   }
 
-  // Autenticação: secret por cliente
-  const providedSecret = req.headers.get('x-webhook-secret') ?? '';
+  // Autenticação: secret por cliente. Aceita via header x-webhook-secret
+  // (recomendado) OU via campo do body (webhookSecret/secret/x-webhook-secret),
+  // pois a configuração de headers no GHL às vezes é limitada.
+  const providedSecret =
+    (req.headers.get('x-webhook-secret') ?? '') ||
+    clean(pick('webhookSecret')) ||
+    clean(pick('secret')) ||
+    clean(pick('x-webhook-secret'));
   if (!providedSecret || !safeEqual(providedSecret, client.webhook_secret)) {
     return errorResponse('Segredo do webhook ausente ou inválido', 401);
   }
