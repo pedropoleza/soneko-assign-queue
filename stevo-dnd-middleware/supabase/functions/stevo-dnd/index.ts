@@ -127,20 +127,37 @@ Deno.serve(async (req) => {
   }
 
   // Validação do payload.
-  // Tolerante ao GHL Custom Data: remove aspas/espaços e normaliza caixa,
-  // pois o GHL costuma enviar o valor literal (ex.: '"block"' com aspas).
+  // Tolerante ao GHL Custom Data: os campos podem vir no topo do JSON ou
+  // aninhados em customData; e valores costumam chegar com aspas literais
+  // (ex.: '"block"'). Removemos aspas/espaços, normalizamos a caixa e
+  // aceitamos por conteúdo (contém "block"/"unblock").
+  const cd =
+    body.customData && typeof body.customData === 'object'
+      ? (body.customData as Record<string, unknown>)
+      : {};
+  const pick = (k: string): unknown => (body[k] !== undefined ? body[k] : cd[k]);
   const clean = (v: unknown): string =>
-    typeof v === 'string' ? v.trim().replace(/^["']+|["']+$/g, '').trim() : '';
-  const action = clean(body.action).toLowerCase();
-  if (action !== 'block' && action !== 'unblock') {
-    return errorResponse('Payload inválido — action deve ser "block" ou "unblock"', 400);
+    typeof v === 'string'
+      ? v.trim().replace(/^["']+|["']+$/g, '').trim()
+      : v === undefined || v === null
+        ? ''
+        : String(v).trim();
+
+  const rawAction = pick('action');
+  const a = clean(rawAction).toLowerCase();
+  const action = a.includes('unblock') ? 'unblock' : a.includes('block') ? 'block' : '';
+  if (!action) {
+    return errorResponse(
+      `Payload inválido — action deve ser "block" ou "unblock" (recebido: ${JSON.stringify(rawAction)}; campos no topo: ${Object.keys(body).join(', ') || 'nenhum'})`,
+      400
+    );
   }
-  const locationId = clean(body.locationId);
-  const contactId = clean(body.contactId);
+  const locationId = clean(pick('locationId'));
+  const contactId = clean(pick('contactId'));
   if (!locationId) return errorResponse('Payload inválido — locationId é obrigatório', 400);
   if (!contactId) return errorResponse('Payload inválido — contactId é obrigatório', 400);
-  const source = typeof body.source === 'string' ? body.source : 'unknown';
-  const reason = typeof body.reason === 'string' ? body.reason : '';
+  const source = clean(pick('source')) || 'unknown';
+  const reason = clean(pick('reason'));
 
   // Resolve o cliente pela location
   const { data: client, error: clientError } = await supabase
@@ -163,7 +180,7 @@ Deno.serve(async (req) => {
   // Telefone
   let phone: string;
   try {
-    phone = normalizePhone(body.phone);
+    phone = normalizePhone(clean(pick('phone')));
   } catch (err) {
     return errorResponse(err instanceof Error ? err.message : 'Telefone inválido', 400);
   }
