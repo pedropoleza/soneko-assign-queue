@@ -126,13 +126,17 @@ Deno.serve(async (req) => {
     return errorResponse('Body JSON inválido', 400);
   }
 
-  // Validação do payload
-  const action = body.action;
+  // Validação do payload.
+  // Tolerante ao GHL Custom Data: remove aspas/espaços e normaliza caixa,
+  // pois o GHL costuma enviar o valor literal (ex.: '"block"' com aspas).
+  const clean = (v: unknown): string =>
+    typeof v === 'string' ? v.trim().replace(/^["']+|["']+$/g, '').trim() : '';
+  const action = clean(body.action).toLowerCase();
   if (action !== 'block' && action !== 'unblock') {
     return errorResponse('Payload inválido — action deve ser "block" ou "unblock"', 400);
   }
-  const locationId = typeof body.locationId === 'string' ? body.locationId.trim() : '';
-  const contactId = typeof body.contactId === 'string' ? body.contactId.trim() : '';
+  const locationId = clean(body.locationId);
+  const contactId = clean(body.contactId);
   if (!locationId) return errorResponse('Payload inválido — locationId é obrigatório', 400);
   if (!contactId) return errorResponse('Payload inválido — contactId é obrigatório', 400);
   const source = typeof body.source === 'string' ? body.source : 'unknown';
@@ -181,7 +185,7 @@ Deno.serve(async (req) => {
 
   const results = await Promise.all(
     targets.map(async (instance) => {
-      const result = await stevoBlockCall(instance, action, phone);
+      const result = await stevoBlockCall(instance, action as 'block' | 'unblock', phone);
       return { instance: instance.name, ...result };
     })
   );

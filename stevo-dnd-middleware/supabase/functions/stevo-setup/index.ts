@@ -1,9 +1,11 @@
-// stevo-setup — API JSON do fluxo de onboarding por link único (token).
+// stevo-setup — API JSON do link do cliente (token).
 // A tela fica no front-end estático independente (pasta web/ deste projeto);
 // o domínio compartilhado *.supabase.co não serve HTML (reescreve para
 // text/plain), então esta função expõe apenas JSON.
 //
-// POST { token, action: 'load' | 'test' | 'save', ... }
+// POST { token, action: 'overview' | 'load' | 'test' | 'save', ... }
+//   overview -> dados do dashboard (blocklist ao vivo do Stevo + auditoria)
+//   load/test/save -> configuração das instâncias
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
 const supabase = createClient(
@@ -86,6 +88,56 @@ async function testStevoConnection(serverUrl: string, apiKey: string): Promise<{
   }
 }
 
+interface BlockEntry {
+  raw: string;
+  kind: 'phone' | 'lid';
+  display: string;
+}
+
+/** Extrai a lista de JIDs bloqueados da resposta do Stevo (formatos variados). */
+function extractJids(body: unknown): string[] {
+  if (!body || typeof body !== 'object') return [];
+  const root = body as Record<string, unknown>;
+  const d = (root.data && typeof root.data === 'object' ? root.data : root) as Record<string, unknown>;
+  const arr =
+    (d.JIDs as unknown) ??
+    (d.jids as unknown) ??
+    (d.blocklist as unknown) ??
+    (Array.isArray(d) ? d : []);
+  return Array.isArray(arr) ? arr.map((x) => String(x)) : [];
+}
+
+function formatJid(jid: string): BlockEntry {
+  const [id, domain = ''] = String(jid).split('@');
+  if (domain === 's.whatsapp.net') return { raw: jid, kind: 'phone', display: `+${id}` };
+  return { raw: jid, kind: 'lid', display: id };
+}
+
+async function fetchBlocklist(
+  serverUrl: string,
+  apiKey: string
+): Promise<{ ok: boolean; error?: string; entries: BlockEntry[] }> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), STEVO_TIMEOUT_MS);
+  try {
+    const res = await fetch(`${serverUrl.replace(/\/+$/, '')}/user/blocklist`, {
+      method: 'GET',
+      headers: { apikey: apiKey },
+      signal: controller.signal,
+    });
+    if (!res.ok) {
+      return { ok: false, error: res.status === 401 ? 'API Key inválida' : `HTTP ${res.status}`, entries: [] };
+    }
+    const body = await res.json().catch(() => null);
+    return { ok: true, entries: extractJids(body).map(formatJid) };
+  } catch (err) {
+    const isTimeout = err instanceof Error && err.name === 'AbortError';
+    return { ok: false, error: isTimeout ? 'Timeout ao consultar o servidor' : 'Falha de rede', entries: [] };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 interface IncomingInstance {
   id?: string;
   name?: string;
@@ -97,7 +149,7 @@ interface IncomingInstance {
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS_HEADERS });
   if (req.method === 'GET') {
-    return json({ service: 'stevo-setup', hint: 'Abra o link de setup no painel web do Stevo DND (/?token=...)' });
+    return json({ service: 'stevo-setup', hint: 'Abra o link no painel web do Stevo DND (/?token=...)' });
   }
   if (req.method !== 'POST') return json({ error: 'Método não permitido' }, 405);
 
@@ -112,6 +164,45 @@ Deno.serve(async (req) => {
   if (!ctx) return json({ error: 'Link inválido ou expirado — peça um novo ao administrador' }, 401);
 
   const action = body.action;
+
+  // Dashboard: instâncias + blocklist ao vivo por instância + auditoria da location
+  if (action === 'overview') {
+    const { data: instances } = await supabase
+      .from('stevo_instances')
+      .select('id, name, server_url, api_key, active')
+      .eq('client_id', ctx.clientId)
+      .order('created_at', { ascending: true });
+
+    const active = (instances ?? []).filter((i) => i.active);
+    const blocklists = await Promise.all(
+      active.map(async (i) => {
+        const r = await fetchBlocklist(i.server_url, i.api_key);
+        return { instance: i.name, ok: r.ok, error: r.error ?? null, count: r.entries.length, entries: r.entries };
+      })
+    );
+
+    const { data: audit } = await supabase
+      .from('stevo_audit_log')
+      .select('created_at, action, phone, contact_id, instance_name, success, source, reason')
+      .eq('ghl_location_id', ctx.ghlLocationId)
+      .order('created_at', { ascending: false })
+      .limit(100);
+
+    return json({
+      clientName: ctx.clientName,
+      locationId: ctx.ghlLocationId,
+      webhookUrl: `${Deno.env.get('SUPABASE_URL')}/functions/v1/stevo-dnd`,
+      instances: (instances ?? []).map((i) => ({
+        id: i.id,
+        name: i.name,
+        serverUrl: i.server_url,
+        maskedKey: maskKey(i.api_key),
+        active: i.active,
+      })),
+      blocklists,
+      audit: audit ?? [],
+    });
+  }
 
   if (action === 'load') {
     const { data: instances } = await supabase

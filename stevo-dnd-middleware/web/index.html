@@ -3,409 +3,450 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Stevo DND — Bloqueio WhatsApp</title>
+<title>Stevo · Bloqueio WhatsApp</title>
 <!--
   Front-end estático e independente do middleware Stevo DND.
-  Hospede esta pasta em qualquer host estático (Vercel, Netlify, Cloudflare
-  Pages, S3...) na URL que preferir — os links de setup gerados usam
-  automaticamente o domínio onde a página estiver publicada.
-
-  Rotas (query string, sem rewrites):
+  Rotas (query string):
     /            -> painel admin (login por admin secret)
-    /?token=...  -> página de setup do cliente (link gerado no admin)
-
-  As APIs ficam nas Supabase Edge Functions (stevo-admin / stevo-setup);
-  o webhook que o GHL chama é a function stevo-dnd.
+    /?token=...  -> dashboard do cliente (contatos bloqueados) + configuração
+  Visual wide no estilo GoHighLevel. As APIs ficam nas Supabase Edge Functions.
 -->
 <style>
-  :root { color-scheme: light; }
+  :root {
+    --bg: #f5f6f8; --panel: #ffffff; --ink-900: #10233f; --ink-700: #33415c;
+    --ink-500: #64748b; --ink-400: #94a3b8; --line: #e5e8ee; --line-soft: #eef1f6;
+    --brand: #2f6bff; --brand-dark: #1e4fd8; --brand-soft: #eaf1ff;
+    --nav: #0f1b33; --nav-soft: #16233f;
+    --green: #16a34a; --green-soft: #dcfce7; --rose: #e11d48; --rose-soft: #ffe4e6;
+    --amber: #b45309; --amber-soft: #fef3c7;
+    --shadow: 0 1px 2px rgba(16,35,63,.06), 0 1px 3px rgba(16,35,63,.04);
+    color-scheme: light;
+  }
   * { box-sizing: border-box; }
-  body { margin: 0; font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; background: #f3f5f8; color: #1a2433; }
-  .wrap { max-width: 960px; margin: 40px auto; padding: 0 16px; }
-  .wrap-narrow { max-width: 760px; }
-  .card { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 24px; margin-bottom: 16px; }
-  h1 { font-size: 20px; margin: 0 0 4px; }
-  h2 { font-size: 15px; margin: 0 0 12px; }
-  .muted { color: #64748b; font-size: 13px; margin: 4px 0 0; }
-  label { display: block; font-size: 12px; font-weight: 600; color: #475569; margin: 10px 0 4px; }
-  input { width: 100%; padding: 9px 10px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px; }
-  input:focus { outline: 2px solid #2563eb33; border-color: #2563eb; }
-  button { cursor: pointer; border: 0; border-radius: 8px; padding: 9px 14px; font-size: 13px; font-weight: 600; }
-  button:disabled { opacity: .5; cursor: not-allowed; }
-  .btn-primary { background: #2563eb; color: #fff; }
-  .btn-primary:hover { background: #1d4ed8; }
-  .btn-secondary { background: #eef2f7; color: #1a2433; }
-  .btn-secondary:hover { background: #e2e8f0; }
-  .btn-danger { background: #fee2e2; color: #b91c1c; }
-  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
-  .row > div { flex: 1; min-width: 200px; }
-  table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #eef2f7; vertical-align: top; }
-  th { color: #64748b; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
-  .pill { display: inline-block; padding: 2px 8px; border-radius: 99px; font-size: 11px; font-weight: 600; }
-  .pill-on { background: #dcfce7; color: #166534; }
-  .pill-off { background: #fee2e2; color: #b91c1c; }
-  .link-box { background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 8px; padding: 10px; font-size: 12px; word-break: break-all; margin-top: 10px; }
-  .instance { border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px; margin-bottom: 12px; background: #fafbfc; }
+  body { margin: 0; font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif; background: var(--bg); color: var(--ink-900); -webkit-font-smoothing: antialiased; }
+  a { color: var(--brand); }
+  /* Topbar */
+  .topbar { background: var(--nav); color: #fff; height: 56px; display: flex; align-items: center; }
+  .topbar-inner { max-width: 1280px; margin: 0 auto; width: 100%; padding: 0 24px; display: flex; align-items: center; justify-content: space-between; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 15px; letter-spacing: -.01em; }
+  .brand .logo { width: 26px; height: 26px; border-radius: 7px; background: linear-gradient(135deg, #2f6bff, #22d3a5); display: grid; place-items: center; font-size: 14px; }
+  .brand small { font-weight: 500; color: #9fb0cc; font-size: 12px; margin-left: 2px; }
+  .topbar-actions { display: flex; align-items: center; gap: 8px; }
+  /* Layout */
+  .container { max-width: 1280px; margin: 0 auto; padding: 24px; }
+  .page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 18px; }
+  .page-title { font-size: 22px; font-weight: 700; letter-spacing: -.02em; margin: 0; }
+  .page-sub { color: var(--ink-500); font-size: 13px; margin-top: 4px; }
+  .page-sub code { background: #fff; border: 1px solid var(--line); padding: 1px 7px; border-radius: 6px; font-size: 12px; }
+  /* KPI cards */
+  .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 18px; }
+  @media (max-width: 860px){ .kpis { grid-template-columns: repeat(2,1fr); } }
+  .kpi { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; box-shadow: var(--shadow); }
+  .kpi .label { font-size: 12px; color: var(--ink-500); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; display: flex; align-items: center; gap: 7px; }
+  .kpi .dot { width: 8px; height: 8px; border-radius: 99px; }
+  .kpi .value { font-size: 30px; font-weight: 750; letter-spacing: -.03em; margin-top: 8px; line-height: 1; }
+  .kpi .foot { font-size: 12px; color: var(--ink-400); margin-top: 6px; }
+  /* Card */
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); margin-bottom: 18px; overflow: hidden; }
+  .card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 18px; border-bottom: 1px solid var(--line-soft); flex-wrap: wrap; }
+  .card-head h2 { font-size: 15px; font-weight: 650; margin: 0; letter-spacing: -.01em; }
+  .card-head .hint { font-size: 12px; color: var(--ink-400); font-weight: 400; margin-top: 2px; }
+  .card-body { padding: 4px 0; }
+  .card-pad { padding: 18px; }
+  /* Table */
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  thead th { text-align: left; padding: 10px 18px; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-400); font-weight: 700; background: #fbfcfe; border-bottom: 1px solid var(--line-soft); position: sticky; top: 0; }
+  tbody td { padding: 11px 18px; border-bottom: 1px solid var(--line-soft); color: var(--ink-700); vertical-align: middle; }
+  tbody tr:last-child td { border-bottom: 0; }
+  tbody tr:hover { background: #fafbfe; }
+  .mono { font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 12.5px; color: var(--ink-900); }
+  .scroll-y { max-height: 460px; overflow-y: auto; }
+  .scroll-x { overflow-x: auto; }
+  /* Badges */
+  .badge { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 99px; font-size: 11.5px; font-weight: 650; }
+  .badge-rose { background: var(--rose-soft); color: var(--rose); }
+  .badge-green { background: var(--green-soft); color: var(--green); }
+  .badge-blue { background: var(--brand-soft); color: var(--brand-dark); }
+  .badge-gray { background: #eef1f6; color: var(--ink-500); }
+  .badge-amber { background: var(--amber-soft); color: var(--amber); }
+  /* Buttons / inputs */
+  button { cursor: pointer; border: 0; border-radius: 8px; padding: 9px 15px; font-size: 13px; font-weight: 600; font-family: inherit; transition: background .12s, opacity .12s; }
+  button:disabled { opacity: .55; cursor: not-allowed; }
+  .btn-primary { background: var(--brand); color: #fff; }
+  .btn-primary:hover { background: var(--brand-dark); }
+  .btn-light { background: #fff; color: var(--ink-700); border: 1px solid var(--line); }
+  .btn-light:hover { background: #f7f9fc; }
+  .btn-ghost { background: transparent; color: #cdd7ea; }
+  .btn-ghost:hover { background: var(--nav-soft); color: #fff; }
+  .btn-danger { background: var(--rose-soft); color: var(--rose); }
+  .btn-sm { padding: 6px 11px; font-size: 12px; }
+  label { display: block; font-size: 12px; font-weight: 600; color: var(--ink-700); margin: 12px 0 5px; }
+  input { width: 100%; padding: 9px 11px; border: 1px solid #cdd5e1; border-radius: 8px; font-size: 14px; font-family: inherit; background: #fff; }
+  input:focus { outline: 2px solid #2f6bff33; border-color: var(--brand); }
+  .search { position: relative; }
+  .search input { padding-left: 32px; height: 34px; width: 240px; }
+  .search svg { position: absolute; left: 10px; top: 9px; color: var(--ink-400); }
+  .row { display: flex; gap: 12px; flex-wrap: wrap; }
+  .row > div { flex: 1; min-width: 220px; }
+  .empty { padding: 40px 18px; text-align: center; color: var(--ink-400); font-size: 14px; }
+  .muted { color: var(--ink-500); font-size: 13px; }
+  pre { background: #0f1b33; color: #dbe6fb; padding: 12px 14px; border-radius: 8px; font-size: 12px; overflow-x: auto; margin: 6px 0 0; }
+  code.inline { background: #eef1f6; padding: 2px 6px; border-radius: 5px; font-size: 12px; }
+  /* Drawer (config) */
+  .drawer-mask { position: fixed; inset: 0; background: rgba(15,27,51,.42); display: none; z-index: 40; }
+  .drawer-mask.open { display: block; }
+  .drawer { position: fixed; top: 0; right: 0; height: 100%; width: 560px; max-width: 94vw; background: var(--bg); box-shadow: -8px 0 30px rgba(16,35,63,.18); transform: translateX(100%); transition: transform .22s ease; z-index: 41; overflow-y: auto; }
+  .drawer.open { transform: none; }
+  .drawer-head { position: sticky; top: 0; background: var(--panel); border-bottom: 1px solid var(--line); padding: 16px 20px; display: flex; align-items: center; justify-content: space-between; }
+  .drawer-head h2 { margin: 0; font-size: 16px; }
+  .drawer-body { padding: 20px; }
+  .instance { border: 1px solid var(--line); border-radius: 10px; padding: 15px; margin-bottom: 12px; background: var(--panel); }
   .instance-header { display: flex; justify-content: space-between; align-items: center; }
-  .test-result { font-size: 12px; margin-top: 8px; padding: 6px 10px; border-radius: 6px; display: none; }
-  .test-ok { background: #dcfce7; color: #166534; display: block; }
-  .test-fail { background: #fee2e2; color: #b91c1c; display: block; }
-  .actions { display: flex; gap: 10px; margin-top: 16px; align-items: center; flex-wrap: wrap; }
-  pre { background: #0f172a; color: #e2e8f0; padding: 12px; border-radius: 8px; font-size: 12px; overflow-x: auto; }
-  code.inline { background: #eef2f7; padding: 2px 6px; border-radius: 4px; font-size: 12px; }
-  .error-text { color: #b91c1c; font-size: 13px; }
-  .ok-text { color: #166534; font-size: 13px; }
+  .test-result { font-size: 12.5px; margin-top: 8px; padding: 7px 11px; border-radius: 7px; display: none; }
+  .test-ok { background: var(--green-soft); color: var(--green); display: block; }
+  .test-fail { background: var(--rose-soft); color: var(--rose); display: block; }
   .config-label { display: flex; justify-content: space-between; align-items: center; margin: 14px 0 4px; }
-  .toast { position: fixed; top: 16px; right: 16px; background: #0f172a; color: #fff; padding: 10px 16px; border-radius: 8px; font-size: 13px; opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 50; }
-  .toast.show { opacity: 1; }
+  /* Login */
+  .login-wrap { min-height: calc(100vh - 56px); display: grid; place-items: center; padding: 24px; }
+  .login-card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); padding: 28px; width: 100%; max-width: 400px; }
+  .login-card h1 { font-size: 19px; margin: 0 0 4px; }
+  .spinner { width: 34px; height: 34px; border: 3px solid var(--line); border-top-color: var(--brand); border-radius: 99px; animation: spin .7s linear infinite; margin: 60px auto; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .toast { position: fixed; top: 16px; right: 16px; background: var(--ink-900); color: #fff; padding: 11px 16px; border-radius: 9px; font-size: 13px; opacity: 0; transition: opacity .2s, transform .2s; pointer-events: none; z-index: 60; transform: translateY(-6px); }
+  .toast.show { opacity: 1; transform: none; }
+  .link-box { background: #f7f9fc; border: 1px dashed #cdd5e1; border-radius: 8px; padding: 10px; font-size: 12px; word-break: break-all; margin-top: 10px; }
 </style>
 </head>
 <body>
-<div class="wrap" id="root"></div>
+<div id="app"></div>
+<div class="drawer-mask" id="drawer-mask" onclick="closeDrawer()"></div>
+<div class="drawer" id="drawer"></div>
 <div class="toast" id="toast"></div>
 
 <script>
 'use strict';
-
-// ── Config ─────────────────────────────────────────────────────────────────
 const API_BASE = 'https://tbziahcpkrfiksqhuhpe.supabase.co/functions/v1';
-
-// ── Helpers ────────────────────────────────────────────────────────────────
 const $ = (id) => document.getElementById(id);
-const root = $('root');
+const app = $('app');
 
-function esc(s) {
-  return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-}
+function esc(s){ return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function toast(m){ const el=$('toast'); el.textContent=m; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),2200); }
+function copyText(t){ navigator.clipboard.writeText(t).then(()=>toast('Copiado')); }
+function fmtDate(s){ try { return new Date(s).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'}); } catch { return s; } }
 
-function toast(msg) {
-  const el = $('toast');
-  el.textContent = msg;
-  el.classList.add('show');
-  setTimeout(() => el.classList.remove('show'), 2200);
-}
-
-function copyText(text) {
-  navigator.clipboard.writeText(text).then(() => toast('Copiado'));
-}
-
-async function api(fn, payload) {
+async function api(fn, payload){
   try {
-    const res = await fetch(`${API_BASE}/${fn}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
+    const res = await fetch(`${API_BASE}/${fn}`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
     return { status: res.status, data: await res.json() };
-  } catch {
-    return { status: 0, data: { error: 'Falha de rede — verifique sua conexão' } };
-  }
+  } catch { return { status: 0, data: { error: 'Falha de rede — verifique sua conexão' } }; }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// ADMIN
-// ═══════════════════════════════════════════════════════════════════════════
-let adminSecret = sessionStorage.getItem('stevo_admin_secret') || '';
+const ICON_SEARCH = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>';
+const ICON_GEAR = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>';
 
-function renderAdminLogin(autoTry = true) {
-  root.classList.remove('wrap-narrow');
-  root.innerHTML = `
-    <div class="card" style="max-width:420px;margin:80px auto">
-      <h1>Stevo DND — Admin</h1>
-      <p class="muted">Bloqueio de WhatsApp via Stevo, acionado pelo GHL.</p>
-      <label>Admin secret</label>
-      <input id="secret-input" type="password" placeholder="cole o admin secret">
-      <div class="actions">
-        <button class="btn-primary" id="login-btn">Entrar</button>
-        <span id="login-msg" class="error-text"></span>
-      </div>
-    </div>`;
-  $('login-btn').onclick = doLogin;
-  $('secret-input').onkeydown = (e) => { if (e.key === 'Enter') doLogin(); };
-  if (autoTry && adminSecret) {
-    api('stevo-admin', { secret: adminSecret, action: 'list' }).then(({ status }) => {
-      if (status === 200) renderAdminApp();
-    });
-  }
+function topbar(right){
+  return `<div class="topbar"><div class="topbar-inner">
+    <div class="brand"><span class="logo">🛡️</span> Stevo <small>· Bloqueio WhatsApp</small></div>
+    <div class="topbar-actions">${right||''}</div>
+  </div></div>`;
 }
 
-async function doLogin() {
-  adminSecret = $('secret-input').value.trim();
-  if (!adminSecret) return;
-  $('login-btn').disabled = true;
-  const { status } = await api('stevo-admin', { secret: adminSecret, action: 'list' });
-  $('login-btn').disabled = false;
-  if (status !== 200) {
-    $('login-msg').textContent = 'Secret inválido';
+// ═══════════════════════════ CLIENT DASHBOARD (?token=) ═══════════════════════════
+let CURRENT_TOKEN = null;
+let OVERVIEW = null;
+
+async function renderDashboard(token){
+  CURRENT_TOKEN = token;
+  app.innerHTML = topbar('') + '<div class="container"><div class="spinner"></div></div>';
+  const { status, data } = await api('stevo-setup', { token, action: 'overview' });
+  if (status !== 200 || data.error){
+    app.innerHTML = topbar('') + `<div class="container"><div class="card"><div class="empty">
+      <div style="font-size:16px;font-weight:600;color:var(--ink-700)">Link inválido ou expirado</div>
+      <div style="margin-top:6px">Peça um novo link ao administrador.</div></div></div></div>`;
     return;
   }
-  sessionStorage.setItem('stevo_admin_secret', adminSecret);
-  renderAdminApp();
+  OVERVIEW = data;
+  paintDashboard();
 }
 
-function renderAdminApp() {
-  root.innerHTML = `
-    <div class="card">
-      <div style="display:flex;justify-content:space-between;align-items:center">
-        <div>
-          <h1>Stevo DND — Admin</h1>
-          <p class="muted">Webhook do GHL: <code class="inline">${esc(API_BASE)}/stevo-dnd</code></p>
-        </div>
-        <button class="btn-secondary" id="refresh-btn">Atualizar</button>
+function paintDashboard(){
+  const d = OVERVIEW;
+  const totalBlocked = (d.blocklists||[]).reduce((s,b)=>s+(b.count||0),0);
+  const activeInstances = (d.instances||[]).filter(i=>i.active).length;
+  const blocksViaGhl = (d.audit||[]).filter(a=>a.action==='block' && a.success).length;
+  const lastActivity = (d.audit&&d.audit[0]) ? fmtDate(d.audit[0].created_at) : '—';
+  const anyError = (d.blocklists||[]).find(b=>!b.ok);
+
+  const right = `<button class="btn-ghost btn-sm" onclick="renderDashboard(CURRENT_TOKEN)">↻ Atualizar</button>
+                 <button class="btn-light btn-sm" onclick="openConfig()">${ICON_GEAR} Configurar</button>`;
+
+  app.innerHTML = topbar(right) + `<div class="container">
+    <div class="page-head">
+      <div>
+        <h1 class="page-title">Contatos bloqueados no WhatsApp</h1>
+        <div class="page-sub">${esc(d.clientName)} · Location <code>${esc(d.locationId)}</code></div>
       </div>
     </div>
-    <div class="card">
-      <h2>Novo cliente</h2>
-      <div class="row">
-        <div><label>Nome do cliente</label><input id="new-name" placeholder="Cliente 1"></div>
-        <div><label>Location ID (GHL)</label><input id="new-location" placeholder="ex.: ve9EPM428h8vShlRW1KT"></div>
-        <div style="flex:0;min-width:auto"><button class="btn-primary" id="create-btn">Criar + gerar link</button></div>
-      </div>
-      <div id="create-result"></div>
+
+    <div class="kpis">
+      <div class="kpi"><div class="label"><span class="dot" style="background:var(--rose)"></span>Total bloqueados</div>
+        <div class="value">${totalBlocked}</div><div class="foot">na conexão do WhatsApp</div></div>
+      <div class="kpi"><div class="label"><span class="dot" style="background:var(--green)"></span>Instâncias ativas</div>
+        <div class="value">${activeInstances}</div><div class="foot">${(d.instances||[]).length} cadastrada(s)</div></div>
+      <div class="kpi"><div class="label"><span class="dot" style="background:var(--brand)"></span>Bloqueios via GHL</div>
+        <div class="value">${blocksViaGhl}</div><div class="foot">disparados por automação</div></div>
+      <div class="kpi"><div class="label"><span class="dot" style="background:var(--amber)"></span>Última atividade</div>
+        <div class="value" style="font-size:18px;padding-top:7px">${lastActivity}</div><div class="foot">registro mais recente</div></div>
     </div>
-    <div class="card"><h2>Clientes</h2><div id="clients"></div></div>
-    <div class="card"><h2>Auditoria — últimas 50 operações</h2><div id="audit"></div></div>`;
-  $('refresh-btn').onclick = refreshAdmin;
-  $('create-btn').onclick = createClient;
-  refreshAdmin();
+
+    ${anyError ? `<div class="card card-pad" style="border-color:var(--rose-soft);background:#fff6f7">
+      <span class="badge badge-rose">Atenção</span> <span class="muted">Uma instância não respondeu (${esc(anyError.error||'erro')}). Verifique a API Key em Configurar.</span></div>` : ''}
+
+    <div class="card">
+      <div class="card-head">
+        <div><h2>Bloqueados no WhatsApp</h2><div class="hint">Lista ao vivo direto da conexão Stevo. IDs internos do WhatsApp aparecem quando o número não expõe o telefone.</div></div>
+        <div class="search">${ICON_SEARCH}<input id="bl-search" placeholder="Buscar contato…" oninput="filterBlocked()"></div>
+      </div>
+      <div class="card-body scroll-y scroll-x" id="blocked-wrap"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><div><h2>Atividade recente</h2><div class="hint">Bloqueios e desbloqueios disparados pelo GoHighLevel.</div></div></div>
+      <div class="card-body scroll-x" id="activity-wrap"></div>
+    </div>
+  </div>`;
+
+  paintBlocked();
+  paintActivity();
 }
 
-async function refreshAdmin() {
-  const [clientsRes, auditRes] = await Promise.all([
-    api('stevo-admin', { secret: adminSecret, action: 'list' }),
-    api('stevo-admin', { secret: adminSecret, action: 'audit' }),
-  ]);
-  renderClients(clientsRes.data.clients || []);
-  renderAudit(auditRes.data.entries || []);
+function allBlockedRows(){
+  const rows = [];
+  (OVERVIEW.blocklists||[]).forEach(b => (b.entries||[]).forEach(e => rows.push({ ...e, instance: b.instance })));
+  return rows;
 }
 
-function setupUrlFromToken(token) {
-  return `${window.location.origin}${window.location.pathname}?token=${token}`;
-}
-
-async function createClient() {
-  const clientName = $('new-name').value.trim();
-  const ghlLocationId = $('new-location').value.trim();
-  if (!clientName || !ghlLocationId) { toast('Informe o nome e o Location ID'); return; }
-  $('create-btn').disabled = true;
-  const { data } = await api('stevo-admin', { secret: adminSecret, action: 'create', clientName, ghlLocationId });
-  $('create-btn').disabled = false;
-  if (data.error || !data.setupToken) {
-    $('create-result').innerHTML = `<p class="error-text">${esc(data.error || 'Erro ao criar cliente')}</p>`;
-    return;
-  }
-  const url = setupUrlFromToken(data.setupToken);
-  $('create-result').innerHTML = `
-    <div class="link-box"><strong>Link de setup (válido por ${data.expiresInDays} dias):</strong><br>
-      <span id="new-link">${esc(url)}</span>
-      <button class="btn-secondary" style="margin-left:8px" onclick="copyText(document.getElementById('new-link').textContent)">Copiar</button>
-    </div>`;
-  $('new-name').value = '';
-  $('new-location').value = '';
-  refreshAdmin();
-}
-
-async function newSetupLink(clientId, boxId) {
-  const { data } = await api('stevo-admin', { secret: adminSecret, action: 'setupLink', clientId });
-  if (data.error || !data.setupToken) { toast(data.error || 'Erro ao gerar link'); return; }
-  const url = setupUrlFromToken(data.setupToken);
-  $(boxId).innerHTML = `<div class="link-box"><span>${esc(url)}</span>
-    <button class="btn-secondary" style="margin-left:8px" onclick="copyText('${url}')">Copiar</button></div>`;
-}
-
-async function toggleClient(clientId, active) {
-  await api('stevo-admin', { secret: adminSecret, action: 'toggleClient', clientId, active });
-  refreshAdmin();
-}
-
-function renderClients(clients) {
-  const el = $('clients');
-  if (!clients.length) { el.innerHTML = '<p class="muted">Nenhum cliente ainda — crie o primeiro acima.</p>'; return; }
-  el.innerHTML = `<div style="overflow-x:auto"><table>
-    <tr><th>Cliente</th><th>Location ID</th><th>Instâncias</th><th>Status</th><th></th></tr>
-    ${clients.map((c, i) => {
-      const inst = c.instances.length === 0
-        ? '<span class="muted">nenhuma (setup pendente)</span>'
-        : c.instances.map((x) => esc(x.name) + (x.active ? '' : ' (inativa)')).join(', ');
-      return `<tr>
-        <td><strong>${esc(c.clientName)}</strong></td>
-        <td><code class="inline">${esc(c.locationId)}</code></td>
-        <td>${inst}</td>
-        <td><span class="pill ${c.active ? 'pill-on' : 'pill-off'}">${c.active ? 'ativo' : 'inativo'}</span></td>
-        <td>
-          <button class="btn-secondary" onclick="newSetupLink('${esc(c.id)}','link-${i}')">Novo link de setup</button>
-          <button class="btn-secondary" onclick="toggleClient('${esc(c.id)}',${!c.active})">${c.active ? 'Desativar' : 'Ativar'}</button>
-          <div id="link-${i}"></div>
-        </td></tr>`;
-    }).join('')}
-  </table></div>`;
-}
-
-function renderAudit(entries) {
-  const el = $('audit');
-  if (!entries.length) { el.innerHTML = '<p class="muted">Nenhuma operação registrada ainda.</p>'; return; }
-  el.innerHTML = `<div style="overflow-x:auto"><table>
-    <tr><th>Quando</th><th>Ação</th><th>Location</th><th>Telefone</th><th>Instância</th><th>Resultado</th><th>Origem</th></tr>
-    ${entries.map((e) => `<tr>
-      <td style="white-space:nowrap">${new Date(e.created_at).toLocaleString('pt-BR')}</td>
-      <td>${esc(e.action)}</td>
-      <td><code class="inline">${esc(e.ghl_location_id)}</code></td>
-      <td>${esc(e.phone)}</td>
-      <td>${esc(e.instance_name)}</td>
-      <td>${e.success ? '<span class="pill pill-on">OK</span>' : `<span class="pill pill-off">falha</span> <span class="muted">${esc(e.message)}</span>`}</td>
-      <td>${esc(e.source)}</td>
+function paintBlocked(filter=''){
+  const rows = allBlockedRows().filter(r => !filter || r.display.toLowerCase().includes(filter) || r.raw.toLowerCase().includes(filter));
+  const multi = (OVERVIEW.blocklists||[]).length > 1;
+  const wrap = $('blocked-wrap');
+  if (!allBlockedRows().length){ wrap.innerHTML = '<div class="empty">Nenhum contato bloqueado no momento.</div>'; return; }
+  if (!rows.length){ wrap.innerHTML = '<div class="empty">Nenhum resultado para a busca.</div>'; return; }
+  wrap.innerHTML = `<table><thead><tr>
+      <th>Contato</th><th>Tipo</th>${multi?'<th>Instância</th>':''}
+    </tr></thead><tbody>
+    ${rows.map(r => `<tr>
+      <td class="mono">${esc(r.display)}</td>
+      <td>${r.kind==='phone'
+        ? '<span class="badge badge-blue">Telefone</span>'
+        : '<span class="badge badge-gray">ID WhatsApp</span>'}</td>
+      ${multi?`<td>${esc(r.instance)}</td>`:''}
     </tr>`).join('')}
-  </table></div>`;
+  </tbody></table>`;
+}
+function filterBlocked(){ paintBlocked($('bl-search').value.trim().toLowerCase()); }
+
+function paintActivity(){
+  const a = OVERVIEW.audit||[];
+  const wrap = $('activity-wrap');
+  if (!a.length){ wrap.innerHTML = '<div class="empty">Nenhuma operação registrada ainda. Os bloqueios disparados pelo GHL aparecem aqui.</div>'; return; }
+  wrap.innerHTML = `<table><thead><tr>
+      <th>Data</th><th>Ação</th><th>Telefone</th><th>Instância</th><th>Resultado</th><th>Origem</th>
+    </tr></thead><tbody>
+    ${a.map(e => `<tr>
+      <td style="white-space:nowrap">${fmtDate(e.created_at)}</td>
+      <td>${e.action==='block'?'<span class="badge badge-rose">Bloqueou</span>':'<span class="badge badge-green">Desbloqueou</span>'}</td>
+      <td class="mono">${esc(e.phone||'—')}</td>
+      <td>${esc(e.instance_name||'—')}</td>
+      <td>${e.success?'<span class="badge badge-green">OK</span>':`<span class="badge badge-rose">falha</span> <span class="muted">${esc(e.message||'')}</span>`}</td>
+      <td class="muted">${esc(e.source||'—')}</td>
+    </tr>`).join('')}
+  </tbody></table>`;
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// SETUP (cliente)
-// ═══════════════════════════════════════════════════════════════════════════
+// ─────────── Config drawer (instâncias + webhook GHL) ───────────
 let instSeq = 0;
-
-async function renderSetup(token) {
-  root.classList.add('wrap-narrow');
-  root.innerHTML = '<div class="card"><p class="muted">Carregando…</p></div>';
-  const { status, data } = await api('stevo-setup', { token, action: 'load' });
-  if (status !== 200 || data.error) {
-    root.innerHTML = `<div class="card"><h1>Link inválido ou expirado</h1>
-      <p class="muted">Peça um novo link de configuração ao administrador.</p></div>`;
-    return;
-  }
-  root.innerHTML = `
-    <div class="card">
-      <h1>Configuração Stevo — ${esc(data.clientName)}</h1>
-      <p class="muted">Location GHL: <code class="inline">${esc(data.locationId)}</code></p>
-    </div>
-    <div class="card">
-      <h2>Instâncias Stevo (números de WhatsApp)</h2>
-      <p class="muted">A URL do servidor (https://smv2-N.stevo.chat) e a API Key aparecem no painel da instância no StevoManager V2.</p>
-      <div id="instances" style="margin-top:14px"></div>
-      <button class="btn-secondary" id="add-btn">+ Adicionar instância</button>
-      <div class="actions">
-        <button class="btn-primary" id="save-btn">Salvar configuração</button>
-        <span id="save-status"></span>
+function openConfig(){
+  instSeq = 0;
+  const d = OVERVIEW;
+  $('drawer').innerHTML = `
+    <div class="drawer-head"><h2>Configuração</h2><button class="btn-light btn-sm" onclick="closeDrawer()">Fechar</button></div>
+    <div class="drawer-body">
+      <div class="muted" style="margin-bottom:6px">Instâncias Stevo (números de WhatsApp). A URL do servidor e a API Key ficam no painel da instância no StevoManager V2.</div>
+      <div id="instances"></div>
+      <button class="btn-light btn-sm" onclick="addInstance()">+ Adicionar instância</button>
+      <div style="display:flex;gap:10px;align-items:center;margin-top:16px">
+        <button class="btn-primary" id="save-btn" onclick="saveInstances()">Salvar configuração</button>
+        <span id="save-status" class="muted"></span>
       </div>
-    </div>
-    <div class="card" id="result-card" style="display:none">
-      <h2>✅ Configuração salva — agora configure o GHL</h2>
-      <div id="ghl-config"></div>
+      <div id="ghl-config" style="margin-top:20px"></div>
     </div>`;
-  $('add-btn').onclick = () => addInstance();
-  $('save-btn').onclick = () => saveInstances(token);
-  const list = data.instances || [];
-  if (list.length) list.forEach((i) => addInstance(i));
-  else addInstance();
+  const list = d.instances || [];
+  if (list.length) list.forEach(i => addInstance(i)); else addInstance();
+  $('drawer').classList.add('open'); $('drawer-mask').classList.add('open');
 }
+function closeDrawer(){ $('drawer').classList.remove('open'); $('drawer-mask').classList.remove('open'); }
 
-function addInstance(existing) {
+function addInstance(existing){
   const id = 'inst-' + (++instSeq);
   const div = document.createElement('div');
-  div.className = 'instance';
-  div.id = id;
+  div.className = 'instance'; div.id = id;
   if (existing && existing.id) div.dataset.existingId = existing.id;
   div.innerHTML = `
-    <div class="instance-header">
-      <strong>Instância</strong>
-      <button class="btn-danger" data-remove>Remover</button>
-    </div>
+    <div class="instance-header"><strong style="font-size:13px">Instância</strong>
+      <button class="btn-danger btn-sm" data-remove>Remover</button></div>
     <label>Nome (ex.: Número Principal)</label>
-    <input class="f-name" value="${existing ? esc(existing.name) : ''}" placeholder="Número Principal">
-    <div class="row">
-      <div>
-        <label>URL do servidor Stevo</label>
-        <input class="f-server" value="${existing ? esc(existing.serverUrl) : ''}" placeholder="https://smv2-1.stevo.chat">
-      </div>
-      <div>
-        <label>API Key ${existing && existing.maskedKey ? `(atual: ${esc(existing.maskedKey)} — deixe em branco para manter)` : ''}</label>
-        <input class="f-key" type="password" placeholder="${existing ? 'manter a atual' : 'cole a API Key da instância'}">
-      </div>
-    </div>
-    <div style="margin-top:10px">
-      <button class="btn-secondary" data-test>Testar conexão</button>
-      <div class="test-result"></div>
-    </div>`;
+    <input class="f-name" value="${existing?esc(existing.name):''}" placeholder="Número Principal">
+    <label>URL do servidor Stevo</label>
+    <input class="f-server" value="${existing?esc(existing.serverUrl):''}" placeholder="https://sm-xxxx.stevo.chat">
+    <label>API Key ${existing&&existing.maskedKey?`(atual: ${esc(existing.maskedKey)} — deixe em branco para manter)`:''}</label>
+    <input class="f-key" type="password" placeholder="${existing?'manter a atual':'cole a API Key da instância'}">
+    <div style="margin-top:10px"><button class="btn-light btn-sm" data-test>Testar conexão</button><div class="test-result"></div></div>`;
   div.querySelector('[data-remove]').onclick = () => div.remove();
   div.querySelector('[data-test]').onclick = () => testInstance(div);
   $('instances').appendChild(div);
 }
-
-function readInstance(div) {
-  return {
-    id: div.dataset.existingId || undefined,
+function readInstance(div){
+  return { id: div.dataset.existingId || undefined,
     name: div.querySelector('.f-name').value.trim(),
     serverUrl: div.querySelector('.f-server').value.trim(),
-    apiKey: div.querySelector('.f-key').value.trim(),
-    active: true,
-  };
+    apiKey: div.querySelector('.f-key').value.trim(), active: true };
 }
-
-async function testInstance(div) {
+async function testInstance(div){
   const inst = readInstance(div);
-  const box = div.querySelector('.test-result');
-  box.className = 'test-result';
-  box.style.display = 'block';
-  box.textContent = 'Testando...';
-  const { data } = await api('stevo-setup', {
-    token: setupToken, action: 'test',
-    serverUrl: inst.serverUrl, apiKey: inst.apiKey, instanceId: inst.id,
-  });
-  box.className = 'test-result ' + (data.ok ? 'test-ok' : 'test-fail');
+  const box = div.querySelector('.test-result'); box.className='test-result'; box.style.display='block'; box.textContent='Testando…';
+  const { data } = await api('stevo-setup', { token: CURRENT_TOKEN, action:'test', serverUrl: inst.serverUrl, apiKey: inst.apiKey, instanceId: inst.id });
+  box.className = 'test-result ' + (data.ok?'test-ok':'test-fail');
   box.textContent = data.message || data.error || 'Erro no teste';
 }
-
-async function saveInstances(token) {
-  const instances = [...document.querySelectorAll('.instance')].map(readInstance);
-  const status = $('save-status');
-  status.className = '';
-  status.textContent = 'Salvando...';
+async function saveInstances(){
+  const instances = [...document.querySelectorAll('#instances .instance')].map(readInstance);
+  const st = $('save-status'); st.textContent='Salvando…';
   $('save-btn').disabled = true;
-  const { data } = await api('stevo-setup', { token, action: 'save', instances });
+  const { data } = await api('stevo-setup', { token: CURRENT_TOKEN, action:'save', instances });
   $('save-btn').disabled = false;
-  if (data.error || !data.ghlConfig) {
-    status.className = 'error-text';
-    status.textContent = data.error || 'Erro ao salvar';
-    return;
-  }
-  status.className = 'ok-text';
-  status.textContent = 'Salvo!';
+  if (data.error || !data.ghlConfig){ st.textContent=''; toast(data.error||'Erro ao salvar'); return; }
+  st.textContent='Salvo!';
   showGhlConfig(data.ghlConfig);
+  renderDashboard(CURRENT_TOKEN); // atualiza os cards por baixo
 }
-
-function showGhlConfig(cfg) {
+function showGhlConfig(cfg){
   const blocks = [
-    ['URL (method POST)', cfg.webhookUrl],
+    ['URL do webhook (POST)', cfg.webhookUrl],
     ['Headers', `${cfg.secretHeader}: ${cfg.secretValue}\nContent-Type: application/json`],
     ['Body — bloqueio', JSON.stringify(cfg.blockBody, null, 2)],
     ['Body — desbloqueio', JSON.stringify(cfg.unblockBody, null, 2)],
   ];
-  $('ghl-config').innerHTML = `
-    <p><strong>1. Workflow de bloqueio</strong> — trigger: DND WhatsApp habilitado ou tag <code class="inline">stevo_block_whatsapp</code>.</p>
-    <p><strong>2. Workflow de desbloqueio</strong> — trigger: DND removido ou tag <code class="inline">stevo_unblock_whatsapp</code>.</p>
-    <p>Nos dois, adicione a ação <strong>Custom Webhook</strong> com:</p>
-    ${blocks.map(([label, value], i) => `
-      <div class="config-label">
-        <span style="font-size:12px;font-weight:600;color:#475569">${label}</span>
-        <button class="btn-secondary" data-copy="${i}">Copiar</button>
-      </div>
-      <pre id="cfg-${i}">${esc(value)}</pre>`).join('')}
-    <p class="muted">Guarde o secret com cuidado — ele autoriza bloqueios nesta location.</p>`;
-  document.querySelectorAll('[data-copy]').forEach((btn) => {
-    btn.onclick = () => copyText($('cfg-' + btn.dataset.copy).textContent);
-  });
-  $('result-card').style.display = 'block';
-  $('result-card').scrollIntoView({ behavior: 'smooth' });
+  $('ghl-config').innerHTML = `<div class="card card-pad" style="margin:0">
+    <h2 style="font-size:14px;margin:0 0 8px">Configuração para o GoHighLevel</h2>
+    <div class="muted" style="margin-bottom:4px">Custom Webhook nos workflows de bloqueio (tag <code class="inline">stevo_block_whatsapp</code>) e desbloqueio (<code class="inline">stevo_unblock_whatsapp</code>).</div>
+    ${blocks.map((b,i)=>`<div class="config-label"><span style="font-size:12px;font-weight:600;color:var(--ink-700)">${b[0]}</span>
+      <button class="btn-light btn-sm" data-copy="${i}">Copiar</button></div><pre id="cfg-${i}">${esc(b[1])}</pre>`).join('')}</div>`;
+  document.querySelectorAll('[data-copy]').forEach(btn => btn.onclick = () => copyText($('cfg-'+btn.dataset.copy).textContent));
 }
 
-// ── Roteamento por query string (fica no fim: usa as funções acima) ────────
+// ═══════════════════════════ ADMIN (/) ═══════════════════════════
+let adminSecret = sessionStorage.getItem('stevo_admin_secret') || '';
+
+function renderAdminLogin(autoTry=true){
+  app.innerHTML = topbar('') + `<div class="login-wrap"><div class="login-card">
+    <h1>Painel Admin</h1><p class="muted" style="margin:0 0 4px">Gerencie clientes e gere links de acesso.</p>
+    <label>Admin secret</label>
+    <input id="secret-input" type="password" placeholder="cole o admin secret">
+    <div style="display:flex;gap:10px;align-items:center;margin-top:14px">
+      <button class="btn-primary" id="login-btn">Entrar</button><span id="login-msg" style="color:var(--rose);font-size:13px"></span>
+    </div></div></div>`;
+  $('login-btn').onclick = doLogin;
+  $('secret-input').onkeydown = (e)=>{ if(e.key==='Enter') doLogin(); };
+  if (autoTry && adminSecret) api('stevo-admin',{secret:adminSecret,action:'list'}).then(({status})=>{ if(status===200) renderAdminApp(); });
+}
+async function doLogin(){
+  adminSecret = $('secret-input').value.trim(); if(!adminSecret) return;
+  $('login-btn').disabled = true;
+  const { status } = await api('stevo-admin',{secret:adminSecret,action:'list'});
+  $('login-btn').disabled = false;
+  if (status!==200){ $('login-msg').textContent='Secret inválido'; return; }
+  sessionStorage.setItem('stevo_admin_secret', adminSecret); renderAdminApp();
+}
+function renderAdminApp(){
+  app.innerHTML = topbar(`<button class="btn-ghost btn-sm" onclick="refreshAdmin()">↻ Atualizar</button>`) + `<div class="container">
+    <div class="page-head"><div><h1 class="page-title">Clientes</h1>
+      <div class="page-sub">Webhook do GHL: <code>${esc(API_BASE)}/stevo-dnd</code></div></div></div>
+    <div class="card card-pad">
+      <h2 style="font-size:14px;margin:0 0 10px">Novo cliente</h2>
+      <div class="row">
+        <div><label>Nome do cliente</label><input id="new-name" placeholder="Cliente 1"></div>
+        <div><label>Location ID (GHL)</label><input id="new-location" placeholder="ex.: lN6lV2OtydGK2UWvNBUT"></div>
+        <div style="flex:0;min-width:auto;display:flex;align-items:flex-end"><button class="btn-primary" id="create-btn">Criar + gerar link</button></div>
+      </div>
+      <div id="create-result"></div>
+    </div>
+    <div class="card"><div class="card-head"><h2>Clientes cadastrados</h2></div><div class="card-body scroll-x" id="clients"></div></div>
+    <div class="card"><div class="card-head"><h2>Auditoria — últimas 50 operações</h2></div><div class="card-body scroll-x" id="audit"></div></div>
+  </div>`;
+  $('create-btn').onclick = createClient;
+  refreshAdmin();
+}
+async function refreshAdmin(){
+  const [c,a] = await Promise.all([ api('stevo-admin',{secret:adminSecret,action:'list'}), api('stevo-admin',{secret:adminSecret,action:'audit'}) ]);
+  renderClients(c.data.clients||[]); renderAdminAudit(a.data.entries||[]);
+}
+function setupUrlFromToken(t){ return `${window.location.origin}${window.location.pathname}?token=${t}`; }
+async function createClient(){
+  const clientName=$('new-name').value.trim(), ghlLocationId=$('new-location').value.trim();
+  if(!clientName||!ghlLocationId){ toast('Informe o nome e o Location ID'); return; }
+  $('create-btn').disabled=true;
+  const { data } = await api('stevo-admin',{secret:adminSecret,action:'create',clientName,ghlLocationId});
+  $('create-btn').disabled=false;
+  if(data.error||!data.setupToken){ $('create-result').innerHTML=`<p style="color:var(--rose);font-size:13px;margin-top:10px">${esc(data.error||'Erro')}</p>`; return; }
+  const url = setupUrlFromToken(data.setupToken);
+  $('create-result').innerHTML = `<div class="link-box"><strong>Link do cliente (válido ${data.expiresInDays} dias):</strong><br>
+    <span id="new-link">${esc(url)}</span> <button class="btn-light btn-sm" style="margin-left:6px" onclick="copyText(document.getElementById('new-link').textContent)">Copiar</button></div>`;
+  $('new-name').value=''; $('new-location').value=''; refreshAdmin();
+}
+async function newSetupLink(clientId, boxId){
+  const { data } = await api('stevo-admin',{secret:adminSecret,action:'setupLink',clientId});
+  if(data.error||!data.setupToken){ toast(data.error||'Erro'); return; }
+  const url = setupUrlFromToken(data.setupToken);
+  $(boxId).innerHTML = `<div class="link-box"><span>${esc(url)}</span> <button class="btn-light btn-sm" style="margin-left:6px" onclick="copyText('${url}')">Copiar</button></div>`;
+}
+async function toggleClient(clientId, active){ await api('stevo-admin',{secret:adminSecret,action:'toggleClient',clientId,active}); refreshAdmin(); }
+function renderClients(clients){
+  const el=$('clients');
+  if(!clients.length){ el.innerHTML='<div class="empty">Nenhum cliente ainda — crie o primeiro acima.</div>'; return; }
+  el.innerHTML = `<table><thead><tr><th>Cliente</th><th>Location ID</th><th>Instâncias</th><th>Status</th><th></th></tr></thead><tbody>
+    ${clients.map((c,i)=>{ const inst = c.instances.length===0?'<span class="muted">setup pendente</span>':c.instances.map(x=>esc(x.name)+(x.active?'':' (inativa)')).join(', ');
+      return `<tr>
+        <td style="font-weight:600;color:var(--ink-900)">${esc(c.clientName)}</td>
+        <td><code class="inline">${esc(c.locationId)}</code></td>
+        <td>${inst}</td>
+        <td>${c.active?'<span class="badge badge-green">ativo</span>':'<span class="badge badge-gray">inativo</span>'}</td>
+        <td><div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button class="btn-light btn-sm" onclick="newSetupLink('${esc(c.id)}','link-${i}')">Link do cliente</button>
+          <button class="btn-light btn-sm" onclick="toggleClient('${esc(c.id)}',${!c.active})">${c.active?'Desativar':'Ativar'}</button>
+        </div><div id="link-${i}"></div></td></tr>`; }).join('')}
+  </tbody></table>`;
+}
+function renderAdminAudit(entries){
+  const el=$('audit');
+  if(!entries.length){ el.innerHTML='<div class="empty">Nenhuma operação registrada ainda.</div>'; return; }
+  el.innerHTML = `<table><thead><tr><th>Data</th><th>Ação</th><th>Location</th><th>Telefone</th><th>Instância</th><th>Resultado</th><th>Origem</th></tr></thead><tbody>
+    ${entries.map(e=>`<tr>
+      <td style="white-space:nowrap">${fmtDate(e.created_at)}</td>
+      <td>${e.action==='block'?'<span class="badge badge-rose">Bloqueou</span>':'<span class="badge badge-green">Desbloqueou</span>'}</td>
+      <td><code class="inline">${esc(e.ghl_location_id)}</code></td>
+      <td class="mono">${esc(e.phone||'—')}</td>
+      <td>${esc(e.instance_name||'—')}</td>
+      <td>${e.success?'<span class="badge badge-green">OK</span>':`<span class="badge badge-rose">falha</span> <span class="muted">${esc(e.message||'')}</span>`}</td>
+      <td class="muted">${esc(e.source||'—')}</td>
+    </tr>`).join('')}
+  </tbody></table>`;
+}
+
+// ─────────── Router ───────────
 const params = new URLSearchParams(window.location.search);
 const setupToken = params.get('token');
-if (setupToken) {
-  renderSetup(setupToken);
-} else {
-  renderAdminLogin();
-}
+if (setupToken) renderDashboard(setupToken); else renderAdminLogin();
 </script>
 </body>
 </html>
