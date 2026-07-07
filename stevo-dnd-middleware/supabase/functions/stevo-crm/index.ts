@@ -46,6 +46,24 @@ function normalizePhone(raw: unknown): string {
   return d;
 }
 
+/**
+ * Variações do telefone para casar mesmo com a ambiguidade do 9º dígito
+ * brasileiro (WhatsApp/GHL ora usam com o 9, ora sem). Ex.:
+ *   5538984216014  <->  553884216014
+ */
+function phoneVariants(phone: string): string[] {
+  const set = new Set<string>([phone]);
+  if (phone.startsWith('55')) {
+    const rest = phone.slice(2); // DDD + número
+    if (rest.length === 11 && rest[2] === '9') {
+      set.add('55' + rest.slice(0, 2) + rest.slice(3)); // remove o 9
+    } else if (rest.length === 10) {
+      set.add('55' + rest.slice(0, 2) + '9' + rest.slice(2)); // adiciona o 9
+    }
+  }
+  return [...set];
+}
+
 /** DELETE /contacts/{id} no GHL. Não vaza o token em mensagens. */
 async function ghlDeleteContact(token: string, contactId: string): Promise<{ ok: boolean; error?: string }> {
   const controller = new AbortController();
@@ -98,7 +116,6 @@ Deno.serve(async (req) => {
   const locationId = clean(pick('locationId'));
   const contactId = clean(pick('contactId'));
   const name = clean(pick('name')) || clean(pick('full_name'));
-  const source = clean(pick('source')) || 'ghl';
   const reason = clean(pick('reason'));
   if (!locationId) return errorResponse('Payload inválido — locationId é obrigatório', 400);
 
@@ -119,28 +136,34 @@ Deno.serve(async (req) => {
 
   let phone = '';
   try { phone = normalizePhone(pick('phone')); } catch { phone = ''; }
-
+  const variants = phone ? phoneVariants(phone) : [];
   const nowIso = new Date().toISOString();
 
-  // ── restore: desativa a marca de remoção ────────────────────────────────
+  // ── restore: desativa a marca de remoção (qualquer variação do número) ───
   if (kind === 'restore') {
     if (!phone) return errorResponse('Telefone é obrigatório para restaurar', 400);
     await supabase.from('stevo_removal_list')
       .update({ active: false, updated_at: nowIso })
-      .eq('ghl_location_id', locationId).eq('phone', phone);
+      .eq('ghl_location_id', locationId).in('phone', variants);
     return json({ success: true, status: 'success', action: 'restore', locationId, phone });
   }
 
-  // ── remove: marca na lista + deleta agora (se possível) ──────────────────
+  // ── remove: marca na lista (dedup por variação) + deleta agora ───────────
   if (kind === 'remove') {
     if (!phone) return errorResponse('Telefone é obrigatório para marcar remoção', 400);
-    await supabase.from('stevo_removal_list').upsert(
-      {
-        client_id: client.id, ghl_location_id: locationId, phone, name: name || null,
-        reason: reason || null, active: true, last_contact_id: contactId || null, updated_at: nowIso,
-      },
-      { onConflict: 'ghl_location_id,phone' }
-    );
+    const { data: existingRows } = await supabase.from('stevo_removal_list')
+      .select('id').eq('ghl_location_id', locationId).in('phone', variants).limit(1);
+    let rowId = existingRows && existingRows[0]?.id;
+    if (rowId) {
+      await supabase.from('stevo_removal_list')
+        .update({ active: true, name: name || null, reason: reason || null, last_contact_id: contactId || null, updated_at: nowIso })
+        .eq('id', rowId);
+    } else {
+      const { data: ins } = await supabase.from('stevo_removal_list')
+        .insert({ client_id: client.id, ghl_location_id: locationId, phone, name: name || null, reason: reason || null, active: true, last_contact_id: contactId || null, updated_at: nowIso })
+        .select('id').single();
+      rowId = ins?.id;
+    }
 
     let deleted = false, delError: string | undefined;
     if (contactId) {
@@ -149,10 +172,11 @@ Deno.serve(async (req) => {
       } else {
         const r = await ghlDeleteContact(client.ghl_api_token, contactId);
         deleted = r.ok; delError = r.ok ? undefined : r.error;
-        if (r.ok) {
+        if (r.ok && rowId) {
+          const { data: cur } = await supabase.from('stevo_removal_list').select('times_deleted').eq('id', rowId).single();
           await supabase.from('stevo_removal_list')
-            .update({ times_deleted: 1, last_deleted_at: nowIso, last_contact_id: contactId, updated_at: nowIso })
-            .eq('ghl_location_id', locationId).eq('phone', phone);
+            .update({ times_deleted: (cur?.times_deleted ?? 0) + 1, last_deleted_at: nowIso, last_contact_id: contactId, updated_at: nowIso })
+            .eq('id', rowId);
         }
         await supabase.from('stevo_deletion_log').insert({
           ghl_location_id: locationId, phone, name: name || null, contact_id: contactId,
@@ -167,12 +191,12 @@ Deno.serve(async (req) => {
     }, httpStatus);
   }
 
-  // ── created: contato entrou; deleta se estiver marcado ───────────────────
-  // kind === 'created'
+  // ── created: contato entrou; deleta se estiver marcado (qualquer variação) ─
   if (!phone) return json({ success: true, status: 'skipped', reason: 'sem telefone' });
-  const { data: mark } = await supabase.from('stevo_removal_list')
+  const { data: marks } = await supabase.from('stevo_removal_list')
     .select('id, active, times_deleted')
-    .eq('ghl_location_id', locationId).eq('phone', phone).maybeSingle();
+    .eq('ghl_location_id', locationId).in('phone', variants).limit(1);
+  const mark = marks && marks[0];
 
   if (!mark || !mark.active) {
     return json({ success: true, status: 'skipped', action: 'created', locationId, phone, listed: false });
