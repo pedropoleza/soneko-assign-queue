@@ -103,14 +103,17 @@ Deno.serve(async (req) => {
   const clean = (v: unknown): string =>
     typeof v === 'string' ? v.trim().replace(/^["']+|["']+$/g, '').trim() : v === undefined || v === null ? '' : String(v).trim();
 
+  // 'check' (created/reply/message/inbound) = se estiver na lista, deleta.
+  // 'remove' (dnd/block/delete) = marca na lista + deleta.
+  // 'restore' (unblock/off) = desativa a marca.
   const raw = clean(pick('action')).toLowerCase();
-  const kind: 'remove' | 'restore' | 'created' | '' =
-    raw.includes('creat') ? 'created'
-    : raw.includes('restore') || raw.includes('unblock') || raw.includes('off') ? 'restore'
+  const kind: 'remove' | 'restore' | 'check' | '' =
+    raw.includes('restore') || raw.includes('unblock') || raw.includes('off') ? 'restore'
     : raw.includes('remove') || raw.includes('delete') || raw.includes('block') || raw.includes('dnd') ? 'remove'
+    : raw.includes('creat') || raw.includes('repl') || raw.includes('message') || raw.includes('msg') || raw.includes('inbound') || raw.includes('check') ? 'check'
     : '';
   if (!kind) {
-    return errorResponse(`Payload inválido — action deve indicar remove/restore/created (recebido: ${JSON.stringify(pick('action'))})`, 400);
+    return errorResponse(`Payload inválido — action deve indicar remove/restore/check (recebido: ${JSON.stringify(pick('action'))})`, 400);
   }
 
   const locationId = clean(pick('locationId'));
