@@ -103,24 +103,26 @@ Deno.serve(async (req) => {
   const clean = (v: unknown): string =>
     typeof v === 'string' ? v.trim().replace(/^["']+|["']+$/g, '').trim() : v === undefined || v === null ? '' : String(v).trim();
 
-  // 'check' (created/reply/message/inbound) = se estiver na lista, deleta.
-  // 'remove' (dnd/block/delete) = marca na lista + deleta.
-  // 'restore' (unblock/off) = desativa a marca.
-  const raw = clean(pick('action')).toLowerCase();
-  const kind: 'remove' | 'restore' | 'check' | '' =
+  // A ação pode vir na URL (?action=remove), no body ou no customData.
+  // Sem ação explícita => 'check' (reentrada: deleta se estiver listado).
+  const qAction = new URL(req.url).searchParams.get('action') ?? '';
+  const raw = (qAction || clean(pick('action'))).toLowerCase();
+  const kind: 'remove' | 'restore' | 'check' =
     raw.includes('restore') || raw.includes('unblock') || raw.includes('off') ? 'restore'
     : raw.includes('remove') || raw.includes('delete') || raw.includes('block') || raw.includes('dnd') ? 'remove'
-    : raw.includes('creat') || raw.includes('repl') || raw.includes('message') || raw.includes('msg') || raw.includes('inbound') || raw.includes('check') ? 'check'
-    : '';
-  if (!kind) {
-    return errorResponse(`Payload inválido — action deve indicar remove/restore/check (recebido: ${JSON.stringify(pick('action'))})`, 400);
-  }
+    : 'check';
 
-  const locationId = clean(pick('locationId'));
-  const contactId = clean(pick('contactId'));
-  const name = clean(pick('name')) || clean(pick('full_name'));
+  // Aceita camelCase, snake_case do GHL e "location" como objeto {id}.
+  const locObj = pick('location');
+  const locationId =
+    clean(pick('locationId')) || clean(pick('location_id')) ||
+    (locObj && typeof locObj === 'object' ? clean((locObj as Record<string, unknown>).id) : clean(locObj));
+  const contactId = clean(pick('contactId')) || clean(pick('contact_id'));
+  const name =
+    clean(pick('name')) || clean(pick('full_name')) ||
+    [clean(pick('first_name')), clean(pick('last_name'))].filter(Boolean).join(' ');
   const reason = clean(pick('reason'));
-  if (!locationId) return errorResponse('Payload inválido — locationId é obrigatório', 400);
+  if (!locationId) return errorResponse('Payload inválido — locationId é obrigatório (envie location.id)', 400);
 
   const { data: client, error: cErr } = await supabase
     .from('stevo_clients')
