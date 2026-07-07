@@ -197,10 +197,29 @@ Deno.serve(async (req) => {
       .order('created_at', { ascending: false })
       .limit(100);
 
+    // Remoção de contatos no GHL: token configurado, lista de remoção e deleções.
+    const { data: clientRow } = await supabase
+      .from('stevo_clients').select('ghl_api_token').eq('id', ctx.clientId).maybeSingle();
+    const { data: removal } = await supabase
+      .from('stevo_removal_list')
+      .select('phone, name, reason, active, times_deleted, last_deleted_at, created_at')
+      .eq('ghl_location_id', ctx.ghlLocationId)
+      .eq('active', true)
+      .order('created_at', { ascending: false })
+      .limit(200);
+    const { data: deletions } = await supabase
+      .from('stevo_deletion_log')
+      .select('created_at, phone, name, contact_id, trigger, success, message')
+      .eq('ghl_location_id', ctx.ghlLocationId)
+      .order('created_at', { ascending: false })
+      .limit(100);
+
     return json({
       clientName: ctx.clientName,
       locationId: ctx.ghlLocationId,
       webhookUrl: `${Deno.env.get('SUPABASE_URL')}/functions/v1/stevo-dnd`,
+      crmUrl: `${Deno.env.get('SUPABASE_URL')}/functions/v1/stevo-crm`,
+      ghlApiTokenSet: !!(clientRow?.ghl_api_token),
       instances: (instances ?? []).map((i) => ({
         id: i.id,
         name: i.name,
@@ -211,6 +230,8 @@ Deno.serve(async (req) => {
       blocklists,
       audit: audit ?? [],
       pending: pending ?? [],
+      removal: removal ?? [],
+      deletions: deletions ?? [],
     });
   }
 
@@ -220,9 +241,13 @@ Deno.serve(async (req) => {
       .select('id, name, server_url, api_key, active')
       .eq('client_id', ctx.clientId)
       .order('created_at', { ascending: true });
+    const { data: clientRow } = await supabase
+      .from('stevo_clients').select('ghl_api_token').eq('id', ctx.clientId).maybeSingle();
     return json({
       clientName: ctx.clientName,
       locationId: ctx.ghlLocationId,
+      crmUrl: `${Deno.env.get('SUPABASE_URL')}/functions/v1/stevo-crm`,
+      ghlApiTokenSet: !!(clientRow?.ghl_api_token),
       instances: (instances ?? []).map((i) => ({
         id: i.id,
         name: i.name,
@@ -231,6 +256,20 @@ Deno.serve(async (req) => {
         active: i.active,
       })),
     });
+  }
+
+  // Salva/atualiza o token de API do GHL (Private Integration) da location.
+  // Em branco = mantém o atual.
+  if (action === 'saveGhlToken') {
+    const token = typeof body.ghlApiToken === 'string' ? body.ghlApiToken.trim() : '';
+    if (token) {
+      const { error } = await supabase
+        .from('stevo_clients')
+        .update({ ghl_api_token: token, updated_at: new Date().toISOString() })
+        .eq('id', ctx.clientId);
+      if (error) return json({ error: 'Erro ao salvar o token do GHL' }, 500);
+    }
+    return json({ saved: true, ghlApiTokenSet: true });
   }
 
   if (action === 'test') {

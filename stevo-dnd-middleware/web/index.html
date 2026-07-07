@@ -219,7 +219,15 @@ function paintDashboard(){
     </div>
 
     <div class="card">
-      <div class="card-head"><div><h2>Atividade recente</h2><div class="hint">Bloqueios e desbloqueios disparados pelo GoHighLevel.</div></div></div>
+      <div class="card-head">
+        <div><h2>🗑️ Marcados para remoção do CRM</h2><div class="hint">Contatos DND que são deletados da location e re-deletados se reentrarem.${d.ghlApiTokenSet?'':' <b style="color:var(--rose)">Configure o token do GHL em Configurar para deletar de verdade.</b>'}</div></div>
+        <span class="badge ${d.ghlApiTokenSet?'badge-green':'badge-amber'}">${d.ghlApiTokenSet?'GHL conectado':'GHL sem token'}</span>
+      </div>
+      <div class="card-body scroll-x" id="removal-wrap"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><div><h2>Atividade recente</h2><div class="hint">Bloqueios/desbloqueios (WhatsApp) e deleções de contato (CRM).</div></div></div>
       <div class="card-body scroll-x" id="activity-wrap"></div>
     </div>
   </div>`;
@@ -227,6 +235,26 @@ function paintDashboard(){
   paintBlocked();
   paintActivity();
   paintPending();
+  paintRemoval();
+}
+
+function paintRemoval(){
+  const p = OVERVIEW.removal||[];
+  const wrap = $('removal-wrap');
+  if (!wrap) return;
+  if (!p.length){ wrap.innerHTML = '<div class="empty">Nenhum contato marcado para remoção.</div>'; return; }
+  wrap.innerHTML = `<table><thead><tr>
+      <th>Telefone</th><th>Nome</th><th>Motivo</th><th>Vezes deletado</th><th>Última deleção</th><th>Desde</th>
+    </tr></thead><tbody>
+    ${p.map(e => `<tr>
+      <td class="mono">${esc(e.phone||'—')}</td>
+      <td>${esc(e.name||'—')}</td>
+      <td class="muted">${esc(e.reason||'—')}</td>
+      <td>${e.times_deleted??0}</td>
+      <td style="white-space:nowrap">${e.last_deleted_at?fmtDate(e.last_deleted_at):'—'}</td>
+      <td style="white-space:nowrap">${e.created_at?fmtDate(e.created_at):'—'}</td>
+    </tr>`).join('')}
+  </tbody></table>`;
 }
 
 function paintPending(){
@@ -274,18 +302,26 @@ function paintBlocked(filter=''){
 }
 function filterBlocked(){ paintBlocked($('bl-search').value.trim().toLowerCase()); }
 
+function actionBadge(a){
+  if (a==='block') return '<span class="badge badge-rose">Bloqueou</span>';
+  if (a==='unblock') return '<span class="badge badge-green">Desbloqueou</span>';
+  if (a==='delete') return '<span class="badge badge-rose">Deletou</span>';
+  return '<span class="badge badge-gray">'+esc(a)+'</span>';
+}
 function paintActivity(){
-  const a = OVERVIEW.audit||[];
+  const audit = (OVERVIEW.audit||[]).map(e => ({ ...e, _kind: e.action, detail: e.instance_name }));
+  const dels = (OVERVIEW.deletions||[]).map(e => ({ created_at: e.created_at, _kind: 'delete', phone: e.phone, detail: e.trigger, success: e.success, message: e.message, source: 'crm' }));
+  const all = [...audit, ...dels].sort((a,b)=> new Date(b.created_at) - new Date(a.created_at)).slice(0,120);
   const wrap = $('activity-wrap');
-  if (!a.length){ wrap.innerHTML = '<div class="empty">Nenhuma operação registrada ainda. Os bloqueios disparados pelo GHL aparecem aqui.</div>'; return; }
+  if (!all.length){ wrap.innerHTML = '<div class="empty">Nenhuma operação registrada ainda.</div>'; return; }
   wrap.innerHTML = `<table><thead><tr>
-      <th>Data</th><th>Ação</th><th>Telefone</th><th>Instância</th><th>Resultado</th><th>Origem</th>
+      <th>Data</th><th>Ação</th><th>Telefone</th><th>Onde</th><th>Resultado</th><th>Origem</th>
     </tr></thead><tbody>
-    ${a.map(e => `<tr>
+    ${all.map(e => `<tr>
       <td style="white-space:nowrap">${fmtDate(e.created_at)}</td>
-      <td>${e.action==='block'?'<span class="badge badge-rose">Bloqueou</span>':'<span class="badge badge-green">Desbloqueou</span>'}</td>
+      <td>${actionBadge(e._kind)}</td>
       <td class="mono">${esc(e.phone||'—')}</td>
-      <td>${esc(e.instance_name||'—')}</td>
+      <td>${esc(e.detail||'—')}</td>
       <td>${e.success?'<span class="badge badge-green">OK</span>':`<span class="badge badge-rose">falha</span> <span class="muted">${esc(e.message||'')}</span>`}</td>
       <td class="muted">${esc(e.source||'—')}</td>
     </tr>`).join('')}
@@ -304,14 +340,59 @@ function openConfig(){
       <div id="instances"></div>
       <button class="btn-light btn-sm" onclick="addInstance()">+ Adicionar instância</button>
       <div style="display:flex;gap:10px;align-items:center;margin-top:16px">
-        <button class="btn-primary" id="save-btn" onclick="saveInstances()">Salvar configuração</button>
+        <button class="btn-primary" id="save-btn" onclick="saveInstances()">Salvar instâncias</button>
         <span id="save-status" class="muted"></span>
       </div>
       <div id="ghl-config" style="margin-top:20px"></div>
+
+      <hr style="border:0;border-top:1px solid var(--line);margin:24px 0">
+      <h2 style="font-size:15px;margin:0">Remoção de contatos no GHL</h2>
+      <div class="muted" style="margin-top:4px">Token de API do GHL (Private Integration) desta location, com escopo <code class="inline">contacts.write</code>. Necessário para deletar contatos.</div>
+      <label>GHL API Token ${d.ghlApiTokenSet?'(configurado — deixe em branco para manter)':''}</label>
+      <input id="ghl-token" type="password" placeholder="${d.ghlApiTokenSet?'manter o atual':'cole o Private Integration Token'}">
+      <div style="display:flex;gap:10px;align-items:center;margin-top:12px">
+        <button class="btn-primary" id="ghltoken-btn" onclick="saveGhlToken()">Salvar token</button>
+        <span id="ghltoken-status" class="muted">${d.ghlApiTokenSet?'✅ token configurado':''}</span>
+      </div>
+      <div id="crm-config" style="margin-top:18px"></div>
     </div>`;
   const list = d.instances || [];
   if (list.length) list.forEach(i => addInstance(i)); else addInstance();
+  showCrmConfig();
   $('drawer').classList.add('open'); $('drawer-mask').classList.add('open');
+}
+
+async function saveGhlToken(){
+  const token = $('ghl-token').value.trim();
+  const st = $('ghltoken-status');
+  st.textContent = 'Salvando…';
+  $('ghltoken-btn').disabled = true;
+  const { data } = await api('stevo-setup', { token: CURRENT_TOKEN, action:'saveGhlToken', ghlApiToken: token });
+  $('ghltoken-btn').disabled = false;
+  if (data.error){ st.textContent = ''; toast(data.error); return; }
+  st.textContent = '✅ token salvo';
+  $('ghl-token').value = '';
+  toast('Token do GHL salvo');
+}
+
+function showCrmConfig(){
+  const el = $('crm-config'); if (!el) return;
+  const d = OVERVIEW;
+  const secret = (d.instances && d.webhookSecretHint) ? d.webhookSecretHint : null;
+  const crmUrl = d.crmUrl || '';
+  const removeBody = { action:'remove', locationId:'{{location.id}}', contactId:'{{contact.id}}', phone:'{{contact.phone}}', name:'{{contact.name}}', reason:'DND WhatsApp' };
+  const createdBody = { action:'contact_created', locationId:'{{location.id}}', contactId:'{{contact.id}}', phone:'{{contact.phone}}', name:'{{contact.name}}' };
+  const blocks = [
+    ['URL do webhook de remoção (POST)', crmUrl],
+    ['Body — workflow "DND / tag" (remover + deletar)', JSON.stringify(removeBody, null, 2)],
+    ['Body — workflow "Contact Created" (re-deletar se reentrar)', JSON.stringify(createdBody, null, 2)],
+  ];
+  el.innerHTML = `<div class="card card-pad" style="margin:0">
+    <h2 style="font-size:14px;margin:0 0 8px">Webhooks de remoção no GoHighLevel</h2>
+    <div class="muted" style="margin-bottom:4px">Use o mesmo header <code class="inline">x-webhook-secret</code> (ou campo <code class="inline">webhookSecret</code>) dos outros webhooks. Crie 2 workflows: um no trigger de DND/tag e outro no trigger <b>Contact Created</b>.</div>
+    ${blocks.map((b,i)=>`<div class="config-label"><span style="font-size:12px;font-weight:600;color:var(--ink-700)">${b[0]}</span>
+      <button class="btn-light btn-sm" data-crmcopy="${i}">Copiar</button></div><pre id="crmcfg-${i}">${esc(b[1])}</pre>`).join('')}</div>`;
+  document.querySelectorAll('[data-crmcopy]').forEach(btn => btn.onclick = () => copyText($('crmcfg-'+btn.dataset.crmcopy).textContent));
 }
 function closeDrawer(){ $('drawer').classList.remove('open'); $('drawer-mask').classList.remove('open'); }
 
