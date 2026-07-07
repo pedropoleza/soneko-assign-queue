@@ -243,7 +243,7 @@ Deno.serve(async (req) => {
   const results = await Promise.all(
     targets.map(async (instance) => {
       const result = await stevoBlockCall(instance, action as 'block' | 'unblock', phone);
-      return { instance: instance.name, ...result };
+      return { instanceId: instance.id, instance: instance.name, ...result };
     })
   );
 
@@ -261,6 +261,50 @@ Deno.serve(async (req) => {
   }));
   const { error: auditError } = await supabase.from('stevo_audit_log').insert(auditRows);
   if (auditError) console.error('Falha ao gravar auditoria:', auditError.message);
+
+  // Fila de retry: enfileira falhas transitórias; resolve pendência ao ter sucesso.
+  const nowIso = new Date().toISOString();
+  for (const r of results) {
+    if (r.success) {
+      await supabase
+        .from('stevo_pending_ops')
+        .update({ status: 'done', resolved_at: nowIso, updated_at: nowIso })
+        .eq('instance_id', r.instanceId)
+        .eq('phone', phone)
+        .eq('action', action)
+        .eq('status', 'pending');
+      continue;
+    }
+    // Não enfileira falha permanente (número não existe no WhatsApp).
+    if ((r.error ?? '').includes('não está no WhatsApp')) continue;
+    const row = {
+      client_id: client.id,
+      ghl_location_id: locationId,
+      instance_id: r.instanceId,
+      instance_name: r.instance,
+      action,
+      phone,
+      contact_id: contactId,
+      source,
+      reason,
+      status: 'pending' as const,
+      attempts: 0,
+      last_error: r.error ?? 'erro desconhecido',
+      next_attempt_at: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+      updated_at: nowIso,
+    };
+    const { error: insErr } = await supabase.from('stevo_pending_ops').insert(row);
+    if (insErr && insErr.code === '23505') {
+      // Já havia pendência para (instância, telefone, ação): atualiza o erro.
+      await supabase
+        .from('stevo_pending_ops')
+        .update({ last_error: r.error ?? 'erro desconhecido', updated_at: nowIso })
+        .eq('instance_id', r.instanceId)
+        .eq('phone', phone)
+        .eq('action', action)
+        .eq('status', 'pending');
+    }
+  }
 
   const succeeded = results.filter((r) => r.success).length;
   const status = succeeded === results.length ? 'success' : succeeded > 0 ? 'partial_success' : 'error';

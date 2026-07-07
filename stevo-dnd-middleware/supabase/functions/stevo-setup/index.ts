@@ -188,6 +188,15 @@ Deno.serve(async (req) => {
       .order('created_at', { ascending: false })
       .limit(100);
 
+    // Operações na fila de retry (aguardando o Stevo aceitar o block/unblock).
+    const { data: pending } = await supabase
+      .from('stevo_pending_ops')
+      .select('action, phone, contact_id, instance_name, attempts, last_error, next_attempt_at, created_at')
+      .eq('ghl_location_id', ctx.ghlLocationId)
+      .eq('status', 'pending')
+      .order('created_at', { ascending: false })
+      .limit(100);
+
     return json({
       clientName: ctx.clientName,
       locationId: ctx.ghlLocationId,
@@ -201,6 +210,7 @@ Deno.serve(async (req) => {
       })),
       blocklists,
       audit: audit ?? [],
+      pending: pending ?? [],
     });
   }
 
