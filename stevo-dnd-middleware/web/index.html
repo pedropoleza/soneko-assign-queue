@@ -173,7 +173,8 @@ function paintDashboard(){
   const d = OVERVIEW;
   const totalBlocked = (d.blocklists||[]).reduce((s,b)=>s+(b.count||0),0);
   const activeInstances = (d.instances||[]).filter(i=>i.active).length;
-  const blocksViaGhl = (d.audit||[]).filter(a=>a.action==='block' && a.success).length;
+  const removalCount = (d.removal||[]).length;
+  const deletionsOk = (d.deletions||[]).filter(x=>x.success).length;
   const lastActivity = (d.audit&&d.audit[0]) ? fmtDate(d.audit[0].created_at) : '—';
   const anyError = (d.blocklists||[]).find(b=>!b.ok);
 
@@ -183,28 +184,25 @@ function paintDashboard(){
   app.innerHTML = topbar(right) + `<div class="container">
     <div class="page-head">
       <div>
-        <h1 class="page-title">Contatos bloqueados no WhatsApp</h1>
+        <h1 class="page-title">Números bloqueados</h1>
         <div class="page-sub">${esc(d.clientName)} · Location <code>${esc(d.locationId)}</code></div>
       </div>
     </div>
 
     <div class="kpis">
-      <div class="kpi"><div class="label"><span class="dot" style="background:var(--rose)"></span>Total bloqueados</div>
-        <div class="value">${totalBlocked}</div><div class="foot">na conexão do WhatsApp</div></div>
+      <div class="kpi"><div class="label"><span class="dot" style="background:var(--rose)"></span>Números bloqueados</div>
+        <div class="value">${removalCount}</div><div class="foot">passaram pela ação de bloqueio</div></div>
+      <div class="kpi"><div class="label"><span class="dot" style="background:var(--brand)"></span>Deleções feitas</div>
+        <div class="value">${deletionsOk}</div><div class="foot">contatos removidos do CRM</div></div>
       <div class="kpi"><div class="label"><span class="dot" style="background:var(--green)"></span>Instâncias ativas</div>
         <div class="value">${activeInstances}</div><div class="foot">${(d.instances||[]).length} cadastrada(s)</div></div>
-      <div class="kpi"><div class="label"><span class="dot" style="background:var(--brand)"></span>Bloqueios via GHL</div>
-        <div class="value">${blocksViaGhl}</div><div class="foot">disparados por automação</div></div>
       <div class="kpi"><div class="label"><span class="dot" style="background:var(--amber)"></span>Última atividade</div>
         <div class="value" style="font-size:18px;padding-top:7px">${lastActivity}</div><div class="foot">registro mais recente</div></div>
     </div>
 
-    ${anyError ? `<div class="card card-pad" style="border-color:var(--rose-soft);background:#fff6f7">
-      <span class="badge badge-rose">Atenção</span> <span class="muted">Uma instância não respondeu (${esc(anyError.error||'erro')}). Verifique a API Key em Configurar.</span></div>` : ''}
-
     ${(d.pending||[]).length ? `<div class="card" style="border-color:var(--amber-soft)">
       <div class="card-head">
-        <div><h2>⏳ Na fila de retry</h2><div class="hint">Operações que o Stevo ainda não aceitou — re-tentadas automaticamente a cada 15 min até serem aplicadas.</div></div>
+        <div><h2>⏳ Na fila de retry</h2><div class="hint">Operações que o Stevo ainda não aceitou — re-tentadas automaticamente a cada 15 min.</div></div>
         <span class="badge badge-amber">${(d.pending||[]).length} pendente(s)</span>
       </div>
       <div class="card-body scroll-x" id="pending-wrap"></div>
@@ -212,24 +210,30 @@ function paintDashboard(){
 
     <div class="card">
       <div class="card-head">
-        <div><h2>Bloqueados no WhatsApp</h2><div class="hint">Lista ao vivo direto da conexão Stevo. IDs internos do WhatsApp aparecem quando o número não expõe o telefone.</div></div>
-        <div class="search">${ICON_SEARCH}<input id="bl-search" placeholder="Buscar contato…" oninput="filterBlocked()"></div>
+        <div><h2>🚫 Números bloqueados</h2><div class="hint">Só os números que passaram pela ação de bloqueio (DND). São deletados do CRM e re-deletados se reentrarem.${d.ghlApiTokenSet?'':' <b style="color:var(--rose)">Configure o token do GHL em Configurar para deletar de verdade.</b>'}</div></div>
+        <div style="display:flex;gap:10px;align-items:center">
+          <span class="badge ${d.ghlApiTokenSet?'badge-green':'badge-amber'}">${d.ghlApiTokenSet?'GHL conectado':'GHL sem token'}</span>
+          <div class="search">${ICON_SEARCH}<input id="rm-search" placeholder="Buscar número…" oninput="filterRemoval()"></div>
+        </div>
       </div>
-      <div class="card-body scroll-y scroll-x" id="blocked-wrap"></div>
+      <div class="card-body scroll-y scroll-x" id="removal-wrap"></div>
     </div>
 
     <div class="card">
-      <div class="card-head">
-        <div><h2>🗑️ Marcados para remoção do CRM</h2><div class="hint">Contatos DND que são deletados da location e re-deletados se reentrarem.${d.ghlApiTokenSet?'':' <b style="color:var(--rose)">Configure o token do GHL em Configurar para deletar de verdade.</b>'}</div></div>
-        <span class="badge ${d.ghlApiTokenSet?'badge-green':'badge-amber'}">${d.ghlApiTokenSet?'GHL conectado':'GHL sem token'}</span>
-      </div>
-      <div class="card-body scroll-x" id="removal-wrap"></div>
-    </div>
-
-    <div class="card">
-      <div class="card-head"><div><h2>Atividade recente</h2><div class="hint">Bloqueios/desbloqueios (WhatsApp) e deleções de contato (CRM).</div></div></div>
+      <div class="card-head"><div><h2>Atividade recente</h2><div class="hint">Bloqueios (marcados) e deleções de contato no CRM.</div></div></div>
       <div class="card-body scroll-x" id="activity-wrap"></div>
     </div>
+
+    <details style="margin-bottom:18px">
+      <summary style="cursor:pointer;color:var(--ink-500);font-size:13px;padding:4px 2px">Ver blocklist do WhatsApp (conexão Stevo)${anyError?' — ⚠️ instância não respondeu':''}</summary>
+      <div class="card" style="margin-top:10px">
+        <div class="card-head">
+          <div><h2>Bloqueados no WhatsApp (Stevo)</h2><div class="hint">Lista ao vivo da conexão. IDs internos (@lid) aparecem quando o número não é exposto.</div></div>
+          <div class="search">${ICON_SEARCH}<input id="bl-search" placeholder="Buscar…" oninput="filterBlocked()"></div>
+        </div>
+        <div class="card-body scroll-y scroll-x" id="blocked-wrap"></div>
+      </div>
+    </details>
   </div>`;
 
   paintBlocked();
@@ -238,24 +242,27 @@ function paintDashboard(){
   paintRemoval();
 }
 
-function paintRemoval(){
-  const p = OVERVIEW.removal||[];
+function paintRemoval(filter=''){
+  const all = OVERVIEW.removal||[];
   const wrap = $('removal-wrap');
   if (!wrap) return;
-  if (!p.length){ wrap.innerHTML = '<div class="empty">Nenhum contato marcado para remoção.</div>'; return; }
+  if (!all.length){ wrap.innerHTML = '<div class="empty">Nenhum número bloqueado ainda. Eles aparecem aqui quando passam pela ação de bloqueio (workflow de DND).</div>'; return; }
+  const p = all.filter(e => !filter || (e.phone||'').includes(filter) || (e.name||'').toLowerCase().includes(filter));
+  if (!p.length){ wrap.innerHTML = '<div class="empty">Nenhum resultado para a busca.</div>'; return; }
   wrap.innerHTML = `<table><thead><tr>
-      <th>Telefone</th><th>Nome</th><th>Motivo</th><th>Vezes deletado</th><th>Última deleção</th><th>Desde</th>
+      <th>Número</th><th>Nome</th><th>Motivo</th><th>Vezes deletado</th><th>Última deleção</th><th>Bloqueado em</th>
     </tr></thead><tbody>
     ${p.map(e => `<tr>
       <td class="mono">${esc(e.phone||'—')}</td>
       <td>${esc(e.name||'—')}</td>
       <td class="muted">${esc(e.reason||'—')}</td>
-      <td>${e.times_deleted??0}</td>
+      <td>${(e.times_deleted??0) > 0 ? '<span class="badge badge-rose">'+e.times_deleted+'x</span>' : '<span class="muted">0</span>'}</td>
       <td style="white-space:nowrap">${e.last_deleted_at?fmtDate(e.last_deleted_at):'—'}</td>
       <td style="white-space:nowrap">${e.created_at?fmtDate(e.created_at):'—'}</td>
     </tr>`).join('')}
   </tbody></table>`;
 }
+function filterRemoval(){ const el=$('rm-search'); paintRemoval(el ? el.value.trim().toLowerCase() : ''); }
 
 function paintPending(){
   const p = OVERVIEW.pending||[];
