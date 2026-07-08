@@ -1,4 +1,4 @@
-import { API_URL, getSecret } from './config';
+import { API_URL, getLocationId, getSecret } from './config';
 import type { Analytics, CreateInput, Overview, QrCode, SlugCheck, UpdateInput } from './types';
 
 export class ApiError extends Error {
@@ -18,6 +18,7 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
     headers: {
       'Content-Type': 'application/json',
       'x-spark-secret': secret,
+      'x-spark-location': getLocationId(),
     },
     body: body ? JSON.stringify(body) : undefined,
   });

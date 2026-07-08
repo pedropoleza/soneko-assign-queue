@@ -18,6 +18,7 @@ export function publicUrl(slug: string): string {
 
 // Admin secret resolution: ?secret= (stored + stripped) -> localStorage -> build-time default.
 const STORAGE_KEY = 'spark_qr_secret';
+const LOCATION_KEY = 'spark_qr_location';
 
 export function getSecret(): string | null {
   if (typeof window === 'undefined') return null;
@@ -33,6 +34,24 @@ export function getSecret(): string | null {
   if (stored) return stored;
   const def = env.VITE_SPARK_QR_DEFAULT_SECRET as string | undefined;
   return def ?? null;
+}
+
+// Location scope: the GHL menu link carries {{location.id}} via ?location_id=.
+// Each GHL account then sees only its own QR codes. Empty string = the main
+// panel (QRs created without a location). Read once, stored + stripped from URL.
+export function getLocationId(): string {
+  if (typeof window === 'undefined') return '';
+  const url = new URL(window.location.href);
+  const fromQuery = url.searchParams.get('location_id') ?? url.searchParams.get('location');
+  if (fromQuery !== null) {
+    const v = fromQuery.trim();
+    localStorage.setItem(LOCATION_KEY, v);
+    url.searchParams.delete('location_id');
+    url.searchParams.delete('location');
+    window.history.replaceState({}, '', url.toString());
+    return v;
+  }
+  return localStorage.getItem(LOCATION_KEY) ?? '';
 }
 
 export function saveSecret(s: string) {

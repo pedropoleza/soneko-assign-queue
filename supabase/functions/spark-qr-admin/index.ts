@@ -23,7 +23,7 @@ import { createClient } from 'jsr:@supabase/supabase-js@2';
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS',
-  'Access-Control-Allow-Headers': 'authorization, content-type, x-spark-secret, apikey',
+  'Access-Control-Allow-Headers': 'authorization, content-type, x-spark-secret, x-spark-location, apikey',
   'Access-Control-Max-Age': '86400',
 };
 
@@ -64,6 +64,11 @@ Deno.serve(async (req: Request) => {
     req.headers.get('x-spark-secret') ?? url.searchParams.get('secret') ?? '';
   if (!secret) return json(401, { error: 'missing_secret' });
 
+  // Location scope: the GHL menu link carries {{location.id}} so each GHL
+  // account sees only its own QR codes. Empty string = the main/global panel.
+  const location =
+    req.headers.get('x-spark-location') ?? url.searchParams.get('location') ?? '';
+
   const rpc = (fn: string, args: Record<string, unknown>) => supabase.rpc(fn, args);
 
   try {
@@ -71,13 +76,13 @@ Deno.serve(async (req: Request) => {
     if (req.method === 'GET' && path === '/overview') {
       const days = parseInt(url.searchParams.get('days') ?? '30', 10);
       const { data, error } = await rpc('spark_qr_overview', {
-        p_secret: secret, p_days: isNaN(days) ? 30 : days,
+        p_secret: secret, p_location_id: location, p_days: isNaN(days) ? 30 : days,
       });
       if (error) return fail(error);
       return json(200, data);
     }
 
-    // GET /check-slug?slug=&exclude=
+    // GET /check-slug?slug=&exclude=   (slug is global, no location scope)
     if (req.method === 'GET' && path === '/check-slug') {
       const slug = url.searchParams.get('slug') ?? '';
       const exclude = url.searchParams.get('exclude');
@@ -90,7 +95,7 @@ Deno.serve(async (req: Request) => {
 
     // GET /qrs
     if (req.method === 'GET' && path === '/qrs') {
-      const { data, error } = await rpc('spark_qr_list', { p_secret: secret });
+      const { data, error } = await rpc('spark_qr_list', { p_secret: secret, p_location_id: location });
       if (error) return fail(error);
       return json(200, data);
     }
@@ -100,7 +105,7 @@ Deno.serve(async (req: Request) => {
     if (req.method === 'GET' && analyticsMatch) {
       const days = parseInt(url.searchParams.get('days') ?? '30', 10);
       const { data, error } = await rpc('spark_qr_analytics', {
-        p_secret: secret, p_id: analyticsMatch[1], p_days: isNaN(days) ? 30 : days,
+        p_secret: secret, p_id: analyticsMatch[1], p_location_id: location, p_days: isNaN(days) ? 30 : days,
       });
       if (error) return fail(error);
       return json(200, data);
@@ -109,7 +114,7 @@ Deno.serve(async (req: Request) => {
     // GET /qrs/:id
     const idMatch = path.match(/^\/qrs\/([0-9a-f-]{36})$/i);
     if (req.method === 'GET' && idMatch) {
-      const { data, error } = await rpc('spark_qr_get', { p_secret: secret, p_id: idMatch[1] });
+      const { data, error } = await rpc('spark_qr_get', { p_secret: secret, p_id: idMatch[1], p_location_id: location });
       if (error) return fail(error);
       return json(200, data);
     }
@@ -119,6 +124,7 @@ Deno.serve(async (req: Request) => {
       const body = await req.json().catch(() => ({}));
       const { data, error } = await rpc('spark_qr_create', {
         p_secret: secret,
+        p_location_id: location,
         p_slug: body.slug ?? '',
         p_target_url: body.target_url ?? '',
         p_name: body.name ?? '',
@@ -133,6 +139,7 @@ Deno.serve(async (req: Request) => {
       const { data, error } = await rpc('spark_qr_update', {
         p_secret: secret,
         p_id: idMatch[1],
+        p_location_id: location,
         p_slug: body.slug ?? null,
         p_target_url: body.target_url ?? null,
         p_name: body.name ?? null,
@@ -144,7 +151,7 @@ Deno.serve(async (req: Request) => {
 
     // DELETE /qrs/:id
     if (req.method === 'DELETE' && idMatch) {
-      const { data, error } = await rpc('spark_qr_delete', { p_secret: secret, p_id: idMatch[1] });
+      const { data, error } = await rpc('spark_qr_delete', { p_secret: secret, p_id: idMatch[1], p_location_id: location });
       if (error) return fail(error);
       return json(200, data);
     }

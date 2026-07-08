@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Loader2, Lock, Plus, QrCode as QrIcon, RefreshCw, Search, Zap } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from './api';
+import { getLocationId } from './config';
 import { isEmbedded, ancestorAllowed } from './lib/embed';
 import type { Overview, QrCode } from './types';
 import { Dashboard } from './components/Dashboard';
@@ -28,6 +29,10 @@ function Blocked() {
 export default function App() {
   // Iframe-only: standalone access is blocked. Evaluated once at startup.
   const allowed = useMemo(() => isEmbedded() && ancestorAllowed(), []);
+
+  // Capture (and strip) ?location_id={{location.id}} once at startup so the
+  // panel is scoped to this GHL account. '' = main panel.
+  const locationId = useMemo(() => getLocationId(), []);
 
   const [items, setItems] = useState<QrCode[] | null>(null);
   const [version, setVersion] = useState(0); // bumps after mutations → refetch overview
@@ -104,6 +109,14 @@ export default function App() {
               <Zap className="h-5 w-5" />
             </span>
             <span className="text-2xl font-bold tracking-tight text-ink-900">Spark QR</span>
+            {locationId && (
+              <span
+                className="hidden rounded-full bg-ink-100 px-2.5 py-1 font-mono text-xs text-ink-500 sm:inline"
+                title={`Location: ${locationId}`}
+              >
+                {locationId.slice(0, 8)}
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-2">
             <button className="btn-ghost h-11 w-11 px-0" onClick={() => { load(); bump(); }} title="Recarregar">
