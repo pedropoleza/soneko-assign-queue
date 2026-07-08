@@ -11,3 +11,6 @@ dist
 .tsbuild/
 *.tsbuildinfo
 
+
+# SPC importer runtime state (contém telefones / PII)
+scripts/.spc_state*
