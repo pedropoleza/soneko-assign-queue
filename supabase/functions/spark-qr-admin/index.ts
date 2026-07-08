@@ -69,6 +69,10 @@ Deno.serve(async (req: Request) => {
   const location =
     req.headers.get('x-spark-location') ?? url.searchParams.get('location') ?? '';
 
+  // TEMP diagnostic: surface the exact location value the panel sends so we can
+  // confirm the GHL menu link is delivering {{location.id}}.
+  console.log(`spark-qr-admin loc=${JSON.stringify(location)} method=${req.method} path=${path}`);
+
   const rpc = (fn: string, args: Record<string, unknown>) => supabase.rpc(fn, args);
 
   try {
