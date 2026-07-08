@@ -1,11 +1,13 @@
-// GHL marketplace app — webhook sink.
+// Spark QR — marketplace app webhook sink.
 //
-// The Spark QR SSO flow does not need webhooks, but the app config has a webhook
-// URL field, so this endpoint accepts and acknowledges GHL events (INSTALL /
-// UNINSTALL, etc.) so nothing errors. Events are recorded in qr.debug_loc for
-// visibility; wire real handling here later if the app's scope grows.
+// The SSO flow does not need webhooks, but the app config has a webhook URL
+// field, so this endpoint accepts and acknowledges events so nothing errors.
+// Events are recorded in qr.debug_loc for visibility.
 //
-// verify_jwt MUST be false (GHL calls this unauthenticated).
+// NOTE: named "spark-*" (no "ghl"/"highlevel" in the path) — HighLevel rejects
+// redirect/webhook URLs that reference its brand.
+//
+// verify_jwt MUST be false (called unauthenticated).
 
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
@@ -27,7 +29,7 @@ Deno.serve(async (req: Request) => {
   try {
     await supabase.rpc('qr_debug_loc', {
       p_location: `webhook type=${JSON.stringify(type)} loc=${JSON.stringify(loc)}`,
-      p_method: 'POST', p_path: '/ghl-app-webhook', p_ua: '',
+      p_method: 'POST', p_path: '/spark-app-webhook', p_ua: '',
     });
   } catch { /* best effort */ }
   return new Response(JSON.stringify({ ok: true }), {

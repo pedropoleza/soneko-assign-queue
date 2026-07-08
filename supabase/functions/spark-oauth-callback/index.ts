@@ -1,16 +1,18 @@
-// GHL marketplace app — OAuth redirect callback.
+// Spark QR — OAuth redirect callback for the marketplace app.
 //
 // GHL sends the browser here with ?code=… after a user installs/authorizes the
 // app on a location. We exchange the code for tokens (using the app's client id
 // + secret from qr.app_config), store them per location, and show a small
-// success page. Tokens aren't required by the Spark QR SSO flow itself, but a
-// working callback is what lets the app install cleanly on each sub-account.
+// success page.
 //
-// verify_jwt MUST be false (GHL calls this unauthenticated, browser redirect).
+// NOTE: named "spark-*" (no "ghl"/"highlevel" in the path) — HighLevel rejects
+// redirect/webhook URLs that reference its brand.
+//
+// verify_jwt MUST be false (called unauthenticated as a browser redirect).
 
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
-const GHL_TOKEN_URL = 'https://services.leadconnectorhq.com/oauth/token';
+const TOKEN_URL = 'https://services.leadconnectorhq.com/oauth/token';
 
 const supabase = createClient(
   Deno.env.get('SUPABASE_URL') ?? '',
@@ -34,7 +36,7 @@ function html(status: number, title: string, msg: string) {
 Deno.serve(async (req: Request) => {
   const url = new URL(req.url);
   const code = url.searchParams.get('code');
-  if (!code) return html(400, 'Faltou o código', 'Nenhum authorization code recebido do GoHighLevel.');
+  if (!code) return html(400, 'Faltou o código', 'Nenhum authorization code recebido.');
 
   const { data: app } = await supabase.rpc('qr_ghl_app');
   const clientId = app?.client_id;
@@ -53,7 +55,7 @@ Deno.serve(async (req: Request) => {
 
   let token: any;
   try {
-    const r = await fetch(GHL_TOKEN_URL, {
+    const r = await fetch(TOKEN_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
       body: form.toString(),
@@ -61,7 +63,7 @@ Deno.serve(async (req: Request) => {
     token = await r.json();
     if (!r.ok) return html(502, 'Falha na troca de token', String(token?.message ?? r.status));
   } catch (e) {
-    return html(502, 'Erro ao contatar o GoHighLevel', (e as Error).message);
+    return html(502, 'Erro ao contatar o servidor', (e as Error).message);
   }
 
   const expiresAt = token.expires_in
