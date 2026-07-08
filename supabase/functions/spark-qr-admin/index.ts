@@ -19,6 +19,7 @@
 // verify_jwt MUST be false (custom secret auth).
 
 import { createClient } from 'jsr:@supabase/supabase-js@2';
+import CryptoJS from 'npm:crypto-js@4.2.0';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -82,6 +83,34 @@ Deno.serve(async (req: Request) => {
   const rpc = (fn: string, args: Record<string, unknown>) => supabase.rpc(fn, args);
 
   try {
+    // POST /sso — resolve the current GHL location from the marketplace-app SSO
+    // session. The custom page posts us the encrypted `payload` it got from GHL
+    // (REQUEST_USER_DATA_RESPONSE); we decrypt it with the app's Shared Secret
+    // (never exposed to the client) and return the signed activeLocation. This
+    // is authoritative: the location can't be spoofed by the client.
+    if (req.method === 'POST' && path === '/sso') {
+      const body = await req.json().catch(() => ({}));
+      const encrypted = String(body.encryptedData ?? body.payload ?? '');
+      if (!encrypted) return json(400, { error: 'missing_encrypted_data' });
+      const { data: ssoKey, error: keyErr } = await rpc('spark_qr_sso_key', {});
+      if (keyErr) return fail(keyErr);
+      if (!ssoKey) return json(500, { error: 'sso_not_configured' });
+      let user: any;
+      try {
+        const plain = CryptoJS.AES.decrypt(encrypted, String(ssoKey)).toString(CryptoJS.enc.Utf8);
+        user = JSON.parse(plain);
+      } catch {
+        return json(400, { error: 'sso_decrypt_failed' });
+      }
+      return json(200, {
+        locationId: user?.activeLocation ?? '',
+        companyId: user?.companyId ?? '',
+        userId: user?.userId ?? '',
+        email: user?.email ?? '',
+        type: user?.type ?? '',
+      });
+    }
+
     // GET /overview?days=30  — dashboard aggregate
     if (req.method === 'GET' && path === '/overview') {
       const days = parseInt(url.searchParams.get('days') ?? '30', 10);

@@ -35,31 +35,41 @@ export function getSecret(): string | null {
   return def ?? null;
 }
 
-// Location scope: the GHL menu link carries {{location.id}} via ?location_id=.
-// Each GHL account then sees only its own QR codes. Empty string = the main
-// panel (QRs without a location).
+// Location scope. Authoritative source is the GHL marketplace-app SSO: the panel
+// asks GHL for the signed user session and the backend (POST /sso) decrypts it
+// to the current activeLocation. That value is set here via setLocationId() and
+// then sent on every request — it can't be spoofed and doesn't depend on the
+// menu link. As a fallback (e.g. opened outside the app, or SSO unavailable) we
+// read a ?location_id= param from the URL once. Empty string = the main panel.
 //
-// The value is read from the URL exactly ONCE per page load and held in memory
-// — deliberately NOT persisted. Each GHL menu open is a fresh iframe load that
-// carries its own location_id, so a module cache captures the right scope every
-// time. Persisting in localStorage would let one account's location leak into
-// another's session (e.g. a link that arrives without the param), which is what
-// caused data to bleed across accounts. If the URL has no location_id, we scope
-// to '' (main) rather than inheriting a stale one.
+// Deliberately NOT persisted in localStorage: each GHL open is a fresh iframe
+// load with its own session, and persisting would let one account's location
+// leak into another's — the bug that made data bleed across accounts.
 let cachedLocationId: string | null = null;
 
+// Called once SSO (or the URL fallback) resolves the location for this session.
+export function setLocationId(id: string) {
+  cachedLocationId = (id ?? '').trim();
+}
+
+// The location scope used for API calls. Prefers a resolved value; otherwise
+// falls back to a ?location_id= URL param (read + stripped once).
 export function getLocationId(): string {
   if (cachedLocationId !== null) return cachedLocationId;
+  return readLocationFromUrl();
+}
+
+// URL fallback only — does not set the resolved value (SSO wins when available).
+export function readLocationFromUrl(): string {
   if (typeof window === 'undefined') return '';
   const url = new URL(window.location.href);
   const fromQuery = url.searchParams.get('location_id') ?? url.searchParams.get('location');
-  cachedLocationId = (fromQuery ?? '').trim();
   if (fromQuery !== null) {
     url.searchParams.delete('location_id');
     url.searchParams.delete('location');
     window.history.replaceState({}, '', url.toString());
   }
-  return cachedLocationId;
+  return (fromQuery ?? '').trim();
 }
 
 export function saveSecret(s: string) {

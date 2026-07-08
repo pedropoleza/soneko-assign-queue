@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Loader2, Lock, Plus, QrCode as QrIcon, RefreshCw, Search, Zap } from 'lucide-react';
 import { toast } from 'sonner';
-import { api } from './api';
-import { getLocationId } from './config';
+import { api, resolveLocation } from './api';
 import { isEmbedded, ancestorAllowed } from './lib/embed';
 import type { Overview, QrCode } from './types';
 import { Dashboard } from './components/Dashboard';
@@ -30,9 +29,11 @@ export default function App() {
   // Iframe-only: standalone access is blocked. Evaluated once at startup.
   const allowed = useMemo(() => isEmbedded() && ancestorAllowed(), []);
 
-  // Capture (and strip) ?location_id={{location.id}} once at startup so the
-  // panel is scoped to this GHL account. '' = main panel.
-  const locationId = useMemo(() => getLocationId(), []);
+  // Which GHL location this session is scoped to, resolved once via SSO (with a
+  // URL-param fallback). Until it resolves we hold data fetches so the first
+  // list/overview already carry the right scope. '' = main panel.
+  const [locationId, setLocationId] = useState<string | null>(null);
+  const locReady = locationId !== null;
 
   const [items, setItems] = useState<QrCode[] | null>(null);
   const [version, setVersion] = useState(0); // bumps after mutations → refetch overview
@@ -61,17 +62,27 @@ export default function App() {
     }
   }, []);
 
-  useEffect(() => { if (allowed) load(); }, [allowed, load]);
+  // Resolve the location scope (SSO → fallback) before any data fetch.
+  useEffect(() => {
+    if (!allowed) return;
+    let alive = true;
+    resolveLocation()
+      .then((loc) => { if (alive) setLocationId(loc); })
+      .catch(() => { if (alive) setLocationId(''); });
+    return () => { alive = false; };
+  }, [allowed]);
+
+  useEffect(() => { if (allowed && locReady) load(); }, [allowed, locReady, load]);
 
   // Fetch the dashboard overview for the selected window; refetch on mutations.
   useEffect(() => {
-    if (!allowed) return;
+    if (!allowed || !locReady) return;
     setOvLoading(true);
     api.overview(ovDays)
       .then(setOverview)
       .catch(() => setOverview(null))
       .finally(() => setOvLoading(false));
-  }, [allowed, ovDays, version]);
+  }, [allowed, locReady, ovDays, version]);
 
   const filtered = useMemo(() => {
     if (!items) return [];

@@ -1,4 +1,5 @@
-import { API_URL, getLocationId, getSecret } from './config';
+import { API_URL, getLocationId, getSecret, readLocationFromUrl, setLocationId } from './config';
+import { requestGhlEncryptedSession } from './lib/ghlSso';
 import type { Analytics, CreateInput, Overview, QrCode, SlugCheck, UpdateInput } from './types';
 
 export class ApiError extends Error {
@@ -29,6 +30,27 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
 
   if (!res.ok) throw new ApiError(data?.error ?? `http_${res.status}`, res.status);
   return data as T;
+}
+
+// Resolve which GHL location this panel session is scoped to, ONCE at startup.
+// Authoritative path: ask GHL for the encrypted SSO session and have the backend
+// decrypt it to the signed activeLocation. Fallback: a ?location_id= URL param.
+// The resolved value is stored in config and sent on every later request.
+export async function resolveLocation(): Promise<string> {
+  try {
+    const encryptedData = await requestGhlEncryptedSession();
+    if (encryptedData) {
+      const res = await call<{ locationId: string }>('POST', '/sso', { encryptedData });
+      const loc = (res?.locationId ?? '').trim();
+      setLocationId(loc);
+      return loc;
+    }
+  } catch {
+    /* fall through to URL fallback */
+  }
+  const fallback = readLocationFromUrl();
+  setLocationId(fallback);
+  return fallback;
 }
 
 export const api = {
