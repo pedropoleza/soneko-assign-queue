@@ -18,7 +18,6 @@ export function publicUrl(slug: string): string {
 
 // Admin secret resolution: ?secret= (stored + stripped) -> localStorage -> build-time default.
 const STORAGE_KEY = 'spark_qr_secret';
-const LOCATION_KEY = 'spark_qr_location';
 
 export function getSecret(): string | null {
   if (typeof window === 'undefined') return null;
@@ -38,20 +37,29 @@ export function getSecret(): string | null {
 
 // Location scope: the GHL menu link carries {{location.id}} via ?location_id=.
 // Each GHL account then sees only its own QR codes. Empty string = the main
-// panel (QRs created without a location). Read once, stored + stripped from URL.
+// panel (QRs without a location).
+//
+// The value is read from the URL exactly ONCE per page load and held in memory
+// — deliberately NOT persisted. Each GHL menu open is a fresh iframe load that
+// carries its own location_id, so a module cache captures the right scope every
+// time. Persisting in localStorage would let one account's location leak into
+// another's session (e.g. a link that arrives without the param), which is what
+// caused data to bleed across accounts. If the URL has no location_id, we scope
+// to '' (main) rather than inheriting a stale one.
+let cachedLocationId: string | null = null;
+
 export function getLocationId(): string {
+  if (cachedLocationId !== null) return cachedLocationId;
   if (typeof window === 'undefined') return '';
   const url = new URL(window.location.href);
   const fromQuery = url.searchParams.get('location_id') ?? url.searchParams.get('location');
+  cachedLocationId = (fromQuery ?? '').trim();
   if (fromQuery !== null) {
-    const v = fromQuery.trim();
-    localStorage.setItem(LOCATION_KEY, v);
     url.searchParams.delete('location_id');
     url.searchParams.delete('location');
     window.history.replaceState({}, '', url.toString());
-    return v;
   }
-  return localStorage.getItem(LOCATION_KEY) ?? '';
+  return cachedLocationId;
 }
 
 export function saveSecret(s: string) {
