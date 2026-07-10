@@ -89,7 +89,11 @@ Resposta: `{ generationId, audio_url, final_text }`. O workflow então envia `au
 - ✅ **Etapas 2–4 (frontend)** — telas My Voice, Templates, Test Audio, History, Usage, Settings.
 - ✅ **Deploy no projeto `GHL Token`** (`tbziahcpkrfiksqhuhpe`): schema `spark` + 7 tabelas aplicadas, schema exposto no PostgREST, bucket privado `spark-audio` criado, 3 Edge Functions publicadas (`spark-oauth`, `spark-api`, `spark-ghl-webhook`).
 - ⏳ **Secrets das Edge Functions** — a setar no dashboard (Settings → Edge Functions → Secrets): `SPARK_SESSION_SECRET`, `GHL_CLIENT_ID`, `GHL_CLIENT_SECRET`, `GHL_OAUTH_REDIRECT_URI`, `GHL_WEBHOOK_SECRET`, `ELEVENLABS_API_KEY`, `APP_URL`, `DEFAULT_MONTHLY_AUDIO_LIMIT`, `DEFAULT_MONTHLY_CHARACTER_LIMIT`. (`SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY` são automáticos.)
-- ⏳ **Etapa 5** — QA ponta-a-ponta com voz real, custom page no GHL e hypercare.
+- 🟡 **Etapa 5 (QA)** — caminhos de falha do webhook **validados em produção** (account_not_found, invalid_secret, no_template_for_event, content_policy_violation, empty_final_text, limite). O caminho de sucesso roda o pipeline inteiro até o TTS; falta só `ELEVENLABS_API_KEY` (ou `SPARK_TTS_MOCK=1`) para fechar a geração real. Custom page no GHL e hypercare pendentes.
+
+Docs: [`docs/ghl-workflow.md`](docs/ghl-workflow.md) (montar o workflow) · [`docs/runbook.md`](docs/runbook.md) (operação/diagnóstico).
+
+> **Nota de infra:** o schema `spark` é exposto no PostgREST via `ALTER ROLE authenticator SET pgrst.db_schemas`. Se as tabelas derem `PGRST205`, rode `notify pgrst, 'reload schema';`. Para persistência, adicione `spark` em Settings → API → Exposed schemas.
 
 ### URLs para o app GHL
 
