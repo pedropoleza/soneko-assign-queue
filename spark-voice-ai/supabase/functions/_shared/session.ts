@@ -2,6 +2,7 @@
 // sessão stateless: base64url(payload).hmacSHA256(payload). Sem tabela extra;
 // a verificação usa SPARK_SESSION_SECRET. Embute account_id + expiração.
 import { sha256Hex } from './security.ts';
+import { conf } from './config.ts';
 
 const enc = new TextEncoder();
 
@@ -15,7 +16,7 @@ function b64urlDecode(s: string): Uint8Array {
 }
 
 async function hmacKey(): Promise<CryptoKey> {
-  const secret = Deno.env.get('SPARK_SESSION_SECRET');
+  const secret = conf('SPARK_SESSION_SECRET');
   if (!secret) throw new Error('session_secret_missing');
   return crypto.subtle.importKey('raw', enc.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, [
     'sign',

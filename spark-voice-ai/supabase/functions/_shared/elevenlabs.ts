@@ -2,16 +2,18 @@
 // D2) e sintetiza áudio. Suporta MOCK para dev local sem gastar créditos:
 // defina SPARK_TTS_MOCK=1.
 
+import { conf } from './config.ts';
+
 const API = 'https://api.elevenlabs.io/v1';
 
 function apiKey(): string {
-  const k = Deno.env.get('ELEVENLABS_API_KEY');
+  const k = conf('ELEVENLABS_API_KEY');
   if (!k) throw new Error('elevenlabs_key_missing');
   return k;
 }
 
 function isMock(): boolean {
-  return Deno.env.get('SPARK_TTS_MOCK') === '1';
+  return conf('SPARK_TTS_MOCK') === '1';
 }
 
 // ElevenLabs cobra ~US$0,30/1k caracteres no plano padrão (estimativa MVP).

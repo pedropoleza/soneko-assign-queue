@@ -12,7 +12,8 @@ import { renderTemplate } from '../_shared/template-engine.ts';
 import { checkContentPolicy, sanitizeText } from '../_shared/content-policy.ts';
 import { estimateCost, synthesize } from '../_shared/elevenlabs.ts';
 import { uploadAudio } from '../_shared/storage.ts';
-import { currentMonthUsage, withinLimits } from '../_shared/usage.ts';
+import { conf, loadConfig } from '../_shared/config.ts';
+import { applyCredit, getBalance, priceFor } from '../_shared/credits.ts';
 
 const PayloadSchema = z.object({
   location: z.object({ id: z.string().min(1) }),
@@ -28,6 +29,7 @@ Deno.serve(async (req) => {
   if (req.method !== 'POST') return json({ error: 'method_not_allowed' }, 405);
 
   const db = serviceClient();
+  await loadConfig(db);
   let raw: unknown;
   try {
     raw = await req.json();
@@ -58,7 +60,7 @@ Deno.serve(async (req) => {
     .eq('account_id', account.id)
     .eq('active', true)
     .maybeSingle();
-  const globalSecret = Deno.env.get('GHL_WEBHOOK_SECRET');
+  const globalSecret = conf('GHL_WEBHOOK_SECRET');
   const okPerLocation = !!secretRow && timingSafeEqual(providedHash, secretRow.secret_hash);
   const okGlobal = !!globalSecret && timingSafeEqual(provided, globalSecret);
   if (!okPerLocation && !okGlobal) return json({ error: 'invalid_secret' }, 401);
@@ -90,10 +92,10 @@ Deno.serve(async (req) => {
   const policy = checkContentPolicy(finalText);
   if (!policy.ok) return json({ error: 'content_policy_violation', violations: policy.violations }, 422);
 
-  // gate de limite mensal
-  const usage = await currentMonthUsage(db, account.id);
-  const limit = withinLimits(usage, account.monthly_audio_limit, account.monthly_character_limit, finalText.length);
-  if (!limit.ok) return json({ error: 'limit_exceeded', reason: limit.reason }, 429);
+  // gate de crédito (pay-per-use, sem planos)
+  const price = priceFor(finalText.length);
+  const balance = await getBalance(db, account.id);
+  if (balance < price) return json({ error: 'insufficient_credits', balance, price }, 402);
 
   // registra a geração (processing) para ter o id no caminho do storage
   const { data: gen, error: genErr } = await db
@@ -134,8 +136,9 @@ Deno.serve(async (req) => {
     if (secretRow) {
       await db.from('webhook_secrets').update({ last_used_at: new Date().toISOString() }).eq('id', secretRow.id);
     }
+    const newBalance = await applyCredit(db, account.id, -price, 'debit', `Áudio ${body.event_type}`, gen.id);
 
-    return json({ generationId: gen.id, audio_url: url, final_text: finalText });
+    return json({ generationId: gen.id, audio_url: url, final_text: finalText, charged: price, balance: newBalance });
   } catch (e) {
     // não vaza a key — mensagem genérica no corpo, detalhe fica no registro
     await db

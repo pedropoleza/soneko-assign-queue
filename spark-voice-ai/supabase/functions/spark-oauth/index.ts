@@ -6,9 +6,12 @@ import { serviceClient } from '../_shared/supabase.ts';
 import { authorizeUrl, exchangeCode } from '../_shared/ghl.ts';
 import { mintSession } from '../_shared/session.ts';
 import { corsHeaders, json, preflight } from '../_shared/cors.ts';
+import { conf, loadConfig } from '../_shared/config.ts';
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return preflight();
+  const db = serviceClient();
+  await loadConfig(db);
   const url = new URL(req.url);
   const path = url.pathname.replace(/.*\/spark-oauth/, '');
 
@@ -25,8 +28,6 @@ Deno.serve(async (req) => {
       const token = await exchangeCode(code);
       if (!token.locationId) return json({ error: 'no_location_in_token' }, 400);
 
-      const db = serviceClient();
-
       // upsert da account por location
       const { data: account, error: accErr } = await db
         .from('accounts')
@@ -35,8 +36,6 @@ Deno.serve(async (req) => {
             ghl_location_id: token.locationId,
             ghl_company_id: token.companyId ?? null,
             company_name: token.locationId, // refinado depois via API do GHL
-            monthly_audio_limit: Number(Deno.env.get('DEFAULT_MONTHLY_AUDIO_LIMIT') ?? 100),
-            monthly_character_limit: Number(Deno.env.get('DEFAULT_MONTHLY_CHARACTER_LIMIT') ?? 20000),
           },
           { onConflict: 'ghl_location_id' },
         )
@@ -57,7 +56,7 @@ Deno.serve(async (req) => {
       );
 
       const session = await mintSession(account.id);
-      const appUrl = Deno.env.get('APP_URL') ?? '';
+      const appUrl = conf('APP_URL') ?? '';
       return Response.redirect(`${appUrl}/?session=${encodeURIComponent(session)}`, 302);
     }
 

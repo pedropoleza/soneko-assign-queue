@@ -9,6 +9,8 @@ import { checkContentPolicy, sanitizeText } from '../_shared/content-policy.ts';
 import { cloneVoice, estimateCost, synthesize } from '../_shared/elevenlabs.ts';
 import { uploadAudio } from '../_shared/storage.ts';
 import { currentMonthUsage } from '../_shared/usage.ts';
+import { loadConfig } from '../_shared/config.ts';
+import { applyCredit, getBalance, priceFor } from '../_shared/credits.ts';
 
 function b64ToBytes(b64: string): Uint8Array {
   const bin = atob(b64.replace(/^data:.*;base64,/, ''));
@@ -18,11 +20,12 @@ function b64ToBytes(b64: string): Uint8Array {
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return preflight();
 
+  const db = serviceClient();
+  await loadConfig(db);
   const session = await verifySession(req.headers.get('x-spark-session'));
   if (!session) return json({ error: 'unauthorized' }, 401);
   const accountId = session.account_id;
 
-  const db = serviceClient();
   const url = new URL(req.url);
   const path = url.pathname.replace(/.*\/spark-api/, '') || '/';
   const seg = path.split('/').filter(Boolean); // ex: ['voices','<id>']
@@ -52,6 +55,7 @@ Deno.serve(async (req) => {
         .eq('account_id', accountId)
         .eq('active', true);
       const usage = await currentMonthUsage(db, accountId);
+      const balance = await getBalance(db, accountId);
       const { data: lastGen } = await db
         .from('audio_generations')
         .select('id, contact_name, event_type, status, created_at')
@@ -72,17 +76,16 @@ Deno.serve(async (req) => {
           id: account.id,
           ghl_location_id: account.ghl_location_id,
           company_name: account.company_name,
-          plan: account.plan,
           status: account.status,
+          credit_balance: balance,
         },
         active_voice: activeVoice ?? null,
         templates_active: templatesActive ?? 0,
         usage: {
-          audios_used: usage.audios,
-          audios_limit: account.monthly_audio_limit,
-          characters_used: usage.characters,
-          characters_limit: account.monthly_character_limit,
-          estimated_cost: estimateCost(usage.characters),
+          audios_month: usage.audios,
+          characters_month: usage.characters,
+          spent_month: estimateCost(usage.characters),
+          credit_balance: balance,
         },
         last_generation: lastGen ?? null,
         recent_errors: recentErrors ?? [],
@@ -244,6 +247,10 @@ Deno.serve(async (req) => {
       const policy = checkContentPolicy(finalText);
       if (!policy.ok) return json({ error: 'content_policy_violation', violations: policy.violations }, 422);
 
+      const price = priceFor(finalText.length);
+      const balance = await getBalance(db, accountId);
+      if (balance < price) return json({ error: 'insufficient_credits', balance, price }, 402);
+
       const { data: gen } = await db
         .from('audio_generations')
         .insert({
@@ -274,7 +281,8 @@ Deno.serve(async (req) => {
           characters_used: finalText.length,
           event_type: tpl.event_type,
         });
-        return json({ ...gen, status: 'completed', audio_url: url, storage_path: sp });
+        const newBalance = await applyCredit(db, accountId, -price, 'debit', `Teste ${tpl.event_type}`, gen.id);
+        return json({ ...gen, status: 'completed', audio_url: url, storage_path: sp, charged: price, balance: newBalance });
       } catch (e) {
         await db.from('audio_generations').update({ status: 'failed', error_message: String(e).slice(0, 500) }).eq(
           'id',
@@ -294,6 +302,18 @@ Deno.serve(async (req) => {
         .order('created_at', { ascending: false })
         .limit(limit);
       return json(data ?? []);
+    }
+
+    // /credits — saldo + extrato (Billing) ------------------------------------
+    if (seg[0] === 'credits' && method === 'GET') {
+      const balance = await getBalance(db, accountId);
+      const { data: tx } = await db
+        .from('credit_transactions')
+        .select('*')
+        .eq('account_id', accountId)
+        .order('created_at', { ascending: false })
+        .limit(50);
+      return json({ balance, transactions: tx ?? [] });
     }
 
     return json({ error: 'not_found', path }, 404);
