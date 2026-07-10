@@ -3,16 +3,20 @@ import { cn } from '@/lib/utils';
 
 export function Button({
   variant = 'primary',
+  size = 'md',
   className,
   ...props
-}: React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'primary' | 'ghost' | 'danger' }) {
+}: React.ButtonHTMLAttributes<HTMLButtonElement> & {
+  variant?: 'primary' | 'glass' | 'ghost' | 'danger';
+  size?: 'md' | 'sm';
+}) {
   return (
     <button
       className={cn(
         variant === 'primary' && 'btn-primary',
-        variant === 'ghost' && 'btn-ghost',
-        variant === 'danger' &&
-          'inline-flex items-center justify-center gap-2 rounded-md border border-red-200 bg-white px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-50',
+        (variant === 'glass' || variant === 'ghost') && 'btn-glass',
+        variant === 'danger' && 'btn-danger',
+        size === 'sm' && 'btn-sm',
         className,
       )}
       {...props}
@@ -31,7 +35,7 @@ export function Field({ label, hint, children }: { label: string; hint?: string;
 }
 
 const inputBase =
-  'w-full rounded-md border border-ink-200 bg-white px-3 py-2 text-sm text-ink-900 placeholder:text-ink-400 focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100';
+  'w-full rounded-xl border border-ink-200 bg-white px-3.5 py-2.5 text-[15px] text-ink-900 placeholder:text-ink-400 focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100';
 
 export function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
   return <input {...props} className={cn(inputBase, props.className)} />;

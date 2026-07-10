@@ -1,22 +1,8 @@
-// Tipos do banco (schema `spark`) — derivados da migration 0001.
+// Tipos do banco (schema `spark`) — derivados das migrations 0001/0002.
 
-export type Plan = 'starter' | 'growth' | 'agency';
 export type AccountStatus = 'active' | 'suspended' | 'cancelled';
 export type VoiceStatus = 'active' | 'inactive';
 export type GenerationStatus = 'processing' | 'completed' | 'failed';
-
-export type Account = {
-  id: string;
-  ghl_location_id: string;
-  ghl_company_id: string | null;
-  company_name: string;
-  plan: Plan;
-  monthly_audio_limit: number;
-  monthly_character_limit: number;
-  status: AccountStatus;
-  created_at: string;
-  updated_at: string;
-};
 
 export type Voice = {
   id: string;
@@ -67,22 +53,42 @@ export type AudioGeneration = {
   error_message: string | null;
   is_test: boolean;
   created_at: string;
+  // devolvidos pelo /audio/test após débito de crédito
+  charged?: number;
+  balance?: number;
 };
 
-export type UsageSummary = {
-  audios_used: number;
-  audios_limit: number;
-  characters_used: number;
-  characters_limit: number;
-  estimated_cost: number;
+// Snippet vindo da location no GoHighLevel.
+export type Snippet = { id: string; name: string; body: string };
+
+export type CreditKind = 'topup' | 'debit' | 'adjustment';
+export type CreditTx = {
+  id: string;
+  kind: CreditKind;
+  amount: number;
+  balance_after: number;
+  description: string | null;
+  generation_id: string | null;
+  created_at: string;
 };
 
-// Estado agregado que o painel consome do endpoint /state.
+// Estado agregado do painel (endpoint /state).
 export type AppState = {
-  account: Pick<Account, 'id' | 'ghl_location_id' | 'company_name' | 'plan' | 'status'>;
+  account: {
+    id: string;
+    ghl_location_id: string;
+    company_name: string;
+    status: AccountStatus;
+    credit_balance: number;
+  };
   active_voice: Voice | null;
   templates_active: number;
-  usage: UsageSummary;
+  usage: {
+    audios_month: number;
+    characters_month: number;
+    spent_month: number;
+    credit_balance: number;
+  };
   last_generation: Pick<AudioGeneration, 'id' | 'contact_name' | 'event_type' | 'status' | 'created_at'> | null;
   recent_errors: Array<Pick<AudioGeneration, 'id' | 'error_message' | 'created_at'>>;
 };
@@ -102,4 +108,20 @@ export const ALLOWED_VARIABLES = [
 ] as const;
 
 export type AllowedVariable = (typeof ALLOWED_VARIABLES)[number];
-export type TemplateVars = Partial<Record<AllowedVariable, string>>;
+
+// Conversão dos merge fields do GHL para a allow-list do Spark.
+export const GHL_FIELD_MAP: Array<[RegExp, string]> = [
+  [/\{\{\s*contact\.first_name\s*\}\}/g, '{{first_name}}'],
+  [/\{\{\s*contact\.(full_name|name)\s*\}\}/g, '{{full_name}}'],
+  [/\{\{\s*contact\.phone\s*\}\}/g, '{{phone}}'],
+  [/\{\{\s*contact\.email\s*\}\}/g, '{{email}}'],
+  [/\{\{\s*location\.name\s*\}\}/g, '{{business_name}}'],
+  [/\{\{\s*user\.name\s*\}\}/g, '{{user_name}}'],
+  [/\{\{\s*appointment\.start_date\s*\}\}/g, '{{appointment_date}}'],
+  [/\{\{\s*appointment\.start_time\s*\}\}/g, '{{appointment_time}}'],
+  [/\{\{\s*custom_values\.[a-z_]+\s*\}\}/g, '{{custom_service}}'],
+];
+
+export function mapGhlFields(text: string): string {
+  return GHL_FIELD_MAP.reduce((acc, [re, to]) => acc.replace(re, to), text);
+}

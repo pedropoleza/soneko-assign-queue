@@ -3,6 +3,8 @@ import type {
   AppState,
   AudioGeneration,
   AudioTemplate,
+  CreditTx,
+  Snippet,
   Voice,
 } from '@/types';
 
@@ -77,6 +79,12 @@ export const api = {
   // Histórico / uso -----------------------------------------------------------
   listGenerations: (limit = 50) =>
     call<AudioGeneration[]>('GET', `/generations?limit=${limit}`),
+
+  // Snippets da location (GHL). Tolerante a endpoint ainda não implementado.
+  listSnippets: () => call<Snippet[]>('GET', '/snippets'),
+
+  // Créditos (Billing) --------------------------------------------------------
+  listCredits: () => call<{ balance: number; transactions: CreditTx[] }>('GET', '/credits'),
 };
 
 export { ApiError };
