@@ -27,6 +27,7 @@ export type GhlToken = {
   locationId?: string;
   companyId?: string;
   userId?: string;
+  userType?: string;
 };
 
 async function tokenRequest(body: Record<string, string>): Promise<GhlToken> {
@@ -47,6 +48,7 @@ export function exchangeCode(code: string): Promise<GhlToken> {
   return tokenRequest({
     grant_type: 'authorization_code',
     code,
+    user_type: 'Location', // emite token com locationId (senão vem token de company)
     redirect_uri: conf('GHL_OAUTH_REDIRECT_URI') ?? '',
   });
 }

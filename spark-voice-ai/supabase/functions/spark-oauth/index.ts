@@ -26,7 +26,12 @@ Deno.serve(async (req) => {
       if (!code) return json({ error: 'missing_code' }, 400);
 
       const token = await exchangeCode(code);
-      if (!token.locationId) return json({ error: 'no_location_in_token' }, 400);
+      if (!token.locationId) {
+        return json(
+          { error: 'no_location_in_token', got: { userType: token.userType, companyId: token.companyId, scope: token.scope } },
+          400,
+        );
+      }
 
       // nome do usuário que instalou/acessa — titular padrão da voz
       const ownerName = token.userId ? await getUserName(token.access_token, token.userId) : null;
