@@ -2,6 +2,7 @@
 //   GET /spark-oauth/install   → redireciona para o consent do GHL
 //   GET /spark-oauth/callback  → troca code por token, provisiona a account,
 //                                emite session e volta pro painel com ?session=
+import CryptoJS from 'https://esm.sh/crypto-js@4.2.0';
 import { serviceClient } from '../_shared/supabase.ts';
 import { authorizeUrl, exchangeCode, getUserName } from '../_shared/ghl.ts';
 import { mintSession } from '../_shared/session.ts';
@@ -38,6 +39,37 @@ Deno.serve(async (req) => {
       }
       const session = await mintSession(account.id);
       return Response.redirect(`${appUrl}/?session=${encodeURIComponent(session)}`, 302);
+    }
+
+    // SSO da Custom Page do app: o GHL entrega os dados do usuário/location
+    // criptografados (AES com a Shared Key). Decripta, resolve a conta da
+    // activeLocation e devolve a sessão. Não confia em id vindo da URL.
+    if (path === '/sso' && req.method === 'POST') {
+      const secret = conf('GHL_WEBHOOK_SECRET');
+      if (!secret) return json({ error: 'sso_not_configured' }, 500);
+      const raw = await req.json().catch(() => ({}));
+      const encrypted = (raw as { encrypted?: string }).encrypted;
+      if (!encrypted) return json({ error: 'missing_encrypted' }, 400);
+      let data: { activeLocation?: string; userName?: string; email?: string; userId?: string };
+      try {
+        const decrypted = CryptoJS.AES.decrypt(encrypted, secret).toString(CryptoJS.enc.Utf8);
+        data = JSON.parse(decrypted);
+      } catch {
+        return json({ error: 'sso_decrypt_failed' }, 400);
+      }
+      const locationId = data.activeLocation;
+      if (!locationId) return json({ error: 'no_active_location', got: Object.keys(data ?? {}) }, 400);
+      const { data: account } = await db
+        .from('accounts')
+        .select('id, owner_name')
+        .eq('ghl_location_id', locationId)
+        .maybeSingle();
+      if (!account) return json({ error: 'not_installed', location_id: locationId }, 404);
+      if (!account.owner_name && data.userName) {
+        await db.from('accounts').update({ owner_name: data.userName }).eq('id', account.id);
+      }
+      const session = await mintSession(account.id);
+      return json({ session });
     }
 
     if (path === '/callback') {

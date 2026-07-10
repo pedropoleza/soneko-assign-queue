@@ -1,22 +1,42 @@
-import { useState } from 'react';
-import { Mic } from 'lucide-react';
-import { Topbar, type TabId } from '@/components/Topbar';
-import { Dashboard } from '@/pages/Dashboard';
-import { VoiceStudioPage } from '@/pages/VoiceStudioPage';
-import { TemplatesPage } from '@/pages/TemplatesPage';
-import { HistoryPage } from '@/pages/HistoryPage';
-import { UsagePage } from '@/pages/UsagePage';
-import { BillingPage } from '@/pages/BillingPage';
-import { SettingsPage } from '@/pages/SettingsPage';
-import { useAppState } from '@/hooks/useAppState';
+import { useEffect, useState } from 'react';
+import { Mic, Loader2 } from 'lucide-react';
 import { getSession } from '@/lib/config';
+import { bootstrapViaSso } from '@/lib/sso';
+import { Panel } from '@/Panel';
+
+type Phase = 'booting' | 'ready' | 'noauth';
 
 export default function App() {
-  const [tab, setTab] = useState<TabId>('dashboard');
-  const { state, error, isLoading } = useAppState();
-  const hasSession = !!getSession();
+  const [phase, setPhase] = useState<Phase>(getSession() ? 'ready' : 'booting');
 
-  if (!hasSession) {
+  // Sem sessão na URL/localStorage: tenta o SSO da Custom Page do GHL.
+  useEffect(() => {
+    if (phase !== 'booting') return;
+    let alive = true;
+    bootstrapViaSso().then((ok) => {
+      if (alive) setPhase(ok ? 'ready' : 'noauth');
+    });
+    return () => {
+      alive = false;
+    };
+  }, [phase]);
+
+  if (phase === 'booting') {
+    return (
+      <div className="grid min-h-screen place-items-center bg-ink-50 px-4">
+        <div className="flex flex-col items-center gap-3 text-ink-500">
+          <span className="grid h-12 w-12 place-items-center rounded-2xl bg-gradient-to-br from-brand-500 to-brand-700 text-white">
+            <Mic size={22} />
+          </span>
+          <div className="flex items-center gap-2 text-sm">
+            <Loader2 size={15} className="animate-spin" /> Conectando ao GoHighLevel…
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (phase === 'noauth') {
     return (
       <div className="grid min-h-screen place-items-center bg-ink-50 px-4">
         <div className="card max-w-md p-8 text-center">
@@ -35,44 +55,5 @@ export default function App() {
     );
   }
 
-  if (isLoading && !state) {
-    return (
-      <div className="min-h-screen">
-        <div className="h-[60px] border-b border-ink-200 bg-white" />
-        <main className="wrap py-7">
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
-            {[0, 1, 2, 3].map((i) => (
-              <div key={i} className="card h-28 animate-pulse" />
-            ))}
-          </div>
-        </main>
-      </div>
-    );
-  }
-
-  if (!state) {
-    return (
-      <div className="grid min-h-screen place-items-center bg-ink-50 px-4">
-        <div className="card max-w-md p-6 text-center">
-          <div className="text-sm font-semibold text-ink-900">Não foi possível carregar o painel</div>
-          <div className="mt-1 text-xs text-ink-500">{error ?? 'erro desconhecido'}</div>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="min-h-screen">
-      <Topbar activeTab={tab} onTabChange={setTab} />
-      <main className="wrap py-7">
-        {tab === 'dashboard' && <Dashboard state={state} />}
-        {tab === 'voice' && <VoiceStudioPage state={state} />}
-        {tab === 'templates' && <TemplatesPage />}
-        {tab === 'history' && <HistoryPage />}
-        {tab === 'usage' && <UsagePage state={state} />}
-        {tab === 'billing' && <BillingPage />}
-        {tab === 'settings' && <SettingsPage state={state} />}
-      </main>
-    </div>
-  );
+  return <Panel />;
 }
