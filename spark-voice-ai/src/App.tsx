@@ -2,7 +2,12 @@ import { useState } from 'react';
 import { Mic } from 'lucide-react';
 import { Topbar, type TabId } from '@/components/Topbar';
 import { Dashboard } from '@/pages/Dashboard';
-import { Placeholder } from '@/pages/Placeholder';
+import { MyVoicePage } from '@/pages/MyVoicePage';
+import { TemplatesPage } from '@/pages/TemplatesPage';
+import { TestAudioPage } from '@/pages/TestAudioPage';
+import { HistoryPage } from '@/pages/HistoryPage';
+import { UsagePage } from '@/pages/UsagePage';
+import { SettingsPage } from '@/pages/SettingsPage';
 import { useAppState } from '@/hooks/useAppState';
 import { getSession } from '@/lib/config';
 
@@ -62,36 +67,12 @@ export default function App() {
       <Topbar companyName={state.account.company_name} activeTab={tab} onTabChange={setTab} />
       <main className="mx-auto max-w-screen-2xl px-6 py-6">
         {tab === 'dashboard' && <Dashboard state={state} />}
-        {tab === 'voice' && (
-          <Placeholder title="My Voice" stage="Etapa 2">
-            Cadastro de voz com upload de sample (Instant Voice Clone) e bloco de consentimento obrigatório.
-          </Placeholder>
-        )}
-        {tab === 'templates' && (
-          <Placeholder title="Templates" stage="Etapa 2">
-            Editor de mensagem com seletor de variáveis da allow-list e preview do texto final.
-          </Placeholder>
-        )}
-        {tab === 'test' && (
-          <Placeholder title="Generate Test Audio" stage="Etapa 3">
-            Seleciona template, preenche nome fictício, gera o MP3 real e ouve no player.
-          </Placeholder>
-        )}
-        {tab === 'history' && (
-          <Placeholder title="Audio History" stage="Etapa 4">
-            Histórico de gerações: contato, evento, texto final, status, custo e link do áudio.
-          </Placeholder>
-        )}
-        {tab === 'usage' && (
-          <Placeholder title="Usage" stage="Etapa 4">
-            Uso do mês x limite, caracteres, custo estimado, eventos e templates mais usados.
-          </Placeholder>
-        )}
-        {tab === 'settings' && (
-          <Placeholder title="Settings" stage="Etapa 4">
-            Dados da conta, plano/limites, secret do webhook e URL para colar no workflow do GHL.
-          </Placeholder>
-        )}
+        {tab === 'voice' && <MyVoicePage />}
+        {tab === 'templates' && <TemplatesPage />}
+        {tab === 'test' && <TestAudioPage />}
+        {tab === 'history' && <HistoryPage />}
+        {tab === 'usage' && <UsagePage state={state} />}
+        {tab === 'settings' && <SettingsPage state={state} />}
       </main>
     </div>
   );
