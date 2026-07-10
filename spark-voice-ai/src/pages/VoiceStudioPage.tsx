@@ -1,12 +1,27 @@
 import { useState } from 'react';
-import { Mic, Trash2, ShieldCheck, Upload, Check, Sparkles, BadgeCheck } from 'lucide-react';
+import { Mic, Trash2, ShieldCheck, Upload, Check, Sparkles, BadgeCheck, CalendarClock, XCircle } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useAsync } from '@/hooks/useAsync';
 import { notifyError, toast } from '@/lib/toast';
 import { Button, Field, Input, Select, Badge, EmptyState } from '@/components/ui/primitives';
 import { WaveformPlayer } from '@/components/WaveformPlayer';
+import { ConfigureSendModal } from '@/components/ConfigureSendModal';
 import { formatDateTime } from '@/lib/utils';
-import type { AppState, AudioGeneration, AudioTemplate, Voice } from '@/types';
+import type { AppState, AudioGeneration, AudioSend, AudioTemplate, Voice } from '@/types';
+
+function fmtDate(d: string | null): string {
+  if (!d) return '—';
+  const [y, m, day] = d.split('-');
+  return `${day}/${m}/${y}`;
+}
+
+const SEND_BADGE: Record<AudioSend['status'], { tone: 'brand' | 'amber' | 'green' | 'ink' | 'red'; label: string }> = {
+  scheduled: { tone: 'brand', label: 'agendado' },
+  missing_dob: { tone: 'amber', label: 'sem Date of Birth' },
+  sent: { tone: 'green', label: 'enviado' },
+  cancelled: { tone: 'ink', label: 'cancelado' },
+  failed: { tone: 'red', label: 'falhou' },
+};
 
 const LANGUAGES = [
   ['pt-BR', 'Português (BR)'],
@@ -51,6 +66,21 @@ export function VoiceStudioPage({ state }: { state: AppState }) {
   const [genState, setGenState] = useState<'idle' | 'running' | 'done' | 'error'>('idle');
   const [genStep, setGenStep] = useState(0);
   const [result, setResult] = useState<AudioGeneration | null>(null);
+
+  // envios agendados
+  const [sendModalOpen, setSendModalOpen] = useState(false);
+  const { data: sends, reload: reloadSends } = useAsync<AudioSend[]>(() => api.listSends().catch(() => [] as AudioSend[]), []);
+  const selectedTemplate = templates?.find((t) => t.id === templateId) ?? null;
+
+  async function cancelSend(id: string) {
+    try {
+      await api.cancelSend(id);
+      toast.success('Envio cancelado.');
+      reloadSends();
+    } catch (err) {
+      notifyError(err);
+    }
+  }
 
   async function createVoice(e: React.FormEvent) {
     e.preventDefault();
@@ -164,7 +194,7 @@ export function VoiceStudioPage({ state }: { state: AppState }) {
                     </Select>
                   </Field>
                 </div>
-                <Field label="Titular da voz" hint="Detectado da sua conta GoHighLevel — é você, logado, quem autoriza o uso desta voz.">
+                <Field label="Titular da voz" hint="Detectado da sua conta SparkLeads — é você, logado, quem autoriza o uso desta voz.">
                   <div className="relative">
                     <Input value={form.voice_owner_name} onChange={(e) => setForm({ ...form, voice_owner_name: e.target.value })} className="pr-24" />
                     <span className="absolute right-2 top-1/2 -translate-y-1/2">
@@ -261,6 +291,13 @@ export function VoiceStudioPage({ state }: { state: AppState }) {
                       <span>debitado ${result.charged} · saldo ${result.balance}</span>
                     )}
                   </div>
+                  {result.audio_url && selectedTemplate && (
+                    <div className="flex justify-end border-t border-ink-100 pt-4">
+                      <Button variant="glass" onClick={() => setSendModalOpen(true)}>
+                        <CalendarClock size={15} /> Configurar envio deste áudio
+                      </Button>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-ink-300 bg-ink-50 p-7 text-center">
@@ -276,6 +313,61 @@ export function VoiceStudioPage({ state }: { state: AppState }) {
           </div>
         </div>
       </div>
+
+      {/* Envios agendados */}
+      <div>
+        <p className="lead">Envios agendados</p>
+        <div className="card">
+          <div className="card-header">
+            <span className="card-title">Agendamentos</span>
+            {sends && <Badge tone="ink">{sends.filter((s) => s.status === 'scheduled' || s.status === 'missing_dob').length} ativos</Badge>}
+          </div>
+          {sends?.length ? (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-ink-100 text-left text-[10.5px] uppercase tracking-wide text-ink-400">
+                    <th className="px-4 py-2.5 font-semibold">Contato</th>
+                    <th className="px-4 py-2.5 font-semibold">Evento</th>
+                    <th className="px-4 py-2.5 font-semibold">Data de envio</th>
+                    <th className="px-4 py-2.5 font-semibold">Status</th>
+                    <th className="px-4 py-2.5" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {sends.map((s) => (
+                    <tr key={s.id} className="border-b border-ink-100 last:border-0 hover:bg-ink-50/60">
+                      <td className="px-4 py-2.5 font-semibold text-ink-900">{s.contact_name ?? s.contact_id}</td>
+                      <td className="px-4 py-2.5 text-ink-500">{s.event_type ?? '—'}</td>
+                      <td className="px-4 py-2.5 tabular-nums text-ink-700">{fmtDate(s.send_date)}</td>
+                      <td className="px-4 py-2.5"><Badge tone={SEND_BADGE[s.status].tone}>{SEND_BADGE[s.status].label}</Badge></td>
+                      <td className="px-4 py-2.5 text-right">
+                        {(s.status === 'scheduled' || s.status === 'missing_dob') && (
+                          <button onClick={() => cancelSend(s.id)} className="text-ink-400 transition hover:text-red-600" title="Cancelar envio">
+                            <XCircle size={16} />
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <EmptyState title="Nenhum envio agendado" hint="Gere um áudio e clique em Configurar envio para agendar pelo aniversário do contato." />
+          )}
+        </div>
+      </div>
+
+      {selectedTemplate && (
+        <ConfigureSendModal
+          open={sendModalOpen}
+          onOpenChange={setSendModalOpen}
+          template={selectedTemplate}
+          defaultQuery={sampleName}
+          onCreated={reloadSends}
+        />
+      )}
     </div>
   );
 }

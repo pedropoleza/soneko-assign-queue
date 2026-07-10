@@ -38,7 +38,7 @@ export function SettingsPage({ state }: { state: AppState }) {
           <div className="card-header"><span className="card-title">Conta</span></div>
           <div className="space-y-3 p-5 text-sm">
             <div className="flex justify-between"><span className="text-ink-500">Empresa</span><span className="font-semibold text-ink-900">{a.company_name}</span></div>
-            <div className="flex justify-between"><span className="text-ink-500">Location (GHL)</span><code className="text-xs text-ink-700">{a.ghl_location_id}</code></div>
+            <div className="flex justify-between"><span className="text-ink-500">Location</span><code className="text-xs text-ink-700">{a.ghl_location_id}</code></div>
             <div className="flex justify-between"><span className="text-ink-500">Status</span><Badge tone={a.status === 'active' ? 'green' : 'red'}>{a.status}</Badge></div>
             <div className="flex justify-between"><span className="text-ink-500">Saldo de créditos</span><span className="font-bold tabular-nums text-ink-900">${a.credit_balance.toFixed(2)}</span></div>
             <div className="flex justify-between"><span className="text-ink-500">Cobrança</span><Badge tone="brand">pay-per-use</Badge></div>
@@ -46,11 +46,11 @@ export function SettingsPage({ state }: { state: AppState }) {
         </div>
 
         <div className="card">
-          <div className="card-header"><span className="card-title">Webhook do GoHighLevel</span></div>
+          <div className="card-header"><span className="card-title">Webhook do SparkLeads</span></div>
           <div className="space-y-4 p-5">
             <CopyRow label="URL do webhook (workflow → Webhook POST)" value={WEBHOOK_URL} />
             <div className="rounded-xl border border-ink-200 bg-ink-50 p-3.5 text-xs text-ink-500">
-              No workflow do GHL, adicione uma ação <b>Webhook (POST)</b> com o header{' '}
+              No workflow da SparkLeads, adicione uma ação <b>Webhook (POST)</b> com o header{' '}
               <code>x-spark-webhook-secret</code> e o body JSON com <code>location.id</code>, <code>event_type</code> e o objeto <code>vars</code>.
             </div>
           </div>

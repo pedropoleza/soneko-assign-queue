@@ -123,8 +123,8 @@ export function TemplatesPage() {
             <div className="card-header">
               <span className="card-title">Snippets da location</span>
               <span className="flex items-center gap-2">
-                <button className="grid h-8 w-8 place-items-center rounded-lg border border-ink-200 bg-white text-ink-500 hover:text-brand-700" title="Sincronizar do GHL"><RefreshCw size={14} /></button>
-                <Badge tone="brand">GoHighLevel</Badge>
+                <button className="grid h-8 w-8 place-items-center rounded-lg border border-ink-200 bg-white text-ink-500 hover:text-brand-700" title="Sincronizar da SparkLeads"><RefreshCw size={14} /></button>
+                <Badge tone="brand">SparkLeads</Badge>
               </span>
             </div>
             {snippets && snippets.length ? (
@@ -140,10 +140,10 @@ export function TemplatesPage() {
                 ))}
               </div>
             ) : (
-              <EmptyState title="Nenhum snippet sincronizado" hint="Os snippets da location aparecem aqui quando a sincronização com o GHL estiver ativa." />
+              <EmptyState title="Nenhum snippet sincronizado" hint="Os snippets da location aparecem aqui quando a sincronização com a SparkLeads estiver ativa." />
             )}
             <div className="border-t border-ink-100 px-5 py-3 text-xs text-ink-400">
-              Os merge fields do GHL (<code>{'{{contact.first_name}}'}</code>…) são convertidos para a allow-list do Spark ao usar.
+              Os merge fields da SparkLeads (<code>{'{{contact.first_name}}'}</code>…) são convertidos para a allow-list do Spark ao usar.
             </div>
           </div>
 

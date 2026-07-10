@@ -97,6 +97,59 @@ export async function getUserName(token: string, userId: string): Promise<string
   }
 }
 
+export type GhlContact = {
+  id: string;
+  name: string;
+  first_name: string | null;
+  phone: string | null;
+  email: string | null;
+  dob: string | null; // YYYY-MM-DD (Date of Birth do contato) ou null
+};
+
+// Busca contatos da location por nome (para mapear "Gabriel" → contatos).
+export async function searchContacts(token: string, locationId: string, query: string): Promise<GhlContact[]> {
+  try {
+    const qs = new URLSearchParams({ locationId, query, limit: '25' });
+    const res = await fetch(`${GHL_API}/contacts/?${qs}`, { headers: apiHeaders(token) });
+    if (!res.ok) return [];
+    const data = (await res.json()) as {
+      contacts?: Array<{
+        id: string;
+        contactName?: string;
+        firstName?: string;
+        lastName?: string;
+        phone?: string;
+        email?: string;
+        dateOfBirth?: string;
+      }>;
+    };
+    return (data.contacts ?? []).map((c) => ({
+      id: c.id,
+      name: c.contactName ?? ([c.firstName, c.lastName].filter(Boolean).join(' ') || c.id),
+      first_name: c.firstName ?? null,
+      phone: c.phone ?? null,
+      email: c.email ?? null,
+      dob: c.dateOfBirth ? c.dateOfBirth.slice(0, 10) : null,
+    }));
+  } catch {
+    return [];
+  }
+}
+
+// Corrige o Date of Birth do contato direto na location (denúncia → correção).
+export async function updateContactDob(token: string, contactId: string, dob: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${GHL_API}/contacts/${contactId}`, {
+      method: 'PUT',
+      headers: { ...apiHeaders(token), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dateOfBirth: dob }),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
 export type Snippet = { id: string; name: string; body: string };
 
 // Snippets/valores reutilizáveis da location. A API v2 pública do GHL não expõe

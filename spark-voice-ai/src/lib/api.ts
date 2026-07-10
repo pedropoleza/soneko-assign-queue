@@ -2,8 +2,10 @@ import { API_URL, getSession } from './config';
 import type {
   AppState,
   AudioGeneration,
+  AudioSend,
   AudioTemplate,
   CreditTx,
+  GhlContact,
   Snippet,
   Voice,
 } from '@/types';
@@ -82,6 +84,19 @@ export const api = {
 
   // Snippets da location (GHL). Tolerante a endpoint ainda não implementado.
   listSnippets: () => call<Snippet[]>('GET', '/snippets'),
+
+  // Contatos da location (modal de envio) -------------------------------------
+  searchContacts: (q: string) => call<GhlContact[]>('GET', `/contacts?q=${encodeURIComponent(q)}`),
+  updateContactDob: (id: string, dob: string) => call<{ ok: true; dob: string }>('PATCH', `/contacts/${id}`, { dob }),
+
+  // Envios agendados ------------------------------------------------------------
+  listSends: () => call<AudioSend[]>('GET', '/sends'),
+  createSends: (body: {
+    template_id: string;
+    event_type: string;
+    contacts: Array<{ contact_id: string; contact_name?: string | null; contact_phone?: string | null; dob?: string | null }>;
+  }) => call<{ ok: true; sends: AudioSend[]; scheduled: number; missing: number }>('POST', '/sends', body),
+  cancelSend: (id: string) => call<{ ok: true }>('DELETE', `/sends/${id}`),
 
   // Créditos (Billing) --------------------------------------------------------
   listCredits: () => call<{ balance: number; transactions: CreditTx[] }>('GET', '/credits'),

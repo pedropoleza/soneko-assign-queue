@@ -58,8 +58,34 @@ export type AudioGeneration = {
   balance?: number;
 };
 
-// Snippet vindo da location no GoHighLevel.
+// Snippet vindo da location no SparkLeads.
 export type Snippet = { id: string; name: string; body: string };
+
+// Contato da location (busca por nome na modal de envio).
+export type GhlContact = {
+  id: string;
+  name: string;
+  first_name: string | null;
+  phone: string | null;
+  email: string | null;
+  dob: string | null; // YYYY-MM-DD ou null (Date of Birth ausente)
+};
+
+// Envio agendado de áudio.
+export type SendStatus = 'scheduled' | 'missing_dob' | 'sent' | 'cancelled' | 'failed';
+export type AudioSend = {
+  id: string;
+  template_id: string | null;
+  event_type: string | null;
+  contact_id: string;
+  contact_name: string | null;
+  contact_phone: string | null;
+  dob: string | null;
+  send_date: string | null;
+  status: SendStatus;
+  error_message: string | null;
+  created_at: string;
+};
 
 export type CreditKind = 'topup' | 'debit' | 'adjustment';
 export type CreditTx = {

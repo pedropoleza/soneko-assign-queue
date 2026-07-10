@@ -11,11 +11,21 @@ import { uploadAudio } from '../_shared/storage.ts';
 import { currentMonthUsage } from '../_shared/usage.ts';
 import { loadConfig } from '../_shared/config.ts';
 import { applyCredit, getBalance, priceFor } from '../_shared/credits.ts';
-import { getAccessToken, getSnippets } from '../_shared/ghl.ts';
+import { getAccessToken, getSnippets, searchContacts, updateContactDob } from '../_shared/ghl.ts';
 
 function b64ToBytes(b64: string): Uint8Array {
   const bin = atob(b64.replace(/^data:.*;base64,/, ''));
   return Uint8Array.from(bin, (c) => c.charCodeAt(0));
+}
+
+// Próxima ocorrência (aniversário) de uma data YYYY-MM-DD a partir de hoje.
+function nextBirthday(dob: string): string {
+  const [, m, d] = dob.split('-').map(Number);
+  const now = new Date();
+  const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  let year = now.getUTCFullYear();
+  if (Date.UTC(year, m - 1, d) < today) year++;
+  return `${year}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
 }
 
 Deno.serve(async (req) => {
@@ -312,6 +322,82 @@ Deno.serve(async (req) => {
       const token = await getAccessToken(db, accountId);
       if (!token || !acc) return json([]);
       return json(await getSnippets(token, acc.ghl_location_id));
+    }
+
+    // /contacts — busca por nome na location + correção de Date of Birth -------
+    if (seg[0] === 'contacts' && seg.length === 1 && method === 'GET') {
+      const q = url.searchParams.get('q') ?? '';
+      const { data: acc } = await db.from('accounts').select('ghl_location_id').eq('id', accountId).single();
+      const token = await getAccessToken(db, accountId);
+      if (!token || !acc) return json([]);
+      return json(await searchContacts(token, acc.ghl_location_id, q));
+    }
+
+    if (seg[0] === 'contacts' && seg.length === 2 && method === 'PATCH') {
+      const b = await readBody();
+      if (!b.dob || !/^\d{4}-\d{2}-\d{2}$/.test(b.dob)) return json({ error: 'invalid_dob' }, 400);
+      const token = await getAccessToken(db, accountId);
+      if (!token) return json({ error: 'no_ghl_token' }, 401);
+      const ok = await updateContactDob(token, seg[1], b.dob);
+      if (!ok) return json({ error: 'contact_update_failed' }, 502);
+      // reflete a correção em envios pendentes deste contato
+      await db
+        .from('audio_sends')
+        .update({ dob: b.dob, send_date: nextBirthday(b.dob), status: 'scheduled' })
+        .eq('account_id', accountId)
+        .eq('contact_id', seg[1])
+        .eq('status', 'missing_dob');
+      return json({ ok: true, dob: b.dob });
+    }
+
+    // /sends — agendamento de envios de áudio -----------------------------------
+    if (seg[0] === 'sends' && seg.length === 1 && method === 'GET') {
+      const { data } = await db
+        .from('audio_sends')
+        .select('*')
+        .eq('account_id', accountId)
+        .order('created_at', { ascending: false })
+        .limit(100);
+      return json(data ?? []);
+    }
+
+    if (seg[0] === 'sends' && seg.length === 1 && method === 'POST') {
+      const b = await readBody();
+      const items = Array.isArray(b.contacts) ? b.contacts : [];
+      if (!items.length) return json({ error: 'no_contacts' }, 400);
+      const rows = items.map((c: { contact_id?: string; contact_name?: string; contact_phone?: string; dob?: string }) => {
+        const dob = typeof c.dob === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(c.dob) ? c.dob : null;
+        return {
+          account_id: accountId,
+          template_id: b.template_id ?? null,
+          event_type: b.event_type ?? null,
+          contact_id: String(c.contact_id ?? ''),
+          contact_name: c.contact_name ?? null,
+          contact_phone: c.contact_phone ?? null,
+          dob,
+          send_date: dob ? nextBirthday(dob) : null,
+          status: dob ? 'scheduled' : 'missing_dob',
+        };
+      }).filter((r: { contact_id: string }) => r.contact_id);
+      if (!rows.length) return json({ error: 'no_contacts' }, 400);
+      const { data, error } = await db.from('audio_sends').insert(rows).select();
+      if (error) return json({ error: 'sends_insert_failed', detail: error.message }, 500);
+      return json({
+        ok: true,
+        sends: data,
+        scheduled: rows.filter((r: { status: string }) => r.status === 'scheduled').length,
+        missing: rows.filter((r: { status: string }) => r.status === 'missing_dob').length,
+      });
+    }
+
+    if (seg[0] === 'sends' && seg.length === 2 && method === 'DELETE') {
+      await db
+        .from('audio_sends')
+        .update({ status: 'cancelled' })
+        .eq('id', seg[1])
+        .eq('account_id', accountId)
+        .in('status', ['scheduled', 'missing_dob']);
+      return json({ ok: true });
     }
 
     // /credits — saldo + extrato (Billing) ------------------------------------

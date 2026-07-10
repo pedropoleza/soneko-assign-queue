@@ -29,7 +29,7 @@ export default function App() {
             <Mic size={22} />
           </span>
           <div className="flex items-center gap-2 text-sm">
-            <Loader2 size={15} className="animate-spin" /> Conectando ao GoHighLevel…
+            <Loader2 size={15} className="animate-spin" /> Conectando ao SparkLeads…
           </div>
         </div>
       </div>
@@ -45,10 +45,10 @@ export default function App() {
           </span>
           <h1 className="mt-4 text-lg font-bold text-ink-900">Spark Voice AI</h1>
           <p className="mt-1 text-sm text-ink-500">
-            Conecte sua conta do GoHighLevel para começar a gerar áudios personalizados com voz clonada.
+            Conecte sua conta do SparkLeads para começar a gerar áudios personalizados com voz clonada.
           </p>
           <a className="btn-primary mt-5 w-full" href="/functions/v1/spark-oauth/install">
-            Conectar com GoHighLevel
+            Conectar com SparkLeads
           </a>
         </div>
       </div>
