@@ -70,16 +70,6 @@ Deno.serve(async (req: Request) => {
   const location =
     req.headers.get('x-spark-location') ?? url.searchParams.get('location') ?? '';
 
-  // TEMP diagnostic: record the exact location value the panel sends so we can
-  // confirm what the GHL iframe is actually delivering. Header captured raw.
-  const rawLocHeader = req.headers.get('x-spark-location');
-  try {
-    await supabase.rpc('qr_debug_loc', {
-      p_location: `hdr=${JSON.stringify(rawLocHeader)} resolved=${JSON.stringify(location)}`,
-      p_method: req.method, p_path: path, p_ua: req.headers.get('user-agent') ?? '',
-    });
-  } catch { /* diagnostic only */ }
-
   const rpc = (fn: string, args: Record<string, unknown>) => supabase.rpc(fn, args);
 
   try {
@@ -167,6 +157,7 @@ Deno.serve(async (req: Request) => {
         p_slug: body.slug ?? '',
         p_target_url: body.target_url ?? '',
         p_name: body.name ?? '',
+        p_origin: body.origin ?? '',
       });
       if (error) return fail(error);
       return json(201, data);
@@ -183,6 +174,7 @@ Deno.serve(async (req: Request) => {
         p_target_url: body.target_url ?? null,
         p_name: body.name ?? null,
         p_is_active: typeof body.is_active === 'boolean' ? body.is_active : null,
+        p_origin: body.origin ?? null,
       });
       if (error) return fail(error);
       return json(200, data);

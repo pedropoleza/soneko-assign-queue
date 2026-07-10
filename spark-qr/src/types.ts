@@ -4,6 +4,7 @@ export type QrCode = {
   target_url: string;
   name: string;
   is_active: boolean;
+  origin: string;
   created_at: string;
   updated_at: string;
   // present in list responses
@@ -41,10 +42,11 @@ export type Overview = {
   top: Array<{ id: string; slug: string; name: string; is_active: boolean; scans: number }>;
 };
 
-export type CreateInput = { slug: string; target_url: string; name: string };
+export type CreateInput = { slug: string; target_url: string; name: string; origin?: string };
 export type UpdateInput = Partial<{
   slug: string;
   target_url: string;
   name: string;
   is_active: boolean;
+  origin: string;
 }>;

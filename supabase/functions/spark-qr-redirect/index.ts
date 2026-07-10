@@ -61,6 +61,31 @@ function firstIp(req: Request): string | null {
   return req.headers.get('x-real-ip');
 }
 
+// Compose the QR's "origin" tag into the final redirect URL so the destination
+// also knows where this particular QR lives — while each QR still tracks its own
+// scans by slug. WhatsApp links fold the tag into the prefilled message; any
+// other URL gets a `source=<origin>` query param (which the Acelera landing
+// reads as ?source, closing the attribution loop).
+function composeTarget(target: string, origin: string): string {
+  const tag = origin.trim();
+  if (!tag) return target;
+  try {
+    const u = new URL(target);
+    const host = u.hostname.toLowerCase();
+    const isWa = host === 'wa.me' || host === 'api.whatsapp.com' || host.endsWith('whatsapp.com');
+    if (isWa) {
+      const existing = u.searchParams.get('text') ?? '';
+      const line = `(Origem: ${tag})`;
+      u.searchParams.set('text', existing ? `${existing}\n\n${line}` : line);
+    } else {
+      u.searchParams.set('source', tag);
+    }
+    return u.toString();
+  } catch {
+    return target; // non-URL target (shouldn't happen) — pass through unchanged
+  }
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method !== 'GET' && req.method !== 'HEAD') {
     return new Response('method_not_allowed', { status: 405 });
@@ -76,17 +101,20 @@ Deno.serve(async (req: Request) => {
 
   let target: string | null = null;
   let qrId: string | null = null;
+  let origin = '';
   try {
     const { data } = await supabase.rpc('spark_qr_lookup', { p_slug: slug });
     if (data && (data as any).target_url) {
       target = (data as any).target_url;
       qrId = (data as any).id;
+      origin = (data as any).origin ?? '';
     }
   } catch (_e) {
     // DB hiccup — fall through to 404 rather than hang the scanner.
   }
 
   if (!target || !qrId) return notFound(slug);
+  target = composeTarget(target, origin);
 
   // Fire-and-forget the scan event. The redirect does not wait for it.
   const ip = firstIp(req);
