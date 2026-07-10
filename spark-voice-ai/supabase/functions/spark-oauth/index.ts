@@ -21,6 +21,25 @@ Deno.serve(async (req) => {
       return Response.redirect(authorizeUrl(state), 302);
     }
 
+    // Abertura da custom page dentro do GHL: recebe location_id (merge field),
+    // resolve a conta já instalada e entra logado. Se não estiver instalada,
+    // inicia o OAuth.
+    if (path === '/enter') {
+      const locationId = url.searchParams.get('location_id');
+      const appUrl = conf('APP_URL') ?? '';
+      if (!locationId) return json({ error: 'missing_location_id' }, 400);
+      const { data: account } = await db
+        .from('accounts')
+        .select('id')
+        .eq('ghl_location_id', locationId)
+        .maybeSingle();
+      if (!account) {
+        return Response.redirect(authorizeUrl(crypto.randomUUID()), 302);
+      }
+      const session = await mintSession(account.id);
+      return Response.redirect(`${appUrl}/?session=${encodeURIComponent(session)}`, 302);
+    }
+
     if (path === '/callback') {
       const code = url.searchParams.get('code');
       if (!code) return json({ error: 'missing_code' }, 400);
