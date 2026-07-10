@@ -39,7 +39,7 @@ export function VoiceStudioPage({ state }: { state: AppState }) {
   const [form, setForm] = useState({
     voice_name: '',
     language: 'pt-BR',
-    voice_owner_name: state.account.company_name,
+    voice_owner_name: state.account.owner_name ?? state.account.company_name,
   });
   const [file, setFile] = useState<File | null>(null);
   const [consent, setConsent] = useState(false);

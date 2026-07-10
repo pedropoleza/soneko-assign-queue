@@ -11,6 +11,7 @@ import { uploadAudio } from '../_shared/storage.ts';
 import { currentMonthUsage } from '../_shared/usage.ts';
 import { loadConfig } from '../_shared/config.ts';
 import { applyCredit, getBalance, priceFor } from '../_shared/credits.ts';
+import { getAccessToken, getSnippets } from '../_shared/ghl.ts';
 
 function b64ToBytes(b64: string): Uint8Array {
   const bin = atob(b64.replace(/^data:.*;base64,/, ''));
@@ -76,6 +77,7 @@ Deno.serve(async (req) => {
           id: account.id,
           ghl_location_id: account.ghl_location_id,
           company_name: account.company_name,
+          owner_name: account.owner_name ?? null,
           status: account.status,
           credit_balance: balance,
         },
@@ -302,6 +304,14 @@ Deno.serve(async (req) => {
         .order('created_at', { ascending: false })
         .limit(limit);
       return json(data ?? []);
+    }
+
+    // /snippets — snippets/valores reutilizáveis da location (GHL) -------------
+    if (seg[0] === 'snippets' && method === 'GET') {
+      const { data: acc } = await db.from('accounts').select('ghl_location_id').eq('id', accountId).single();
+      const token = await getAccessToken(db, accountId);
+      if (!token || !acc) return json([]);
+      return json(await getSnippets(token, acc.ghl_location_id));
     }
 
     // /credits — saldo + extrato (Billing) ------------------------------------

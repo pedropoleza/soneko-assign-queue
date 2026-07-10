@@ -78,6 +78,7 @@ export type AppState = {
     id: string;
     ghl_location_id: string;
     company_name: string;
+    owner_name: string | null;
     status: AccountStatus;
     credit_balance: number;
   };

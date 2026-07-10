@@ -3,7 +3,7 @@
 //   GET /spark-oauth/callback  → troca code por token, provisiona a account,
 //                                emite session e volta pro painel com ?session=
 import { serviceClient } from '../_shared/supabase.ts';
-import { authorizeUrl, exchangeCode } from '../_shared/ghl.ts';
+import { authorizeUrl, exchangeCode, getUserName } from '../_shared/ghl.ts';
 import { mintSession } from '../_shared/session.ts';
 import { corsHeaders, json, preflight } from '../_shared/cors.ts';
 import { conf, loadConfig } from '../_shared/config.ts';
@@ -28,6 +28,9 @@ Deno.serve(async (req) => {
       const token = await exchangeCode(code);
       if (!token.locationId) return json({ error: 'no_location_in_token' }, 400);
 
+      // nome do usuário que instalou/acessa — titular padrão da voz
+      const ownerName = token.userId ? await getUserName(token.access_token, token.userId) : null;
+
       // upsert da account por location
       const { data: account, error: accErr } = await db
         .from('accounts')
@@ -36,6 +39,7 @@ Deno.serve(async (req) => {
             ghl_location_id: token.locationId,
             ghl_company_id: token.companyId ?? null,
             company_name: token.locationId, // refinado depois via API do GHL
+            ...(ownerName ? { owner_name: ownerName } : {}),
           },
           { onConflict: 'ghl_location_id' },
         )
