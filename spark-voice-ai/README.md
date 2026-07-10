@@ -85,8 +85,13 @@ Resposta: `{ generationId, audio_url, final_text }`. O workflow então envia `au
 
 - ✅ **Etapa 0** — migration das 7 tabelas, `.env.example`, README.
 - ✅ **Etapa 1** — esqueleto Vite, camada Supabase, tipos, resolução de `account_id` (OAuth/webhook), `/lib/security`.
-- ✅ **Backend das Etapas 2–4** — template-engine, política de conteúdo, `spark-api`, `spark-oauth`, `spark-ghl-webhook` (com mock de TTS para dev).
-- ⏳ **Frontend das Etapas 2–4** — telas My Voice, Templates, Test Audio, History, Usage, Settings (hoje placeholders).
-- ⏳ **Etapa 5** — QA ponta-a-ponta, deploy e hypercare.
+- ✅ **Etapas 2–4 (backend)** — template-engine, política de conteúdo, `spark-api`, `spark-oauth`, `spark-ghl-webhook` (com mock de TTS para dev).
+- ✅ **Etapas 2–4 (frontend)** — telas My Voice, Templates, Test Audio, History, Usage, Settings.
+- ✅ **Deploy no projeto `GHL Token`** (`tbziahcpkrfiksqhuhpe`): schema `spark` + 7 tabelas aplicadas, schema exposto no PostgREST, bucket privado `spark-audio` criado, 3 Edge Functions publicadas (`spark-oauth`, `spark-api`, `spark-ghl-webhook`).
+- ⏳ **Secrets das Edge Functions** — a setar no dashboard (Settings → Edge Functions → Secrets): `SPARK_SESSION_SECRET`, `GHL_CLIENT_ID`, `GHL_CLIENT_SECRET`, `GHL_OAUTH_REDIRECT_URI`, `GHL_WEBHOOK_SECRET`, `ELEVENLABS_API_KEY`, `APP_URL`, `DEFAULT_MONTHLY_AUDIO_LIMIT`, `DEFAULT_MONTHLY_CHARACTER_LIMIT`. (`SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY` são automáticos.)
+- ⏳ **Etapa 5** — QA ponta-a-ponta com voz real, custom page no GHL e hypercare.
 
-Depende de tarefas 👤 Time da Etapa 0 (provisionar Supabase/Storage, obter chaves, registrar app GHL) antes do go-live.
+### URLs para o app GHL
+
+- **Redirect URI (OAuth):** `https://tbziahcpkrfiksqhuhpe.supabase.co/functions/v1/spark-oauth/callback`
+- **Webhook (workflow):** `https://tbziahcpkrfiksqhuhpe.supabase.co/functions/v1/spark-ghl-webhook`

@@ -47,17 +47,21 @@ Deno.serve(async (req) => {
   if (!account) return json({ error: 'account_not_found' }, 404);
   if (account.status !== 'active') return json({ error: 'account_inactive' }, 403);
 
-  // secret do webhook (header) comparado por hash
+  // Autenticação do webhook. Aceita:
+  //  (a) Shared Secret global do app GHL (env GHL_WEBHOOK_SECRET) — modelo MVP;
+  //  (b) secret por-location (hash em webhook_secrets) — hardening futuro.
   const provided = req.headers.get('x-spark-webhook-secret') ?? '';
+  const providedHash = await sha256Hex(provided);
   const { data: secretRow } = await db
     .from('webhook_secrets')
     .select('*')
     .eq('account_id', account.id)
     .eq('active', true)
     .maybeSingle();
-  if (!secretRow) return json({ error: 'no_webhook_secret' }, 401);
-  const providedHash = await sha256Hex(provided);
-  if (!timingSafeEqual(providedHash, secretRow.secret_hash)) return json({ error: 'invalid_secret' }, 401);
+  const globalSecret = Deno.env.get('GHL_WEBHOOK_SECRET');
+  const okPerLocation = !!secretRow && timingSafeEqual(providedHash, secretRow.secret_hash);
+  const okGlobal = !!globalSecret && timingSafeEqual(provided, globalSecret);
+  if (!okPerLocation && !okGlobal) return json({ error: 'invalid_secret' }, 401);
 
   // template ativo para o event_type
   const { data: template } = await db
@@ -127,7 +131,9 @@ Deno.serve(async (req) => {
       provider: 'elevenlabs',
       event_type: body.event_type,
     });
-    await db.from('webhook_secrets').update({ last_used_at: new Date().toISOString() }).eq('id', secretRow.id);
+    if (secretRow) {
+      await db.from('webhook_secrets').update({ last_used_at: new Date().toISOString() }).eq('id', secretRow.id);
+    }
 
     return json({ generationId: gen.id, audio_url: url, final_text: finalText });
   } catch (e) {
