@@ -55,6 +55,7 @@ export async function resolveLocation(): Promise<string> {
 
 export const api = {
   overview: (days = 30) => call<Overview>('GET', `/overview?days=${days}`),
+  waNumber: () => call<{ phone: string }>('GET', '/wa-number'),
   list: () => call<QrCode[]>('GET', '/qrs'),
   get: (id: string) => call<QrCode>('GET', `/qrs/${id}`),
   create: (input: CreateInput) => call<QrCode>('POST', '/qrs', input),

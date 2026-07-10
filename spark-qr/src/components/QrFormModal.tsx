@@ -12,6 +12,8 @@ type Props = {
   onClose: () => void;
   onSaved: () => void;
   editing: QrCode | null;
+  /** This location's default WhatsApp number, prefilled when creating. */
+  defaultWaPhone?: string;
 };
 
 type DestType = 'url' | 'whatsapp';
@@ -34,7 +36,7 @@ function buildWaUrl(phone: string, message: string): string {
   return msg ? `${base}?text=${encodeURIComponent(msg)}` : base;
 }
 
-export function QrFormModal({ open, onClose, onSaved, editing }: Props) {
+export function QrFormModal({ open, onClose, onSaved, editing, defaultWaPhone = '' }: Props) {
   const isEdit = !!editing;
   const [name, setName] = useState('');
   const [destType, setDestType] = useState<DestType>('url');
@@ -64,13 +66,20 @@ export function QrFormModal({ open, onClose, onSaved, editing }: Props) {
         setWaMessage(u.searchParams.get('text') ?? '');
       } catch { /* ignore */ }
       setTargetUrl('');
+    } else if (!editing && defaultWaPhone) {
+      // New QR with a known location number → open straight into WhatsApp mode
+      // with the number prefilled.
+      setDestType('whatsapp');
+      setWaPhone(defaultWaPhone);
+      setWaMessage('');
+      setTargetUrl('');
     } else {
       setDestType('url');
       setTargetUrl(t);
       setWaPhone('');
       setWaMessage('');
     }
-  }, [open, editing]);
+  }, [open, editing, defaultWaPhone]);
 
   const effectiveTarget = destType === 'whatsapp' ? buildWaUrl(waPhone, waMessage) : targetUrl.trim();
 

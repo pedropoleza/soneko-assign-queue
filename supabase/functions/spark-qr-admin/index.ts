@@ -101,7 +101,28 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // GET /overview?days=30  — dashboard aggregate
+    // GET /wa-number — default WhatsApp number for this location's QR builder.
+    // Explicit per-location override wins; otherwise fall back to the location's
+    // GHL phone (when the app is OAuth-installed and we have a token).
+    if (req.method === 'GET' && path === '/wa-number') {
+      const { data, error } = await rpc('spark_qr_wa_number', { p_secret: secret, p_location_id: location });
+      if (error) return fail(error);
+      let phone = String((data as any)?.phone ?? '');
+      const token = String((data as any)?.access_token ?? '');
+      if (!phone && token && location) {
+        try {
+          const r = await fetch(`https://services.leadconnectorhq.com/locations/${location}`, {
+            headers: { Authorization: `Bearer ${token}`, Version: '2021-07-28', Accept: 'application/json' },
+          });
+          if (r.ok) {
+            const j = await r.json();
+            phone = String(j?.location?.phone ?? j?.phone ?? '');
+          }
+        } catch { /* fall back to empty */ }
+      }
+      return json(200, { phone });
+    }
+
     if (req.method === 'GET' && path === '/overview') {
       const days = parseInt(url.searchParams.get('days') ?? '30', 10);
       const { data, error } = await rpc('spark_qr_overview', {

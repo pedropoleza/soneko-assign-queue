@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Loader2, Lock, Plus, QrCode as QrIcon, RefreshCw, Search, Zap } from 'lucide-react';
+import { BarChart3, Loader2, Lock, Plus, QrCode as QrIcon, RefreshCw, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import { api, resolveLocation } from './api';
 import { isEmbedded, ancestorAllowed } from './lib/embed';
@@ -8,6 +8,8 @@ import { Dashboard } from './components/Dashboard';
 import { QrCard } from './components/QrCard';
 import { QrFormModal } from './components/QrFormModal';
 import { AnalyticsModal } from './components/AnalyticsModal';
+
+type Tab = 'qr' | 'metrics';
 
 function Blocked() {
   return (
@@ -39,9 +41,14 @@ export default function App() {
   const [version, setVersion] = useState(0); // bumps after mutations → refetch overview
   const [loading, setLoading] = useState(false);
   const [query, setQuery] = useState('');
+  const [tab, setTab] = useState<Tab>('qr');
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<QrCode | null>(null);
   const [analytics, setAnalytics] = useState<QrCode | null>(null);
+
+  // Default WhatsApp number for this location (override or the GHL location
+  // phone), used to prefill the WhatsApp QR builder.
+  const [waPhone, setWaPhone] = useState('');
 
   // Dashboard overview lives here (not inside Dashboard) so its data survives
   // re-renders. Weekly by default; refetches when the window or version changes.
@@ -73,6 +80,14 @@ export default function App() {
   }, [allowed]);
 
   useEffect(() => { if (allowed && locReady) load(); }, [allowed, locReady, load]);
+
+  // Pull this location's default WhatsApp number once the scope is known.
+  useEffect(() => {
+    if (!allowed || !locReady) return;
+    let alive = true;
+    api.waNumber().then((r) => { if (alive) setWaPhone(r?.phone ?? ''); }).catch(() => {});
+    return () => { alive = false; };
+  }, [allowed, locReady]);
 
   // Fetch the dashboard overview for the selected window; refetch on mutations.
   useEffect(() => {
@@ -111,26 +126,36 @@ export default function App() {
 
   if (!allowed) return <Blocked />;
 
+  const tabs: { id: Tab; label: string; icon: typeof QrIcon }[] = [
+    { id: 'qr', label: 'QR Codes', icon: QrIcon },
+    { id: 'metrics', label: 'Métricas', icon: BarChart3 },
+  ];
+
   return (
     <div className="min-h-screen bg-ink-50">
-      <header className="sticky top-0 z-30 border-b border-ink-200 bg-white/90 backdrop-blur">
-        <div className="mx-auto flex h-16 max-w-screen-2xl items-center justify-between gap-4 px-6 lg:px-8">
-          <div className="flex items-center gap-3">
-            <span className="grid h-10 w-10 place-items-center rounded-xl bg-brand-600 text-white">
-              <Zap className="h-5 w-5" />
-            </span>
-            <span className="text-2xl font-bold tracking-tight text-ink-900">Spark QR</span>
-            {locationId && (
-              <span
-                className="hidden rounded-full bg-ink-100 px-2.5 py-1 font-mono text-xs text-ink-500 sm:inline"
-                title={`Location: ${locationId}`}
-              >
-                {locationId.slice(0, 8)}
-              </span>
-            )}
-          </div>
+      {/* GHL-native style: a tab bar, no app branding (the GHL chrome frames it). */}
+      <header className="sticky top-0 z-30 border-b border-ink-200 bg-white">
+        <div className="mx-auto flex max-w-screen-2xl items-center justify-between gap-4 px-4 lg:px-8">
+          <nav className="-mb-px flex gap-1" aria-label="Seções">
+            {tabs.map((t) => {
+              const active = tab === t.id;
+              return (
+                <button
+                  key={t.id}
+                  onClick={() => setTab(t.id)}
+                  className={`flex items-center gap-2 border-b-2 px-4 py-4 text-sm font-semibold transition-colors ${
+                    active
+                      ? 'border-brand-600 text-brand-700'
+                      : 'border-transparent text-ink-500 hover:text-ink-800'
+                  }`}
+                >
+                  <t.icon className="h-4 w-4" /> {t.label}
+                </button>
+              );
+            })}
+          </nav>
           <div className="flex items-center gap-2">
-            <button className="btn-ghost h-11 w-11 px-0" onClick={() => { load(); bump(); }} title="Recarregar">
+            <button className="btn-ghost h-10 w-10 px-0" onClick={() => { load(); bump(); }} title="Recarregar">
               <RefreshCw className={`h-5 w-5 ${loading ? 'animate-spin' : ''}`} />
             </button>
             <button className="btn-primary" onClick={() => { setEditing(null); setFormOpen(true); }}>
@@ -140,15 +165,15 @@ export default function App() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-screen-2xl px-6 py-8 lg:px-8">
+      <main className="mx-auto max-w-screen-2xl px-4 py-8 lg:px-8">
         {items === null ? (
           <div className="grid place-items-center py-28 text-ink-400">
             <Loader2 className="h-8 w-8 animate-spin" />
           </div>
+        ) : tab === 'metrics' ? (
+          <Dashboard data={overview} days={ovDays} loading={ovLoading} onDays={setOvDays} />
         ) : (
           <>
-            <Dashboard data={overview} days={ovDays} loading={ovLoading} onDays={setOvDays} />
-
             <div className="mb-4 flex items-center justify-between gap-3">
               <h2 className="text-lg font-semibold text-ink-900">
                 Seus QR codes <span className="text-ink-400">({items.length})</span>
@@ -204,6 +229,7 @@ export default function App() {
       <QrFormModal
         open={formOpen}
         editing={editing}
+        defaultWaPhone={waPhone}
         onClose={() => setFormOpen(false)}
         onSaved={() => { load(); bump(); }}
       />
