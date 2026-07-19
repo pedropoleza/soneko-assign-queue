@@ -10,8 +10,13 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
       new QueryClient({
         defaultOptions: {
           queries: {
+            // Real-time posture: the dashboard is an always-open embedded menu
+            // link, so keep it fresh. It refetches when Dani returns to the tab
+            // and when the connection recovers; per-query polling (see Overview)
+            // keeps it live while open.
             staleTime: 30_000,
-            refetchOnWindowFocus: false,
+            refetchOnWindowFocus: true,
+            refetchOnReconnect: true,
             retry: 1,
           },
         },

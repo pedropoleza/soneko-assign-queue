@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, CalendarDays, CalendarCheck2, UserCheck, UserX, MessagesSquare, MailWarning, Wallet, Trophy } from "lucide-react";
 import { StatCard } from "@/components/overview/stat-card";
 import { Card } from "@/components/ui/card";
 import { Badge, type BadgeProps } from "@/components/ui/badge";
@@ -64,10 +64,10 @@ export function ActivitySections({
     <>
       <Section title="Agenda">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <StatCard label="Agendamentos" value={a.appointments.kpis.total} hint="No período" accent />
-          <StatCard label="Confirmados" value={a.appointments.kpis.confirmados} />
-          <StatCard label="Compareceram" value={a.appointments.kpis.compareceu} />
-          <StatCard label="No-show" value={a.appointments.kpis.noShow} hint={`${a.appointments.kpis.cancelados} cancelados`} />
+          <StatCard label="Agendamentos" value={a.appointments.kpis.total} hint="No período" icon={CalendarDays} tone="blue" accent />
+          <StatCard label="Confirmados" value={a.appointments.kpis.confirmados} icon={CalendarCheck2} tone="green" />
+          <StatCard label="Compareceram" value={a.appointments.kpis.compareceu} icon={UserCheck} tone="green" />
+          <StatCard label="No-show" value={a.appointments.kpis.noShow} hint={`${a.appointments.kpis.cancelados} cancelados`} icon={UserX} tone="amber" />
         </div>
         <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-3">
           <ChartCard title="Por status" info="Agendamentos do período distribuídos pelo status no GHL: confirmado, compareceu, no-show e cancelado.">
@@ -109,8 +109,8 @@ export function ActivitySections({
 
       <Section title="Conversas">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <StatCard label="Conversas" value={a.conversations.kpis.total} hint="No período" accent />
-          <StatCard label="Não lidas" value={a.conversations.kpis.unread} />
+          <StatCard label="Conversas" value={a.conversations.kpis.total} hint="No período" icon={MessagesSquare} tone="blue" accent />
+          <StatCard label="Não lidas" value={a.conversations.kpis.unread} icon={MailWarning} tone="amber" />
         </div>
         <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-3">
           <ChartCard title="Por canal" info="Conversas do período agrupadas pelo canal de origem no GHL (WhatsApp, SMS, e-mail, etc.).">
@@ -159,8 +159,8 @@ export function ActivitySections({
 
       <Section title="Receita — negócios">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <StatCard label="Em aberto" value={formatMoneyBR(a.opportunities.kpis.openValue)} hint={`${a.opportunities.kpis.openCount} negócios`} accent />
-          <StatCard label="Ganho" value={formatMoneyBR(a.opportunities.kpis.wonValue)} hint={`${a.opportunities.kpis.wonCount} fechados`} />
+          <StatCard label="Em aberto" value={formatMoneyBR(a.opportunities.kpis.openValue)} hint={`${a.opportunities.kpis.openCount} negócios`} icon={Wallet} tone="blue" accent />
+          <StatCard label="Ganho" value={formatMoneyBR(a.opportunities.kpis.wonValue)} hint={`${a.opportunities.kpis.wonCount} fechados`} icon={Trophy} tone="green" />
         </div>
         <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-3">
           <ChartCard title="Valor em aberto por pipeline" info="Soma do valor monetário dos negócios (opportunities) ainda abertos, agrupada por pipeline do GHL." className="lg:col-span-2">

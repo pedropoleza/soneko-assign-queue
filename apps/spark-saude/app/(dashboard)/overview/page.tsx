@@ -3,12 +3,14 @@
 import * as React from "react";
 import Link from "next/link";
 import { addDays, startOfMonth, startOfYear } from "date-fns";
-import { useQuery, keepPreviousData } from "@tanstack/react-query";
+import { useQuery, keepPreviousData, useQueryClient } from "@tanstack/react-query";
+import { Users, Wallet, CalendarClock, Hourglass } from "lucide-react";
 import { api, ghlContactUrl } from "@/lib/client/api";
 import * as A from "@/lib/analytics";
 import type { DrillSpec } from "@/lib/analytics";
 import { PageHeader } from "@/components/shell/page-header";
 import { SectionHeader } from "@/components/shell/section-header";
+import { LiveStatus } from "@/components/shell/live-status";
 import { StatCard } from "@/components/overview/stat-card";
 import { DrillDrawer } from "@/components/overview/drill-drawer";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
@@ -78,14 +80,28 @@ export default function OverviewPage() {
   const [chartRanges, setChartRanges] = React.useState<Record<string, DateRangeValue | null>>({});
   const [drill, setDrill] = React.useState<{ title: string; contacts: Contact[] } | null>(null);
 
-  const book = useQuery({ queryKey: ["book"], queryFn: api.book, staleTime: 60_000 });
+  const queryClient = useQueryClient();
+
+  // Real-time: poll the live data while the dashboard is open so new entries in
+  // the GHL subaccount surface without a manual reload. Config (tags/field map)
+  // rarely changes, so it stays long-lived.
+  const LIVE = 60_000;
+  const book = useQuery({ queryKey: ["book"], queryFn: api.book, staleTime: 45_000, refetchInterval: LIVE });
   const config = useQuery({ queryKey: ["config"], queryFn: api.config, staleTime: Infinity });
-  const pipeline = useQuery({ queryKey: ["pipeline"], queryFn: api.pipeline });
+  const pipeline = useQuery({ queryKey: ["pipeline"], queryFn: api.pipeline, refetchInterval: LIVE });
   const activity = useQuery({
     queryKey: ["activity", range.key, range.from, range.to],
     queryFn: () => api.activity({ from: range.from, to: range.to }),
     placeholderData: keepPreviousData,
+    refetchInterval: LIVE,
   });
+
+  const refreshAll = React.useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ["book"] });
+    queryClient.invalidateQueries({ queryKey: ["pipeline"] });
+    queryClient.invalidateQueries({ queryKey: ["activity"] });
+    queryClient.invalidateQueries({ queryKey: ["config"] });
+  }, [queryClient]);
 
   const contacts = book.data?.contacts ?? [];
   const cfg = config.data;
@@ -106,6 +122,8 @@ export default function OverviewPage() {
   );
 
   const kpis = tags ? A.computeKpis(globalFiltered, tags) : null;
+  const avgTicket = kpis && kpis.activeClients > 0 ? kpis.mrr / kpis.activeClients : 0;
+  const newThisMonth = React.useMemo(() => A.newByMonth(globalFiltered).at(-1)?.value ?? 0, [globalFiltered]);
 
   const openDrill = (spec: DrillSpec, source: Contact[]) => {
     if (!tags) return;
@@ -130,7 +148,12 @@ export default function OverviewPage() {
       <PageHeader
         title="Visão geral"
         description="Panorama da carteira. Clique em qualquer número ou fatia para listar os contatos."
-        actions={<DateRangeFilter value={range} onChange={setRange} presets={presets} />}
+        actions={
+          <>
+            <LiveStatus updatedAt={book.dataUpdatedAt} fetching={book.isFetching || activity.isFetching} onRefresh={refreshAll} />
+            <DateRangeFilter value={range} onChange={setRange} presets={presets} />
+          </>
+        }
       />
 
       {loading ? (
@@ -143,12 +166,41 @@ export default function OverviewPage() {
         <ErrorState message={((book.error || config.error) as Error)?.message} onRetry={() => book.refetch()} />
       ) : kpis ? (
         <>
-          {/* KPIs — clickable */}
+          {/* KPIs — color-coded, clickable guide */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <StatCard label="Clientes ativos" value={kpis.activeClients} hint={`${kpis.totalClients} na carteira`} onClick={() => openDrill({ kind: "kpi", metric: "active" }, globalFiltered)} />
-            <StatCard label="Receita mensal" value={formatMoneyBR(kpis.mrr)} hint="Soma dos prêmios ativos" accent onClick={() => openDrill({ kind: "kpi", metric: "mrr" }, globalFiltered)} />
-            <StatCard label="Renovações (60 dias)" value={kpis.upcomingRenewals} hint="Próximas do vencimento" onClick={() => openDrill({ kind: "kpi", metric: "renewals60" }, globalFiltered)} />
-            <StatCard label="Aguardando aprovação" value={kpis.awaitingApproval} hint={`${kpis.applicationsInProgress} em andamento`} onClick={() => openDrill({ kind: "kpi", metric: "awaiting" }, globalFiltered)} />
+            <StatCard
+              label="Clientes ativos"
+              value={kpis.activeClients}
+              hint={newThisMonth > 0 ? `${kpis.totalClients} na carteira · +${newThisMonth} no mês` : `${kpis.totalClients} na carteira`}
+              icon={Users}
+              tone="blue"
+              onClick={() => openDrill({ kind: "kpi", metric: "active" }, globalFiltered)}
+            />
+            <StatCard
+              label="Receita mensal"
+              value={formatMoneyBR(kpis.mrr)}
+              hint={avgTicket > 0 ? `Ticket médio ${formatMoneyBR(avgTicket)}` : "Soma dos prêmios ativos"}
+              icon={Wallet}
+              tone="green"
+              accent
+              onClick={() => openDrill({ kind: "kpi", metric: "mrr" }, globalFiltered)}
+            />
+            <StatCard
+              label="Renovações (60 dias)"
+              value={kpis.upcomingRenewals}
+              hint="Próximas do vencimento"
+              icon={CalendarClock}
+              tone="amber"
+              onClick={() => openDrill({ kind: "kpi", metric: "renewals60" }, globalFiltered)}
+            />
+            <StatCard
+              label="Aguardando aprovação"
+              value={kpis.awaitingApproval}
+              hint={`${kpis.applicationsInProgress} em andamento`}
+              icon={Hourglass}
+              tone="violet"
+              onClick={() => openDrill({ kind: "kpi", metric: "awaiting" }, globalFiltered)}
+            />
           </div>
 
           {/* Carteira — composição do livro de clientes */}
