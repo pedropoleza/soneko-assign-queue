@@ -37,7 +37,13 @@ export function ghlContactUrl(cfg: AppConfig | undefined, contactId: string): st
 
 export const api = {
   config: () => request<AppConfig>("/api/config"),
-  overview: () => request<OverviewSummary>("/api/overview"),
+  overview: (params: { from?: string; to?: string } = {}) => {
+    const sp = new URLSearchParams();
+    if (params.from) sp.set("from", params.from);
+    if (params.to) sp.set("to", params.to);
+    const qs = sp.toString();
+    return request<OverviewSummary>(`/api/overview${qs ? `?${qs}` : ""}`);
+  },
   renewals: (params: { within?: number; from?: string; to?: string }) => {
     const sp = new URLSearchParams();
     if (params.from) sp.set("from", params.from);

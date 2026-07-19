@@ -7,7 +7,7 @@ import type {
   RenewalItem,
 } from "@/lib/types";
 import { contactToRenewal, filterRenewalsByRange, renewalRange } from "../renewals";
-import { computeOverview } from "../overview";
+import { computeOverview, filterByDateAdded } from "../overview";
 import type { TenantConfig } from "../tenant";
 
 /**
@@ -18,6 +18,9 @@ import type { TenantConfig } from "../tenant";
 
 const iso = (days: number) => addDays(new Date(), days).toISOString();
 
+// Spread entry dates across recent months so the date filter has visible effect.
+let __seq = 0;
+
 function c(
   id: string,
   name: string,
@@ -25,13 +28,14 @@ function c(
   fields: Contact["fields"],
   extra: Partial<Contact> = {},
 ): Contact {
+  const daysAgo = 4 + __seq++ * 7;
   return {
     id,
     name,
     email: `${id}@exemplo.com`,
     phone: "+1 (786) 555-0100",
     tags: ["linha_saude", ...tags],
-    dateAdded: iso(-120),
+    dateAdded: iso(-daysAgo),
     fields,
     ...extra,
   };
@@ -176,6 +180,6 @@ export function fixtureRenewals(
   return filterRenewalsByRange(items, from, to);
 }
 
-export function fixtureOverview(tenant: TenantConfig): OverviewSummary {
-  return computeOverview(FIXTURE_CONTACTS, tenant);
+export function fixtureOverview(tenant: TenantConfig, params: { from?: string; to?: string } = {}): OverviewSummary {
+  return computeOverview(filterByDateAdded(FIXTURE_CONTACTS, params.from, params.to), tenant);
 }

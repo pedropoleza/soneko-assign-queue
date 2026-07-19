@@ -27,12 +27,15 @@ export async function getConfigData(locationIn?: string): Promise<{ locationId: 
   return { locationId: resolveLocationId(locationIn), ghlAppBase: serverEnv.ghlAppBase };
 }
 
-export async function getOverviewData(locationIn?: string): Promise<OverviewSummary> {
+export async function getOverviewData(
+  locationIn?: string,
+  params: { from?: string; to?: string } = {},
+): Promise<OverviewSummary> {
   const locationId = resolveLocationId(locationIn);
   const tenant = await getTenantConfig(locationId);
-  if (serverEnv.useFixtures) return fx.fixtureOverview(tenant);
+  if (serverEnv.useFixtures) return fx.fixtureOverview(tenant, params);
   const resolver = await buildFieldResolver(locationId, tenant);
-  return getOverview({ locationId, tenant, resolver });
+  return getOverview({ locationId, tenant, resolver, ...params });
 }
 
 export async function getRenewalsData(

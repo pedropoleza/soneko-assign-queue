@@ -15,12 +15,30 @@ export interface OverviewParams {
   locationId: string;
   tenant: TenantConfig;
   resolver: FieldResolver;
+  /** Optional period filter on the contact entry date (dateAdded). */
+  from?: string;
+  to?: string;
+}
+
+/** Filter contacts by entry date (dateAdded). No bounds → whole book. */
+export function filterByDateAdded(contacts: Contact[], from?: string, to?: string): Contact[] {
+  if (!from && !to) return contacts;
+  const fromT = from ? new Date(`${from}T00:00:00`).getTime() : null;
+  const toT = to ? new Date(`${to}T23:59:59`).getTime() : null;
+  return contacts.filter((c) => {
+    if (!c.dateAdded) return false;
+    const t = new Date(c.dateAdded).getTime();
+    if (Number.isNaN(t)) return false;
+    if (fromT != null && t < fromT) return false;
+    if (toT != null && t > toT) return false;
+    return true;
+  });
 }
 
 export async function getOverview(params: OverviewParams): Promise<OverviewSummary> {
   const { locationId, tenant, resolver } = params;
   const contacts = await fetchAllByTag({ locationId, tenant, resolver, tag: tenant.linhaTag });
-  return computeOverview(contacts, tenant);
+  return computeOverview(filterByDateAdded(contacts, params.from, params.to), tenant);
 }
 
 const MONTHS_PT = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];

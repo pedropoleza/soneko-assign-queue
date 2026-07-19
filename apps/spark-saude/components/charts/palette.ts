@@ -5,16 +5,16 @@
  * - Status (documentação): refined, muted semantic tones, always with labels.
  */
 
-// Matches the UI --primary token.
-export const SERIES_BLUE = "#2663f2";
-export const SERIES_BLUE_SOFT = "#e9effe";
+// Matches the UI --primary token (GHL blue #155EEF).
+export const SERIES_BLUE = "#155EEF";
+export const SERIES_BLUE_SOFT = "#e7eefe";
 
 export const CHART_GRID = "#eef1f6";
-export const CHART_TRACK = "#f2f5fa";
+export const CHART_TRACK = "#eef2f8";
 export const CHART_AXIS = "#d9dfe8";
 
-// Ordinal blue ramp (light → dark). Lightest clears ~2:1 on white.
-export const BLUE_RAMP = ["#83a8f6", "#4f84f2", "#2663f2", "#1a4bc4", "#143a95"];
+// Ordinal blue ramp (light → dark) around the GHL blue.
+export const BLUE_RAMP = ["#84adf5", "#4f88f0", "#155EEF", "#1146b8", "#0c3286"];
 
 const PLANO_ORDER = ["Bronze", "Silver", "Gold", "Platinum"];
 
@@ -23,16 +23,16 @@ export function planoColors(labels: string[]): string[] {
   return labels.map((l) => {
     const idx = PLANO_ORDER.indexOf(l);
     if (idx >= 0) return BLUE_RAMP[Math.min(idx, BLUE_RAMP.length - 1)]!;
-    return "#c6cfdd"; // Outros / Sem plano
+    return "#cbd5e1"; // Outros / Sem plano
   });
 }
 
-// Documentação — muted semantic tones (good → bad), shipped with legend labels.
+// Documentação — GHL semantic tones (good → bad), shipped with legend labels.
 export const DOC_COLORS: Record<string, string> = {
-  Recebida: "#0e9f6e",
-  Parcial: "#d98a0b",
-  Pendente: "#e24d5b",
-  "Sem info": "#a7b1c0",
+  Recebida: "#12B76A",
+  Parcial: "#F79009",
+  Pendente: "#F04438",
+  "Sem info": "#98A2B3",
 };
 
 export function colorsByMap(labels: string[], map: Record<string, string>, fallback = "#a7b1c0"): string[] {

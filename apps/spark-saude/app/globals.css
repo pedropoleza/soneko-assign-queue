@@ -19,11 +19,11 @@
 
   --border: 214 20% 91%;
   --input: 214 20% 89%;
-  --ring: 222 89% 55%;
+  --ring: 220 87% 51%;
 
-  /* GHL blue (~#2A6FF3 / #155EEF) */
-  --primary: 222 89% 55%;
-  --primary-hover: 224 76% 48%;
+  /* GHL blue — #155EEF, hover #004EEB */
+  --primary: 220 87% 51%;
+  --primary-hover: 220 100% 46%;
   --primary-foreground: 0 0% 100%;
 
   /* Soft status colors */
