@@ -1,0 +1,73 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Design tokens — aligned to GoHighLevel (see CLAUDE.md §6).
+ * Light background, subtle borders, GHL blue, soft (non-saturated) status badges.
+ */
+:root {
+  --page: 210 20% 98%; /* #F9FAFB page background */
+  --background: 0 0% 100%;
+  --foreground: 222 24% 16%;
+
+  --card: 0 0% 100%;
+  --card-foreground: 222 24% 16%;
+
+  --muted: 210 20% 97%;
+  --muted-foreground: 215 16% 47%;
+
+  --border: 214 20% 91%;
+  --input: 214 20% 89%;
+  --ring: 222 89% 55%;
+
+  /* GHL blue (~#2A6FF3 / #155EEF) */
+  --primary: 222 89% 55%;
+  --primary-hover: 224 76% 48%;
+  --primary-foreground: 0 0% 100%;
+
+  /* Soft status colors */
+  --status-green-bg: 145 63% 95%;
+  --status-green-fg: 152 55% 27%;
+  --status-amber-bg: 44 96% 93%;
+  --status-amber-fg: 32 75% 33%;
+  --status-red-bg: 0 86% 96%;
+  --status-red-fg: 0 63% 42%;
+  --status-blue-bg: 214 95% 95%;
+  --status-blue-fg: 222 68% 42%;
+  --status-gray-bg: 214 15% 94%;
+  --status-gray-fg: 215 16% 40%;
+
+  --radius: 0.625rem;
+}
+
+* {
+  border-color: hsl(var(--border));
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background-color: hsl(var(--page));
+  color: hsl(var(--foreground));
+  font-feature-settings: "cv11", "ss01";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Thin, discreet scrollbars — matches GHL density. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(214 15% 85%) transparent;
+}
+*::-webkit-scrollbar {
+  height: 8px;
+  width: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background-color: hsl(214 15% 85%);
+  border-radius: 9999px;
+}
