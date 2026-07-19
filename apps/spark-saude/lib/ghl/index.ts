@@ -13,10 +13,11 @@ import {
 import { getRenewals } from "./renewals";
 import { getOverview } from "./overview";
 import { getPipelineViews } from "./pipelineView";
+import { getActivity } from "./activity";
 import { moveOpportunityStage } from "./opportunities";
 import { GhlConfigError } from "./errors";
 import * as fx from "./__fixtures__/data";
-import type { Contact, OverviewSummary, Paginated, PipelineView, RenewalItem, SemanticField } from "@/lib/types";
+import type { ActivitySummary, Contact, OverviewSummary, Paginated, PipelineView, RenewalItem, SemanticField } from "@/lib/types";
 
 /**
  * High-level, typed data facade consumed by the route handlers (CLAUDE.md §8).
@@ -70,6 +71,16 @@ export async function getRenewalsData(
   if (serverEnv.useFixtures) return fx.fixtureRenewals(tenant, params);
   const resolver = await buildFieldResolver(locationId, tenant);
   return getRenewals({ locationId, tenant, resolver, ...params });
+}
+
+export async function getActivityData(
+  locationIn?: string,
+  params: { from?: string; to?: string } = {},
+): Promise<ActivitySummary> {
+  const locationId = resolveLocationId(locationIn);
+  const tenant = await getTenantConfig(locationId);
+  if (serverEnv.useFixtures) return fx.fixtureActivity();
+  return getActivity({ locationId, tenant, ...params });
 }
 
 export async function getPipelineData(locationIn?: string): Promise<PipelineView[]> {

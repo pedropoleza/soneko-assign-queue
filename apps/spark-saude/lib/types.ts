@@ -148,6 +148,52 @@ export interface Paginated<T> {
   nextCursor: Cursor | null;
 }
 
+// --- Subaccount activity (Agenda · Conversas · Receita) ---------------------
+
+export interface Appointment {
+  id: string;
+  calendarId: string;
+  calendarName: string;
+  contactId?: string;
+  title: string;
+  status: string; // Novo | Confirmado | Compareceu | No-show | Cancelado
+  startTime?: string;
+}
+
+export interface AgendaSummary {
+  kpis: { total: number; confirmados: number; compareceu: number; noShow: number; cancelados: number };
+  byStatus: ChartDatum[];
+  byCalendar: ChartDatum[];
+  upcoming: Appointment[];
+}
+
+export interface ConversationItem {
+  id: string;
+  contactId?: string;
+  name: string;
+  channel: string;
+  unread: number;
+  lastAt?: string;
+}
+
+export interface ConversationsSummary {
+  kpis: { total: number; unread: number };
+  byChannel: ChartDatum[];
+  recent: ConversationItem[];
+}
+
+export interface OppRevenue {
+  kpis: { openValue: number; wonValue: number; openCount: number; wonCount: number };
+  byPipeline: ChartDatum[]; // open value per pipeline
+  byStatus: ChartDatum[]; // count per status
+}
+
+export interface ActivitySummary {
+  appointments: AgendaSummary;
+  conversations: ConversationsSummary;
+  opportunities: OppRevenue;
+}
+
 /** A typed error surfaced from the data layer to the route handlers/front. */
 export interface ApiErrorShape {
   error: string;

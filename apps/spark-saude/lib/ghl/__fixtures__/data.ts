@@ -1,6 +1,9 @@
-import { addDays } from "date-fns";
+import { addDays, addHours } from "date-fns";
 import type {
+  ActivitySummary,
+  Appointment,
   Contact,
+  ConversationItem,
   OverviewSummary,
   Pipeline,
   PipelineView,
@@ -8,6 +11,7 @@ import type {
 } from "@/lib/types";
 import { contactToRenewal, filterRenewalsByRange, renewalRange } from "../renewals";
 import { computeOverview, filterByDateAdded } from "../overview";
+import { computeAgenda, computeConversations, computeOppRevenue, type OppLike } from "../activity";
 import type { TenantConfig } from "../tenant";
 
 /**
@@ -184,4 +188,55 @@ export function fixtureRenewals(
 
 export function fixtureOverview(tenant: TenantConfig, params: { from?: string; to?: string } = {}): OverviewSummary {
   return computeOverview(filterByDateAdded(FIXTURE_CONTACTS, params.from, params.to), tenant);
+}
+
+// --- Activity fixtures (Agenda · Conversas · Receita) -----------------------
+
+const FX_CALS = [
+  { id: "cal-1", name: "Consulta Inicial" },
+  { id: "cal-2", name: "Apresentação & Fechamento" },
+];
+const APPT_STATUSES = ["Confirmado", "Novo", "Compareceu", "No-show", "Cancelado", "Confirmado", "Novo", "Compareceu"];
+
+const FIXTURE_APPTS: Appointment[] = Array.from({ length: 18 }, (_, i) => {
+  const cal = FX_CALS[i % 2]!;
+  const offsetH = (i - 6) * 20; // spread past + future
+  return {
+    id: `appt-${i}`,
+    calendarId: cal.id,
+    calendarName: cal.name,
+    contactId: FIXTURE_CONTACTS[i % FIXTURE_CONTACTS.length]!.id,
+    title: `${cal.name} — ${FIXTURE_CONTACTS[i % FIXTURE_CONTACTS.length]!.name}`,
+    status: APPT_STATUSES[i % APPT_STATUSES.length]!,
+    startTime: addHours(new Date(), offsetH).toISOString(),
+  };
+});
+
+const CHANNELS = ["WhatsApp", "SMS", "Email", "Ligação", "WhatsApp", "WhatsApp", "Email"];
+const FIXTURE_CONVS: ConversationItem[] = Array.from({ length: 15 }, (_, i) => {
+  const c = FIXTURE_CONTACTS[i % FIXTURE_CONTACTS.length]!;
+  return {
+    id: `conv-${i}`,
+    contactId: c.id,
+    name: c.name,
+    channel: CHANNELS[i % CHANNELS.length]!,
+    unread: i % 4 === 0 ? 1 : 0,
+    lastAt: addHours(new Date(), -i * 3).toISOString(),
+  };
+});
+
+const OPP_STATUSES = ["open", "open", "won", "open", "lost", "open", "won", "open"];
+const FIXTURE_OPPS: OppLike[] = Array.from({ length: 26 }, (_, i) => ({
+  status: OPP_STATUSES[i % OPP_STATUSES.length],
+  monetaryValue: 180 + (i % 8) * 45,
+  pipelineId: i % 3 === 0 ? "fx-cli" : "fx-acq",
+}));
+
+export function fixtureActivity(): ActivitySummary {
+  const pipelineNames = new Map(FIXTURE_PIPELINES.map((p) => [p.id, p.name]));
+  return {
+    appointments: computeAgenda(FIXTURE_APPTS),
+    conversations: computeConversations(FIXTURE_CONVS),
+    opportunities: computeOppRevenue(FIXTURE_OPPS, pipelineNames),
+  };
 }

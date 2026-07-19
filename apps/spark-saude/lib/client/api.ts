@@ -1,4 +1,5 @@
 import type {
+  ActivitySummary,
   Contact,
   OverviewSummary,
   Paginated,
@@ -63,6 +64,13 @@ export const api = {
     return request<RenewalItem[]>(`/api/renewals?${sp.toString()}`);
   },
   pipeline: () => request<PipelineView[]>("/api/pipeline"),
+  activity: (params: { from?: string; to?: string } = {}) => {
+    const sp = new URLSearchParams();
+    if (params.from) sp.set("from", params.from);
+    if (params.to) sp.set("to", params.to);
+    const qs = sp.toString();
+    return request<ActivitySummary>(`/api/activity${qs ? `?${qs}` : ""}`);
+  },
   contacts: (params: { q?: string; cursor?: (string | number)[]; limit?: number }) => {
     const sp = new URLSearchParams();
     if (params.q) sp.set("q", params.q);

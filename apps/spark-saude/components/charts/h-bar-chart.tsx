@@ -12,10 +12,12 @@ export function HBarChart({
   data,
   color = SERIES_BLUE,
   onSelect,
+  valueFormat,
 }: {
   data: ChartDatum[];
   color?: string;
   onSelect?: (label: string) => void;
+  valueFormat?: (n: number) => string;
 }) {
   const max = Math.max(1, ...data.map((d) => d.value));
 
@@ -38,7 +40,9 @@ export function HBarChart({
                 style={{ width: `${w}%`, minWidth: d.value > 0 ? 6 : 0, background: color }}
               />
             </div>
-            <span className="w-6 text-right font-medium tabular-nums text-foreground">{d.value}</span>
+            <span className={`shrink-0 text-right font-medium tabular-nums text-foreground ${valueFormat ? "w-24" : "w-6"}`}>
+              {valueFormat ? valueFormat(d.value) : d.value}
+            </span>
           </li>
         );
       })}
