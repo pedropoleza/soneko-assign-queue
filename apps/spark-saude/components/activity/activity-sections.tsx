@@ -69,14 +69,14 @@ export function ActivitySections({
           <StatCard label="No-show" value={a.appointments.kpis.noShow} hint={`${a.appointments.kpis.cancelados} cancelados`} />
         </div>
         <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-3">
-          <ChartCard title="Por status">
+          <ChartCard title="Por status" info="Agendamentos do período distribuídos pelo status no GHL: confirmado, compareceu, no-show e cancelado.">
             {a.appointments.byStatus.length ? (
               <DonutChart data={a.appointments.byStatus} colors={colorsByMap(a.appointments.byStatus.map((d) => d.label), APPT_COLORS)} centerLabel="Agend." />
             ) : (
               <ChartEmpty label="Sem agendamentos" />
             )}
           </ChartCard>
-          <ChartCard title="Por calendário">
+          <ChartCard title="Por calendário" info="Volume de agendamentos por calendário do GHL (ex.: Consulta Inicial, Apresentação & Fechamento).">
             {a.appointments.byCalendar.length ? <HBarChart data={a.appointments.byCalendar} /> : <ChartEmpty label="—" />}
           </ChartCard>
           <Card className="flex flex-col">
@@ -112,7 +112,7 @@ export function ActivitySections({
           <StatCard label="Não lidas" value={a.conversations.kpis.unread} />
         </div>
         <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-3">
-          <ChartCard title="Por canal">
+          <ChartCard title="Por canal" info="Conversas do período agrupadas pelo canal de origem no GHL (WhatsApp, SMS, e-mail, etc.).">
             {a.conversations.byChannel.length ? (
               <DonutChart data={a.conversations.byChannel} colors={categoricalFor(a.conversations.byChannel.map((d) => d.label))} centerLabel="Conversas" />
             ) : (
@@ -162,14 +162,14 @@ export function ActivitySections({
           <StatCard label="Ganho" value={formatMoneyBR(a.opportunities.kpis.wonValue)} hint={`${a.opportunities.kpis.wonCount} fechados`} />
         </div>
         <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-3">
-          <ChartCard title="Valor em aberto por pipeline" className="lg:col-span-2">
+          <ChartCard title="Valor em aberto por pipeline" info="Soma do valor monetário dos negócios (opportunities) ainda abertos, agrupada por pipeline do GHL." className="lg:col-span-2">
             {a.opportunities.byPipeline.length ? (
               <HBarChart data={a.opportunities.byPipeline} valueFormat={(n) => formatMoneyBR(n)} />
             ) : (
               <ChartEmpty label="Sem negócios em aberto" />
             )}
           </ChartCard>
-          <ChartCard title="Negócios por status">
+          <ChartCard title="Negócios por status" info="Negócios (opportunities) distribuídos pelo status: aberto, ganho, perdido e abandonado.">
             {a.opportunities.byStatus.length ? (
               <DonutChart data={a.opportunities.byStatus} colors={colorsByMap(a.opportunities.byStatus.map((d) => d.label), OPP_COLORS)} centerLabel="Negócios" />
             ) : (

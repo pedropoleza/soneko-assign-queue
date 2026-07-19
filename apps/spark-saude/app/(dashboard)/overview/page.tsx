@@ -49,6 +49,33 @@ function ChartEmpty({ label }: { label: string }) {
   return <div className="flex h-[176px] items-center justify-center text-center text-sm text-muted-foreground">{label}</div>;
 }
 
+/** Explicações da lógica de cada gráfico (regras de domínio do CLAUDE.md). */
+const INFO = {
+  seguradora:
+    "Clientes da carteira saúde agrupados pela seguradora (campo seguradora do contato). Clique numa barra para listar os contatos.",
+  plano:
+    "Clientes agrupados pelo plano escolhido (campo plano_escolhido). Clique numa fatia para ver quem está em cada plano.",
+  doc:
+    "Status do campo documentacao_recebida. Os arquivos em si (SSN, passaporte, comprovantes) ficam na aba Documents do contato no GHL — aqui mostramos só o status.",
+  faixa:
+    "Carteira distribuída por faixa de prêmio mensal (campo monthly_premium): abaixo de US$ 200, US$ 200–350, US$ 350–500 e US$ 500+.",
+  renovMes:
+    "Clientes distribuídos pelo mês de renovação (campo data_renovacao), nos próximos 6 meses. Renovações já vencidas entram no mês atual.",
+  renovStatus:
+    "Situação das renovações com data definida — calculada a partir de data_renovacao e das tags de renovação (renovacao_pendente, renovacao_feita, nao_renovou).",
+  mrrSeg:
+    "Receita recorrente: soma do prêmio mensal (monthly_premium) dos clientes ativos, agrupada por seguradora.",
+  novos:
+    "Novos contatos linha_saude por mês de entrada (data de criação no GHL), nos últimos 6 meses.",
+  origem:
+    "Origem dos contatos pelas tags origem_indicacao, origem_whatsapp e origem_organica.",
+} as const;
+
+/** Título de seção no padrão GHL (texto limpo, sem ícone). */
+function SectionTitle({ children }: { children: React.ReactNode }) {
+  return <h2 className="mb-3 text-sm font-semibold tracking-tight">{children}</h2>;
+}
+
 export default function OverviewPage() {
   const presets = React.useMemo(buildPresets, []);
   const [range, setRange] = React.useState<DateRangeValue>({ key: "all", label: "Todo o período" });
@@ -128,113 +155,128 @@ export default function OverviewPage() {
             <StatCard label="Aguardando aprovação" value={kpis.awaitingApproval} hint={`${kpis.applicationsInProgress} em andamento`} onClick={() => openDrill({ kind: "kpi", metric: "awaiting" }, globalFiltered)} />
           </div>
 
-          {/* Charts — each with its own filter + drill on click */}
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-            <ChartCard title="Renovações por mês" subtitle="Próximos 6 meses" className="lg:col-span-2" right={chartFilter("renewals")}>
-              {A.renewalsByMonth(dataFor("renewals")).some((d) => d.value > 0) ? (
-                <ColumnChart
-                  data={A.renewalsByMonth(dataFor("renewals"))}
-                  onSelect={(i, label) => openDrill({ kind: "renewalMonth", month: i, label }, dataFor("renewals"))}
-                />
-              ) : (
-                <ChartEmpty label="Sem renovações datadas no período" />
-              )}
-            </ChartCard>
+          {/* Carteira — composição do livro de clientes */}
+          <section>
+            <SectionTitle>Carteira</SectionTitle>
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+              <ChartCard title="Carteira por seguradora" info={INFO.seguradora} className="lg:col-span-2" right={chartFilter("seguradora")}>
+                {A.bySeguradora(dataFor("seguradora")).length ? (
+                  <HBarChart
+                    data={A.bySeguradora(dataFor("seguradora"))}
+                    onSelect={(v) => openDrill({ kind: "seguradora", value: v }, dataFor("seguradora"))}
+                  />
+                ) : (
+                  <ChartEmpty label="Sem seguradora no período" />
+                )}
+              </ChartCard>
 
-            <ChartCard title="Distribuição por plano" right={chartFilter("plano")}>
-              {A.byPlano(dataFor("plano")).length ? (
-                <DonutChart
-                  data={A.byPlano(dataFor("plano"))}
-                  colors={planoColors(A.byPlano(dataFor("plano")).map((d) => d.label))}
-                  centerLabel="Clientes"
-                  onSelect={(v) => openDrill({ kind: "plano", value: v }, dataFor("plano"))}
-                />
-              ) : (
-                <ChartEmpty label="Sem planos no período" />
-              )}
-            </ChartCard>
+              <ChartCard title="Distribuição por plano" info={INFO.plano} right={chartFilter("plano")}>
+                {A.byPlano(dataFor("plano")).length ? (
+                  <DonutChart
+                    data={A.byPlano(dataFor("plano"))}
+                    colors={planoColors(A.byPlano(dataFor("plano")).map((d) => d.label))}
+                    centerLabel="Clientes"
+                    onSelect={(v) => openDrill({ kind: "plano", value: v }, dataFor("plano"))}
+                  />
+                ) : (
+                  <ChartEmpty label="Sem planos no período" />
+                )}
+              </ChartCard>
 
-            <ChartCard title="Carteira por seguradora" className="lg:col-span-2" right={chartFilter("seguradora")}>
-              {A.bySeguradora(dataFor("seguradora")).length ? (
-                <HBarChart
-                  data={A.bySeguradora(dataFor("seguradora"))}
-                  onSelect={(v) => openDrill({ kind: "seguradora", value: v }, dataFor("seguradora"))}
-                />
-              ) : (
-                <ChartEmpty label="Sem seguradora no período" />
-              )}
-            </ChartCard>
+              <ChartCard title="Documentação" subtitle="Status dos documentos" info={INFO.doc} right={chartFilter("doc")}>
+                {A.docStatus(dataFor("doc")).length ? (
+                  <DonutChart
+                    data={A.docStatus(dataFor("doc"))}
+                    colors={colorsByMap(A.docStatus(dataFor("doc")).map((d) => d.label), DOC_COLORS)}
+                    centerLabel="Clientes"
+                    onSelect={(v) => openDrill({ kind: "doc", value: v }, dataFor("doc"))}
+                  />
+                ) : (
+                  <ChartEmpty label="Sem dados de documentação" />
+                )}
+              </ChartCard>
 
-            <ChartCard title="Documentação" subtitle="Status dos documentos" right={chartFilter("doc")}>
-              {A.docStatus(dataFor("doc")).length ? (
-                <DonutChart
-                  data={A.docStatus(dataFor("doc"))}
-                  colors={colorsByMap(A.docStatus(dataFor("doc")).map((d) => d.label), DOC_COLORS)}
-                  centerLabel="Clientes"
-                  onSelect={(v) => openDrill({ kind: "doc", value: v }, dataFor("doc"))}
-                />
-              ) : (
-                <ChartEmpty label="Sem dados de documentação" />
-              )}
-            </ChartCard>
+              <ChartCard title="Faixa de prêmio mensal" subtitle="Distribuição da carteira" info={INFO.faixa} className="lg:col-span-2" right={chartFilter("faixa")}>
+                {A.premiumBands(dataFor("faixa")).some((d) => d.value > 0) ? (
+                  <ColumnChart
+                    data={A.premiumBands(dataFor("faixa"))}
+                    onSelect={(_i, label) => openDrill({ kind: "premiumBand", value: label }, dataFor("faixa"))}
+                  />
+                ) : (
+                  <ChartEmpty label="Sem prêmios preenchidos no período" />
+                )}
+              </ChartCard>
+            </div>
+          </section>
 
-            <ChartCard title="Novos clientes por mês" subtitle="Últimos 6 meses" className="lg:col-span-2" right={chartFilter("novos")}>
-              {A.newByMonth(dataFor("novos")).some((d) => d.value > 0) ? (
-                <ColumnChart data={A.newByMonth(dataFor("novos"))} />
-              ) : (
-                <ChartEmpty label="Sem novos contatos no período" />
-              )}
-            </ChartCard>
+          {/* Renovações — ciclo por data_renovacao */}
+          <section>
+            <SectionTitle>Renovações</SectionTitle>
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+              <ChartCard title="Renovações por mês" subtitle="Próximos 6 meses" info={INFO.renovMes} className="lg:col-span-2" right={chartFilter("renewals")}>
+                {A.renewalsByMonth(dataFor("renewals")).some((d) => d.value > 0) ? (
+                  <ColumnChart
+                    data={A.renewalsByMonth(dataFor("renewals"))}
+                    onSelect={(i, label) => openDrill({ kind: "renewalMonth", month: i, label }, dataFor("renewals"))}
+                  />
+                ) : (
+                  <ChartEmpty label="Sem renovações datadas no período" />
+                )}
+              </ChartCard>
 
-            <ChartCard title="Origem dos contatos" right={chartFilter("origem")}>
-              {A.byOrigem(dataFor("origem")).length ? (
-                <DonutChart
-                  data={A.byOrigem(dataFor("origem"))}
-                  colors={categoricalFor(A.byOrigem(dataFor("origem")).map((d) => d.label))}
-                  centerLabel="Contatos"
-                  onSelect={(v) => openDrill({ kind: "origem", value: v }, dataFor("origem"))}
-                />
-              ) : (
-                <ChartEmpty label="Sem origem marcada no período" />
-              )}
-            </ChartCard>
+              <ChartCard title="Status das renovações" info={INFO.renovStatus} right={chartFilter("renovstatus")}>
+                {tags && A.renewalStatusDist(dataFor("renovstatus"), tags).length ? (
+                  <DonutChart
+                    data={A.renewalStatusDist(dataFor("renovstatus"), tags)}
+                    colors={colorsByMap(A.renewalStatusDist(dataFor("renovstatus"), tags).map((d) => d.label), RENEWAL_COLORS)}
+                    centerLabel="Com renovação"
+                    onSelect={(v) => openDrill({ kind: "renewalStatus", value: v }, dataFor("renovstatus"))}
+                  />
+                ) : (
+                  <ChartEmpty label="Sem renovações datadas no período" />
+                )}
+              </ChartCard>
+            </div>
+          </section>
 
-            <ChartCard title="Receita por seguradora" subtitle="Prêmio mensal (ativos)" className="lg:col-span-2" right={chartFilter("mrrseg")}>
-              {tags && A.mrrBySeguradora(dataFor("mrrseg"), tags).length ? (
-                <HBarChart
-                  data={A.mrrBySeguradora(dataFor("mrrseg"), tags)}
-                  valueFormat={(n) => formatMoneyBR(n)}
-                  onSelect={(v) => openDrill({ kind: "mrrSeguradora", value: v }, dataFor("mrrseg"))}
-                />
-              ) : (
-                <ChartEmpty label="Sem prêmios ativos no período" />
-              )}
-            </ChartCard>
+          {/* Receita e aquisição */}
+          <section>
+            <SectionTitle>Receita e aquisição</SectionTitle>
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+              <ChartCard title="Receita por seguradora" subtitle="Prêmio mensal (ativos)" info={INFO.mrrSeg} className="lg:col-span-2" right={chartFilter("mrrseg")}>
+                {tags && A.mrrBySeguradora(dataFor("mrrseg"), tags).length ? (
+                  <HBarChart
+                    data={A.mrrBySeguradora(dataFor("mrrseg"), tags)}
+                    valueFormat={(n) => formatMoneyBR(n)}
+                    onSelect={(v) => openDrill({ kind: "mrrSeguradora", value: v }, dataFor("mrrseg"))}
+                  />
+                ) : (
+                  <ChartEmpty label="Sem prêmios ativos no período" />
+                )}
+              </ChartCard>
 
-            <ChartCard title="Status das renovações" right={chartFilter("renovstatus")}>
-              {tags && A.renewalStatusDist(dataFor("renovstatus"), tags).length ? (
-                <DonutChart
-                  data={A.renewalStatusDist(dataFor("renovstatus"), tags)}
-                  colors={colorsByMap(A.renewalStatusDist(dataFor("renovstatus"), tags).map((d) => d.label), RENEWAL_COLORS)}
-                  centerLabel="Com renovação"
-                  onSelect={(v) => openDrill({ kind: "renewalStatus", value: v }, dataFor("renovstatus"))}
-                />
-              ) : (
-                <ChartEmpty label="Sem renovações datadas no período" />
-              )}
-            </ChartCard>
+              <ChartCard title="Origem dos contatos" info={INFO.origem} right={chartFilter("origem")}>
+                {A.byOrigem(dataFor("origem")).length ? (
+                  <DonutChart
+                    data={A.byOrigem(dataFor("origem"))}
+                    colors={categoricalFor(A.byOrigem(dataFor("origem")).map((d) => d.label))}
+                    centerLabel="Contatos"
+                    onSelect={(v) => openDrill({ kind: "origem", value: v }, dataFor("origem"))}
+                  />
+                ) : (
+                  <ChartEmpty label="Sem origem marcada no período" />
+                )}
+              </ChartCard>
 
-            <ChartCard title="Faixa de prêmio mensal" subtitle="Distribuição da carteira" className="lg:col-span-3" right={chartFilter("faixa")}>
-              {A.premiumBands(dataFor("faixa")).some((d) => d.value > 0) ? (
-                <ColumnChart
-                  data={A.premiumBands(dataFor("faixa"))}
-                  onSelect={(_i, label) => openDrill({ kind: "premiumBand", value: label }, dataFor("faixa"))}
-                />
-              ) : (
-                <ChartEmpty label="Sem prêmios preenchidos no período" />
-              )}
-            </ChartCard>
-          </div>
+              <ChartCard title="Novos clientes por mês" subtitle="Últimos 6 meses" info={INFO.novos} className="lg:col-span-3" right={chartFilter("novos")}>
+                {A.newByMonth(dataFor("novos")).some((d) => d.value > 0) ? (
+                  <ColumnChart data={A.newByMonth(dataFor("novos"))} />
+                ) : (
+                  <ChartEmpty label="Sem novos contatos no período" />
+                )}
+              </ChartCard>
+            </div>
+          </section>
         </>
       ) : null}
 
