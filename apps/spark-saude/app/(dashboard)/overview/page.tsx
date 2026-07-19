@@ -14,7 +14,7 @@ import { ChartCard } from "@/components/charts/chart-card";
 import { DonutChart } from "@/components/charts/donut-chart";
 import { ColumnChart } from "@/components/charts/column-chart";
 import { HBarChart } from "@/components/charts/h-bar-chart";
-import { categoricalFor, colorsByMap, DOC_COLORS } from "@/components/charts/palette";
+import { planoColors, colorsByMap, DOC_COLORS } from "@/components/charts/palette";
 import { humanizeTag, isAttentionTag } from "@/lib/labels";
 import { formatMoneyBR } from "@/lib/utils";
 import type { ChartDatum } from "@/lib/types";
@@ -60,7 +60,7 @@ export default function OverviewPage() {
 
             <ChartCard title="Distribuição por plano">
               {q.data.byPlano.length ? (
-                <DonutChart data={q.data.byPlano} colors={categoricalFor(q.data.byPlano.map((d) => d.label))} centerLabel="Clientes" />
+                <DonutChart data={q.data.byPlano} colors={planoColors(q.data.byPlano.map((d) => d.label))} centerLabel="Clientes" />
               ) : (
                 <ChartEmpty label="Sem planos preenchidos" />
               )}

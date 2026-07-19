@@ -24,9 +24,27 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
   return (await res.json()) as T;
 }
 
+export interface AppConfig {
+  locationId: string;
+  ghlAppBase: string;
+}
+
+/** Deep link to a contact in the native GHL UI (opens in a new tab). */
+export function ghlContactUrl(cfg: AppConfig | undefined, contactId: string): string | undefined {
+  if (!cfg?.ghlAppBase || !cfg.locationId) return undefined;
+  return `${cfg.ghlAppBase}/v2/location/${cfg.locationId}/contacts/detail/${contactId}`;
+}
+
 export const api = {
+  config: () => request<AppConfig>("/api/config"),
   overview: () => request<OverviewSummary>("/api/overview"),
-  renewals: (within: 30 | 60 | 90) => request<RenewalItem[]>(`/api/renewals?within=${within}`),
+  renewals: (params: { within?: number; from?: string; to?: string }) => {
+    const sp = new URLSearchParams();
+    if (params.from) sp.set("from", params.from);
+    if (params.to) sp.set("to", params.to);
+    if (params.within && !params.from && !params.to) sp.set("within", String(params.within));
+    return request<RenewalItem[]>(`/api/renewals?${sp.toString()}`);
+  },
   pipeline: () => request<PipelineView[]>("/api/pipeline"),
   contacts: (params: { q?: string; cursor?: (string | number)[]; limit?: number }) => {
     const sp = new URLSearchParams();

@@ -7,6 +7,8 @@
 export const serverEnv = {
   ghlApiBase: (process.env.GHL_API_BASE || "https://services.leadconnectorhq.com").replace(/\/+$/, ""),
   ghlApiVersion: process.env.GHL_API_VERSION || "2021-07-28",
+  // Base of the GHL app UI (for deep links to contacts). White-label configurable.
+  ghlAppBase: (process.env.GHL_APP_BASE || "https://app.gohighlevel.com").replace(/\/+$/, ""),
   locationId: process.env.GHL_LOCATION_ID || "",
 
   accessToken: process.env.GHL_ACCESS_TOKEN || "",

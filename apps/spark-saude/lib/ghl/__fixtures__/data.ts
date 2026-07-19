@@ -6,7 +6,7 @@ import type {
   PipelineView,
   RenewalItem,
 } from "@/lib/types";
-import { contactToRenewal, type RenewalWindow } from "../renewals";
+import { contactToRenewal, filterRenewalsByRange, renewalRange } from "../renewals";
 import { computeOverview } from "../overview";
 import type { TenantConfig } from "../tenant";
 
@@ -165,10 +165,15 @@ function buildViews(): PipelineView[] {
 
 export const FIXTURE_PIPELINE_VIEWS: PipelineView[] = buildViews();
 
-export function fixtureRenewals(tenant: TenantConfig, withinDays: RenewalWindow): RenewalItem[] {
-  return FIXTURE_CONTACTS.map((c) => contactToRenewal(c, tenant))
-    .filter((r): r is RenewalItem => r !== null && r.daysUntil !== null && r.daysUntil <= withinDays)
-    .sort((a, b) => (a.daysUntil ?? 0) - (b.daysUntil ?? 0));
+export function fixtureRenewals(
+  tenant: TenantConfig,
+  params: { from?: string; to?: string; withinDays?: number },
+): RenewalItem[] {
+  const items = FIXTURE_CONTACTS.map((c) => contactToRenewal(c, tenant)).filter(
+    (r): r is RenewalItem => r !== null,
+  );
+  const { from, to } = renewalRange(params);
+  return filterRenewalsByRange(items, from, to);
 }
 
 export function fixtureOverview(tenant: TenantConfig): OverviewSummary {

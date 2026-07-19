@@ -9,7 +9,7 @@ import {
   removeContactTags,
   updateContactCustomField,
 } from "./contacts";
-import { getRenewals, type RenewalWindow } from "./renewals";
+import { getRenewals } from "./renewals";
 import { getOverview } from "./overview";
 import { getPipelineViews } from "./pipelineView";
 import { moveOpportunityStage } from "./opportunities";
@@ -23,6 +23,10 @@ import type { Contact, OverviewSummary, Paginated, PipelineView, RenewalItem, Se
  * function switches between fixtures (dev) and the real GHL API.
  */
 
+export async function getConfigData(locationIn?: string): Promise<{ locationId: string; ghlAppBase: string }> {
+  return { locationId: resolveLocationId(locationIn), ghlAppBase: serverEnv.ghlAppBase };
+}
+
 export async function getOverviewData(locationIn?: string): Promise<OverviewSummary> {
   const locationId = resolveLocationId(locationIn);
   const tenant = await getTenantConfig(locationId);
@@ -33,13 +37,13 @@ export async function getOverviewData(locationIn?: string): Promise<OverviewSumm
 
 export async function getRenewalsData(
   locationIn: string | undefined,
-  withinDays: RenewalWindow,
+  params: { from?: string; to?: string; withinDays?: number },
 ): Promise<RenewalItem[]> {
   const locationId = resolveLocationId(locationIn);
   const tenant = await getTenantConfig(locationId);
-  if (serverEnv.useFixtures) return fx.fixtureRenewals(tenant, withinDays);
+  if (serverEnv.useFixtures) return fx.fixtureRenewals(tenant, params);
   const resolver = await buildFieldResolver(locationId, tenant);
-  return getRenewals({ locationId, tenant, resolver, withinDays });
+  return getRenewals({ locationId, tenant, resolver, ...params });
 }
 
 export async function getPipelineData(locationIn?: string): Promise<PipelineView[]> {

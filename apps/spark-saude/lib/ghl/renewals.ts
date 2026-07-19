@@ -51,18 +51,49 @@ export interface RenewalParams {
   locationId: string;
   tenant: TenantConfig;
   resolver: FieldResolver;
-  withinDays?: RenewalWindow;
+  /** ISO yyyy-mm-dd lower bound on data_renovacao (omit to include overdue). */
+  from?: string;
+  /** ISO yyyy-mm-dd upper bound on data_renovacao. */
+  to?: string;
+  /** Back-compat: "next N days" — sets `to` = today+N when from/to are absent. */
+  withinDays?: number;
+}
+
+/** Pure date-range filter over already-computed renewal items. */
+export function filterRenewalsByRange(items: RenewalItem[], from?: string, to?: string): RenewalItem[] {
+  const fromT = from ? new Date(`${from}T00:00:00`).getTime() : null;
+  const toT = to ? new Date(`${to}T23:59:59`).getTime() : null;
+  return items
+    .filter((r) => {
+      if (!r.dataRenovacao) return false;
+      const t = new Date(r.dataRenovacao).getTime();
+      if (Number.isNaN(t)) return false;
+      if (fromT != null && t < fromT) return false;
+      if (toT != null && t > toT) return false;
+      return true;
+    })
+    .sort((a, b) => (a.daysUntil ?? 0) - (b.daysUntil ?? 0));
+}
+
+export function renewalRange(params: { from?: string; to?: string; withinDays?: number }): {
+  from?: string;
+  to?: string;
+} {
+  if (params.from || params.to) return { from: params.from, to: params.to };
+  if (params.withinDays) {
+    const to = new Date();
+    to.setDate(to.getDate() + params.withinDays);
+    return { to: to.toISOString().slice(0, 10) };
+  }
+  return {};
 }
 
 export async function getRenewals(params: RenewalParams): Promise<RenewalItem[]> {
-  const { locationId, tenant, resolver, withinDays = 90 } = params;
+  const { locationId, tenant, resolver } = params;
   const contacts = await fetchAllByTag({ locationId, tenant, resolver, tag: tenant.linhaTag });
-
   const items = contacts
     .map((c) => contactToRenewal(c, tenant))
-    .filter((r): r is RenewalItem => r !== null && r.daysUntil !== null && r.daysUntil <= withinDays)
-    // most urgent first (overdue negatives lead), then by date
-    .sort((a, b) => (a.daysUntil ?? 0) - (b.daysUntil ?? 0));
-
-  return items;
+    .filter((r): r is RenewalItem => r !== null);
+  const { from, to } = renewalRange(params);
+  return filterRenewalsByRange(items, from, to);
 }

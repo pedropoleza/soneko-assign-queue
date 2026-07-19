@@ -4,9 +4,9 @@ import * as React from "react";
 import type { ChartDatum } from "@/lib/types";
 
 /**
- * Donut for categorical identity (plano, documentação). Legend always present;
- * hover a segment (or legend row) to read its label/value in the center.
- * 2px surface gap between segments; text uses ink tokens, not the series color.
+ * Donut for categorical/ordinal identity (plano, documentação). Legend always
+ * present; hover a segment or a legend row to read it in the center. 2px surface
+ * gap between segments; text uses ink tokens, never the series color.
  */
 export function DonutChart({
   data,
@@ -20,8 +20,8 @@ export function DonutChart({
   const total = data.reduce((s, d) => s + d.value, 0);
   const [hover, setHover] = React.useState<number | null>(null);
 
-  const size = 168;
-  const stroke = 22;
+  const size = 164;
+  const stroke = 20;
   const r = (size - stroke) / 2;
   const cx = size / 2;
   const cy = size / 2;
@@ -30,7 +30,7 @@ export function DonutChart({
   let acc = 0;
   const segs = data.map((d, i) => {
     const pct = total > 0 ? (d.value / total) * 100 : 0;
-    const seg = { i, pct, offset: acc, color: colors[i] ?? "#9aa0aa", label: d.label, value: d.value };
+    const seg = { i, pct, offset: acc, color: colors[i] ?? "#a7b1c0", label: d.label, value: d.value };
     acc += pct;
     return seg;
   });
@@ -40,10 +40,10 @@ export function DonutChart({
   const centerText = active ? active.label : centerLabel;
 
   return (
-    <div className="flex flex-col items-center gap-5 sm:flex-row sm:gap-6">
+    <div className="flex flex-col items-center gap-5 sm:flex-row sm:gap-7">
       <div className="relative shrink-0" style={{ width: size, height: size }}>
         <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="-rotate-90">
-          <circle cx={cx} cy={cy} r={r} fill="none" stroke="hsl(214 22% 93%)" strokeWidth={stroke} />
+          <circle cx={cx} cy={cy} r={r} fill="none" stroke="#eef1f6" strokeWidth={stroke} />
           {total > 0 &&
             segs.map((s) => {
               const len = Math.max(s.pct - gap, 0.5);
@@ -64,23 +64,23 @@ export function DonutChart({
                   style={{
                     cursor: "pointer",
                     transition: "stroke-width .15s ease, opacity .15s ease",
-                    opacity: hover == null || hover === s.i ? 1 : 0.45,
+                    opacity: hover == null || hover === s.i ? 1 : 0.4,
                   }}
                 />
               );
             })}
         </svg>
         <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-          <span className="text-2xl font-semibold leading-none">{centerValue}</span>
+          <span className="text-[28px] font-semibold leading-none tracking-tight">{centerValue}</span>
           <span className="mt-1 max-w-[96px] text-center text-[11px] leading-tight text-muted-foreground">{centerText}</span>
         </div>
       </div>
 
-      <ul className="grid w-full gap-1.5 sm:min-w-[132px]">
+      <ul className="grid w-full gap-0.5 sm:min-w-[140px]">
         {segs.map((s) => (
           <li
             key={s.i}
-            className="flex cursor-default items-center gap-2 text-sm"
+            className="flex cursor-default items-center gap-2 rounded-md px-1.5 py-1 text-sm transition-colors hover:bg-muted"
             onMouseEnter={() => setHover(s.i)}
             onMouseLeave={() => setHover(null)}
           >

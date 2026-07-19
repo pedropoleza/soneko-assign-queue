@@ -3,6 +3,7 @@
 import * as React from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/client/api";
+import { ExternalLink } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -35,16 +36,29 @@ function f(fields: ContactFields, key: keyof ContactFields): string | undefined 
   return v == null ? undefined : String(v);
 }
 
-function Body({ contact }: { contact: Contact }) {
+function Body({ contact, ghlUrl }: { contact: Contact; ghlUrl?: string }) {
   const fields = contact.fields;
   return (
     <div className="overflow-y-auto">
-      <div className="flex items-center gap-3 px-5 py-4">
-        <Avatar name={contact.name} className="h-11 w-11 text-sm" />
-        <div className="min-w-0">
-          <DialogTitle className="truncate">{contact.name}</DialogTitle>
-          <p className="truncate text-sm text-muted-foreground">{contact.email || contact.phone || "—"}</p>
+      <div className="flex items-center justify-between gap-3 px-5 py-4 pr-12">
+        <div className="flex min-w-0 items-center gap-3">
+          <Avatar name={contact.name} className="h-11 w-11 text-sm" />
+          <div className="min-w-0">
+            <DialogTitle className="truncate">{contact.name}</DialogTitle>
+            <p className="truncate text-sm text-muted-foreground">{contact.email || contact.phone || "—"}</p>
+          </div>
         </div>
+        {ghlUrl ? (
+          <a
+            href={ghlUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            title="Abrir contato no GHL"
+            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-primary"
+          >
+            <ExternalLink className="h-4 w-4" />
+          </a>
+        ) : null}
       </div>
 
       {contact.tags.length > 0 ? (
@@ -94,10 +108,12 @@ export function Client360({
   contactId,
   open,
   onOpenChange,
+  ghlUrl,
 }: {
   contactId: string | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  ghlUrl?: string;
 }) {
   const q = useQuery({
     queryKey: ["contact", contactId],
@@ -119,7 +135,7 @@ export function Client360({
             <ErrorState message={(q.error as Error).message} onRetry={() => q.refetch()} />
           </div>
         ) : q.data ? (
-          <Body contact={q.data} />
+          <Body contact={q.data} ghlUrl={ghlUrl} />
         ) : null}
       </DialogContent>
     </Dialog>

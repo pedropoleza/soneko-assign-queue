@@ -2,9 +2,9 @@
 
 import * as React from "react";
 import { useSearchParams } from "next/navigation";
-import { useInfiniteQuery } from "@tanstack/react-query";
-import { Search } from "lucide-react";
-import { api } from "@/lib/client/api";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { Search, ExternalLink } from "lucide-react";
+import { api, ghlContactUrl } from "@/lib/client/api";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -32,6 +32,8 @@ export function ClientsView() {
 
   const [selected, setSelected] = React.useState<string | null>(null);
   const [open, setOpen] = React.useState(false);
+
+  const config = useQuery({ queryKey: ["config"], queryFn: api.config, staleTime: Infinity });
 
   // Deep-link from the Overview "Abrir" action (?contact=<id>).
   React.useEffect(() => {
@@ -88,6 +90,7 @@ export function ClientsView() {
                     <TH>Seguradora / plano</TH>
                     <TH>Renovação</TH>
                     <TH>Tags</TH>
+                    <TH className="w-10" />
                   </TR>
                 </THead>
                 <TBody>
@@ -119,6 +122,20 @@ export function ClientsView() {
                           {c.tags.length > 3 ? <Badge tone="gray">+{c.tags.length - 3}</Badge> : null}
                         </div>
                       </TD>
+                      <TD>
+                        {ghlContactUrl(config.data, c.id) ? (
+                          <a
+                            href={ghlContactUrl(config.data, c.id)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                            title="Abrir contato no GHL"
+                            className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-primary"
+                          >
+                            <ExternalLink className="h-4 w-4" />
+                          </a>
+                        ) : null}
+                      </TD>
                     </TR>
                   ))}
                 </TBody>
@@ -141,7 +158,12 @@ export function ClientsView() {
         </div>
       </Card>
 
-      <Client360 contactId={selected} open={open} onOpenChange={setOpen} />
+      <Client360
+        contactId={selected}
+        open={open}
+        onOpenChange={setOpen}
+        ghlUrl={selected ? ghlContactUrl(config.data, selected) : undefined}
+      />
     </div>
   );
 }

@@ -1,19 +1,24 @@
 import { getRenewalsData } from "@/lib/ghl";
 import { jsonError, jsonOk, locationFromRequest } from "@/lib/http";
-import type { RenewalWindow } from "@/lib/ghl/renewals";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-function parseWindow(v: string | null): RenewalWindow {
-  const n = Number(v);
-  return n === 30 || n === 60 ? n : n === 90 ? 90 : 90;
-}
+const ISO = /^\d{4}-\d{2}-\d{2}$/;
 
 export async function GET(req: Request) {
   try {
-    const within = parseWindow(new URL(req.url).searchParams.get("within"));
-    return jsonOk(await getRenewalsData(locationFromRequest(req), within));
+    const sp = new URL(req.url).searchParams;
+    const from = sp.get("from");
+    const to = sp.get("to");
+    const withinRaw = Number(sp.get("within"));
+    const withinDays = [30, 60, 90].includes(withinRaw) ? withinRaw : undefined;
+    const params = {
+      from: from && ISO.test(from) ? from : undefined,
+      to: to && ISO.test(to) ? to : undefined,
+      withinDays: from || to ? undefined : (withinDays ?? 60),
+    };
+    return jsonOk(await getRenewalsData(locationFromRequest(req), params));
   } catch (err) {
     return jsonError(err);
   }
