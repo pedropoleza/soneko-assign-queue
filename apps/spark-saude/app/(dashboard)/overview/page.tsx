@@ -22,7 +22,7 @@ import { DonutChart } from "@/components/charts/donut-chart";
 import { ColumnChart } from "@/components/charts/column-chart";
 import { HBarChart } from "@/components/charts/h-bar-chart";
 import { PipelineFunnel } from "@/components/pipeline/pipeline-funnel";
-import { planoColors, colorsByMap, categoricalFor, DOC_COLORS } from "@/components/charts/palette";
+import { planoColors, colorsByMap, categoricalFor, DOC_COLORS, RENEWAL_COLORS } from "@/components/charts/palette";
 import { humanizeTag, isAttentionTag } from "@/lib/labels";
 import { formatMoneyBR } from "@/lib/utils";
 import type { Contact } from "@/lib/types";
@@ -190,6 +190,42 @@ export default function OverviewPage() {
                 />
               ) : (
                 <ChartEmpty label="Sem origem marcada no período" />
+              )}
+            </ChartCard>
+
+            <ChartCard title="Receita por seguradora" subtitle="Prêmio mensal (ativos)" className="lg:col-span-2" right={chartFilter("mrrseg")}>
+              {tags && A.mrrBySeguradora(dataFor("mrrseg"), tags).length ? (
+                <HBarChart
+                  data={A.mrrBySeguradora(dataFor("mrrseg"), tags)}
+                  valueFormat={(n) => formatMoneyBR(n)}
+                  onSelect={(v) => openDrill({ kind: "mrrSeguradora", value: v }, dataFor("mrrseg"))}
+                />
+              ) : (
+                <ChartEmpty label="Sem prêmios ativos no período" />
+              )}
+            </ChartCard>
+
+            <ChartCard title="Status das renovações" right={chartFilter("renovstatus")}>
+              {tags && A.renewalStatusDist(dataFor("renovstatus"), tags).length ? (
+                <DonutChart
+                  data={A.renewalStatusDist(dataFor("renovstatus"), tags)}
+                  colors={colorsByMap(A.renewalStatusDist(dataFor("renovstatus"), tags).map((d) => d.label), RENEWAL_COLORS)}
+                  centerLabel="Com renovação"
+                  onSelect={(v) => openDrill({ kind: "renewalStatus", value: v }, dataFor("renovstatus"))}
+                />
+              ) : (
+                <ChartEmpty label="Sem renovações datadas no período" />
+              )}
+            </ChartCard>
+
+            <ChartCard title="Faixa de prêmio mensal" subtitle="Distribuição da carteira" className="lg:col-span-3" right={chartFilter("faixa")}>
+              {A.premiumBands(dataFor("faixa")).some((d) => d.value > 0) ? (
+                <ColumnChart
+                  data={A.premiumBands(dataFor("faixa"))}
+                  onSelect={(_i, label) => openDrill({ kind: "premiumBand", value: label }, dataFor("faixa"))}
+                />
+              ) : (
+                <ChartEmpty label="Sem prêmios preenchidos no período" />
               )}
             </ChartCard>
           </div>

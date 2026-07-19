@@ -42,6 +42,14 @@ export const DOC_COLORS: Record<string, string> = {
   "Sem info": "#98A2B3",
 };
 
+export const RENEWAL_COLORS: Record<string, string> = {
+  Pendente: "#F79009",
+  Avisado: "#155EEF",
+  Feito: "#12B76A",
+  "Não renovou": "#F04438",
+  "Sem status": "#98A2B3",
+};
+
 export function colorsByMap(labels: string[], map: Record<string, string>, fallback = "#a7b1c0"): string[] {
   return labels.map((l) => map[l] ?? fallback);
 }

@@ -179,6 +179,59 @@ export function attention(contacts: Contact[], attentionTags: string[]): Contact
   return contacts.filter((c) => attentionTags.some((t) => c.tags.includes(t))).slice(0, 12);
 }
 
+/** Monthly recurring revenue (sum of premiums) per seguradora, active clients only. */
+export function mrrBySeguradora(contacts: Contact[], tags: ConfigTags): ChartDatum[] {
+  const m = new Map<string, number>();
+  for (const c of contacts) {
+    if (!c.tags.includes(tags.active)) continue;
+    const p = num(c.fields.monthlyPremium);
+    const s = String(c.fields.seguradora ?? "").trim();
+    if (!p || !s) continue;
+    m.set(s, (m.get(s) ?? 0) + p);
+  }
+  return [...m.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6).map(([label, value]) => ({ label, value: Math.round(value) }));
+}
+
+export function renewalStatusLabel(c: Contact, tags: ConfigTags): string {
+  const t = tags.renewal;
+  if (c.tags.includes(t.feito)) return "Feito";
+  if (c.tags.includes(t.naoRenovou)) return "Não renovou";
+  if (c.tags.includes(t.avisado)) return "Avisado";
+  if (c.tags.includes(t.pendente)) return "Pendente";
+  return "Sem status";
+}
+
+/** Renewal pipeline health — status split among clients that have a renewal date. */
+export function renewalStatusDist(contacts: Contact[], tags: ConfigTags): ChartDatum[] {
+  const m = new Map<string, number>();
+  for (const c of contacts) {
+    if (!c.fields.dataRenovacao) continue;
+    const l = renewalStatusLabel(c, tags);
+    m.set(l, (m.get(l) ?? 0) + 1);
+  }
+  return ["Pendente", "Avisado", "Feito", "Não renovou", "Sem status"]
+    .map((label) => ({ label, value: m.get(label) ?? 0 }))
+    .filter((d) => d.value > 0);
+}
+
+const BANDS: { label: string; test: (p: number) => boolean }[] = [
+  { label: "< US$200", test: (p) => p < 200 },
+  { label: "US$200–350", test: (p) => p >= 200 && p < 350 },
+  { label: "US$350–500", test: (p) => p >= 350 && p < 500 },
+  { label: "US$500+", test: (p) => p >= 500 },
+];
+
+export function premiumBands(contacts: Contact[]): ChartDatum[] {
+  const counts = BANDS.map((b) => ({ label: b.label, value: 0 }));
+  for (const c of contacts) {
+    const p = num(c.fields.monthlyPremium);
+    if (p == null) continue;
+    const idx = BANDS.findIndex((b) => b.test(p));
+    if (idx >= 0) counts[idx]!.value++;
+  }
+  return counts;
+}
+
 // --- Drill-down: from a metric/segment to the underlying contacts ------------
 
 export type DrillSpec =
@@ -188,6 +241,9 @@ export type DrillSpec =
   | { kind: "doc"; value: string }
   | { kind: "renewalMonth"; month: number; label: string }
   | { kind: "origem"; value: string }
+  | { kind: "renewalStatus"; value: string }
+  | { kind: "premiumBand"; value: string }
+  | { kind: "mrrSeguradora"; value: string }
   | { kind: "attention" };
 
 export function drill(contacts: Contact[], spec: DrillSpec, tags: ConfigTags, attentionTags: string[]): { title: string; contacts: Contact[] } {
@@ -237,6 +293,30 @@ export function drill(contacts: Contact[], spec: DrillSpec, tags: ConfigTags, at
       const tag = Object.keys(ORIGEM_LABELS).find((k) => ORIGEM_LABELS[k] === spec.value) ?? `origem_${spec.value.toLowerCase()}`;
       return { title: `Origem · ${spec.value}`, contacts: contacts.filter((c) => c.tags.includes(tag)) };
     }
+    case "renewalStatus":
+      return {
+        title: `Renovação · ${spec.value}`,
+        contacts: contacts.filter((c) => c.fields.dataRenovacao && renewalStatusLabel(c, tags) === spec.value),
+      };
+    case "premiumBand": {
+      const band = BANDS.find((b) => b.label === spec.value);
+      return {
+        title: `Prêmio · ${spec.value}`,
+        contacts: band
+          ? contacts.filter((c) => {
+              const p = num(c.fields.monthlyPremium);
+              return p != null && band.test(p);
+            })
+          : [],
+      };
+    }
+    case "mrrSeguradora":
+      return {
+        title: `Receita · ${spec.value}`,
+        contacts: contacts.filter(
+          (c) => c.tags.includes(tags.active) && num(c.fields.monthlyPremium) && String(c.fields.seguradora ?? "").trim() === spec.value,
+        ),
+      };
     case "attention":
       return { title: "Precisa de atenção", contacts: attention(contacts, attentionTags) };
     default:
