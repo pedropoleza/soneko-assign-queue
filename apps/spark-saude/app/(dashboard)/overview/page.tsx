@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { addDays, startOfMonth, startOfYear } from "date-fns";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { api, ghlContactUrl } from "@/lib/client/api";
 import * as A from "@/lib/analytics";
 import type { DrillSpec } from "@/lib/analytics";
@@ -22,6 +22,7 @@ import { DonutChart } from "@/components/charts/donut-chart";
 import { ColumnChart } from "@/components/charts/column-chart";
 import { HBarChart } from "@/components/charts/h-bar-chart";
 import { PipelineFunnel } from "@/components/pipeline/pipeline-funnel";
+import { ActivitySections } from "@/components/activity/activity-sections";
 import { planoColors, colorsByMap, categoricalFor, DOC_COLORS, RENEWAL_COLORS } from "@/components/charts/palette";
 import { humanizeTag, isAttentionTag } from "@/lib/labels";
 import { formatMoneyBR } from "@/lib/utils";
@@ -57,6 +58,11 @@ export default function OverviewPage() {
   const book = useQuery({ queryKey: ["book"], queryFn: api.book, staleTime: 60_000 });
   const config = useQuery({ queryKey: ["config"], queryFn: api.config, staleTime: Infinity });
   const pipeline = useQuery({ queryKey: ["pipeline"], queryFn: api.pipeline });
+  const activity = useQuery({
+    queryKey: ["activity", range.key, range.from, range.to],
+    queryFn: () => api.activity({ from: range.from, to: range.to }),
+    placeholderData: keepPreviousData,
+  });
 
   const contacts = book.data?.contacts ?? [];
   const cfg = config.data;
@@ -253,6 +259,21 @@ export default function OverviewPage() {
           <EmptyState title="Nenhuma pipeline encontrada" hint="Verifique as pipelines configuradas nesta location." />
         )}
       </section>
+
+      {/* Atividade — Agenda · Conversas · Receita */}
+      {activity.isLoading ? (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-[112px] w-full" />
+          ))}
+        </div>
+      ) : activity.isError ? (
+        <ErrorState message={(activity.error as Error).message} onRetry={() => activity.refetch()} />
+      ) : activity.data ? (
+        <div className={`space-y-6 ${activity.isFetching ? "opacity-70 transition-opacity" : ""}`}>
+          <ActivitySections data={activity.data} ghlUrlFor={ghlUrlFor} />
+        </div>
+      ) : null}
 
       {/* Attention */}
       <Card>
