@@ -4,12 +4,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   return (
     <div className="min-h-screen">
       <header className="sticky top-0 z-30 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
-        <div className="mx-auto flex max-w-[1400px] items-center justify-between px-6 py-3">
-          <div className="flex items-baseline gap-2">
-            <span className="text-[15px] font-semibold tracking-tight">Spark Saúde</span>
-            <span className="text-sm text-muted-foreground">Dashboard da Corretora</span>
+        <div className="mx-auto flex max-w-[1400px] items-center justify-between px-6 py-2.5">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-7 w-7 items-center justify-center rounded-md bg-primary text-[13px] font-bold text-primary-foreground">
+              S
+            </div>
+            <div className="flex items-baseline gap-2">
+              <span className="text-[15px] font-semibold tracking-tight">Spark Saúde</span>
+              <span className="hidden text-sm text-muted-foreground sm:inline">Dashboard da Corretora</span>
+            </div>
           </div>
-          <span className="text-sm text-muted-foreground">Seguro Saúde</span>
+          <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">Seguro Saúde</span>
         </div>
         <div className="mx-auto max-w-[1400px] px-6">
           <TopTabs />

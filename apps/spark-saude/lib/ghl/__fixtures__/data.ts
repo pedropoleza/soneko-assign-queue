@@ -7,6 +7,7 @@ import type {
   RenewalItem,
 } from "@/lib/types";
 import { contactToRenewal, type RenewalWindow } from "../renewals";
+import { computeOverview } from "../overview";
 import type { TenantConfig } from "../tenant";
 
 /**
@@ -79,6 +80,36 @@ export const FIXTURE_CONTACTS: Contact[] = [
   c("natalia-gomes", "Natália Gomes", ["cliente_ativo", "documento_pendente"], {
     dataRenovacao: iso(9), seguradora: "Molina", planoEscolhido: "Silver 70", monthlyPremium: 268, documentacaoRecebida: "Parcial", pessoasNoSeguro: 2,
   }),
+  c("otavio-barros", "Otávio Barros", ["cliente_ativo", "renovacao_avisada"], {
+    dataRenovacao: iso(63), seguradora: "UnitedHealthcare", planoEscolhido: "Gold 80", monthlyPremium: 534, documentacaoRecebida: "Sim", pessoasNoSeguro: 3,
+  }),
+  c("paula-freitas", "Paula Freitas", ["cliente_ativo"], {
+    dataRenovacao: iso(78), seguradora: "Aetna", planoEscolhido: "Silver 70", monthlyPremium: 296, documentacaoRecebida: "Sim", pessoasNoSeguro: 2,
+  }),
+  c("rafael-teixeira", "Rafael Teixeira", ["cliente_ativo", "renovacao_pendente"], {
+    dataRenovacao: iso(95), seguradora: "Oscar", planoEscolhido: "Bronze 60", monthlyPremium: 189, documentacaoRecebida: "Parcial", pessoasNoSeguro: 1,
+  }),
+  c("sofia-ramos", "Sofia Ramos", ["cliente_ativo", "renovacao_feita"], {
+    dataRenovacao: iso(112), seguradora: "Ambetter", planoEscolhido: "Gold 80", monthlyPremium: 501, documentacaoRecebida: "Sim", pessoasNoSeguro: 4,
+  }),
+  c("thiago-cardoso", "Thiago Cardoso", ["cliente_ativo"], {
+    dataRenovacao: iso(134), seguradora: "Cigna", planoEscolhido: "Silver 73", monthlyPremium: 247, documentacaoRecebida: "Sim", pessoasNoSeguro: 2,
+  }),
+  c("ursula-melo", "Úrsula Melo", ["cliente_ativo", "renovacao_avisada"], {
+    dataRenovacao: iso(150), seguradora: "Molina", planoEscolhido: "Bronze 60", monthlyPremium: 172, documentacaoRecebida: "Não", pessoasNoSeguro: 1,
+  }),
+  c("vitor-azevedo", "Vitor Azevedo", ["cliente_ativo"], {
+    dataRenovacao: iso(46), seguradora: "UnitedHealthcare", planoEscolhido: "Silver 70", monthlyPremium: 318, documentacaoRecebida: "Sim", pessoasNoSeguro: 3,
+  }),
+  c("wagner-pinto", "Wagner Pinto", ["cliente_ativo", "requer_atencao"], {
+    dataRenovacao: iso(38), seguradora: "Oscar", planoEscolhido: "Gold 80", monthlyPremium: 462, documentacaoRecebida: "Parcial", pessoasNoSeguro: 2,
+  }),
+  c("yara-campos", "Yara Campos", ["cliente_ativo"], {
+    dataRenovacao: iso(88), seguradora: "Aetna", planoEscolhido: "Bronze 60", monthlyPremium: 205, documentacaoRecebida: "Sim", pessoasNoSeguro: 1,
+  }),
+  c("zeca-moura", "Zeca Moura", ["aplicacao_em_analise"], {
+    seguradora: "Ambetter", planoEscolhido: "Silver 70", monthlyPremium: 279, documentacaoRecebida: "Parcial", underwritingStatus: "Em análise", pessoasNoSeguro: 2,
+  }),
 ];
 
 const FIXTURE_STAGES = {
@@ -141,19 +172,5 @@ export function fixtureRenewals(tenant: TenantConfig, withinDays: RenewalWindow)
 }
 
 export function fixtureOverview(tenant: TenantConfig): OverviewSummary {
-  const has = (c: Contact, tag: string) => c.tags.includes(tag);
-  const count = (tag: string) => FIXTURE_CONTACTS.filter((c) => has(c, tag)).length;
-  const renewals60 = fixtureRenewals(tenant, 60);
-  const attention = FIXTURE_CONTACTS.filter((c) =>
-    tenant.attentionTags.some((t) => c.tags.includes(t)),
-  ).slice(0, 12);
-  return {
-    metrics: [
-      { key: "activeClients", label: "Clientes ativos", value: count(tenant.overviewTags.activeClients) },
-      { key: "upcomingRenewals", label: "Renovações (60 dias)", value: renewals60.length },
-      { key: "applicationsInProgress", label: "Aplicações em andamento", value: count(tenant.overviewTags.applicationsInProgress) },
-      { key: "awaitingApproval", label: "Aguardando aprovação", value: count(tenant.overviewTags.awaitingApproval) },
-    ],
-    attention,
-  };
+  return computeOverview(FIXTURE_CONTACTS, tenant);
 }

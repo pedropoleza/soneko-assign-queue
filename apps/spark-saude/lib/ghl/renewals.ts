@@ -19,7 +19,7 @@ function daysUntil(dateStr?: string | number): number | null {
   return differenceInCalendarDays(d, new Date());
 }
 
-function statusFromTags(tags: string[], t: TenantConfig): RenewalStatus {
+export function statusFromRenewalTags(tags: string[], t: TenantConfig): RenewalStatus {
   const has = (x: string) => tags.includes(x);
   if (has(t.renewalTags.feito)) return "feito";
   if (has(t.renewalTags.naoRenovou)) return "nao_renovou";
@@ -42,7 +42,7 @@ export function contactToRenewal(c: Contact, tenant: TenantConfig): RenewalItem 
     monthlyPremium: typeof c.fields.monthlyPremium === "number" ? c.fields.monthlyPremium : undefined,
     dataRenovacao,
     daysUntil: d,
-    status: statusFromTags(c.tags, tenant),
+    status: statusFromRenewalTags(c.tags, tenant),
     tags: c.tags,
   };
 }

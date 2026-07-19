@@ -10,35 +10,83 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { LoadingRows, ErrorState, EmptyState } from "@/components/ui/data-state";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import { ChartCard } from "@/components/charts/chart-card";
+import { DonutChart } from "@/components/charts/donut-chart";
+import { ColumnChart } from "@/components/charts/column-chart";
+import { HBarChart } from "@/components/charts/h-bar-chart";
+import { categoricalFor, colorsByMap, DOC_COLORS } from "@/components/charts/palette";
 import { humanizeTag, isAttentionTag } from "@/lib/labels";
+import { formatMoneyBR } from "@/lib/utils";
+import type { ChartDatum } from "@/lib/types";
+
+function ChartEmpty({ label }: { label: string }) {
+  return <div className="flex h-[176px] items-center justify-center text-sm text-muted-foreground">{label}</div>;
+}
 
 export default function OverviewPage() {
   const q = useQuery({ queryKey: ["overview"], queryFn: api.overview });
 
   return (
-    <div>
-      <PageHeader
-        title="Visão geral"
-        description="Resumo da carteira de saúde e o que precisa de atenção hoje."
-      />
+    <div className="space-y-5">
+      <PageHeader title="Visão geral" description="Panorama da carteira de saúde, renovações e receita." />
 
+      {/* KPI row */}
       {q.isLoading ? (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {Array.from({ length: 4 }).map((_, i) => (
-            <Skeleton key={i} className="h-[92px] w-full" />
+            <Skeleton key={i} className="h-[104px] w-full" />
           ))}
         </div>
       ) : q.isError ? (
         <ErrorState message={(q.error as Error).message} onRetry={() => q.refetch()} />
       ) : q.data ? (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          {q.data.metrics.map((m, i) => (
-            <StatCard key={m.key} label={m.label} value={m.value} accent={i === 1} />
-          ))}
-        </div>
+        <>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <StatCard label="Clientes ativos" value={q.data.kpis.activeClients} hint={`${q.data.kpis.totalClients} na carteira`} />
+            <StatCard label="Receita mensal" value={formatMoneyBR(q.data.kpis.mrr)} hint="Soma dos prêmios ativos" accent />
+            <StatCard label="Renovações (60 dias)" value={q.data.kpis.upcomingRenewals} hint="Próximas do vencimento" />
+            <StatCard label="Aguardando aprovação" value={q.data.kpis.awaitingApproval} hint={`${q.data.kpis.applicationsInProgress} em andamento`} />
+          </div>
+
+          {/* Charts */}
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+            <ChartCard title="Renovações por mês" subtitle="Próximos 6 meses" className="lg:col-span-2">
+              {q.data.renewalsByMonth.some((d: ChartDatum) => d.value > 0) ? (
+                <ColumnChart data={q.data.renewalsByMonth} />
+              ) : (
+                <ChartEmpty label="Sem renovações datadas ainda" />
+              )}
+            </ChartCard>
+
+            <ChartCard title="Distribuição por plano">
+              {q.data.byPlano.length ? (
+                <DonutChart data={q.data.byPlano} colors={categoricalFor(q.data.byPlano.map((d) => d.label))} centerLabel="Clientes" />
+              ) : (
+                <ChartEmpty label="Sem planos preenchidos" />
+              )}
+            </ChartCard>
+
+            <ChartCard title="Carteira por seguradora" className="lg:col-span-2">
+              {q.data.bySeguradora.length ? (
+                <HBarChart data={q.data.bySeguradora} />
+              ) : (
+                <ChartEmpty label="Sem seguradora preenchida" />
+              )}
+            </ChartCard>
+
+            <ChartCard title="Documentação" subtitle="Status dos documentos">
+              {q.data.docStatus.length ? (
+                <DonutChart data={q.data.docStatus} colors={colorsByMap(q.data.docStatus.map((d) => d.label), DOC_COLORS)} centerLabel="Clientes" />
+              ) : (
+                <ChartEmpty label="Sem dados de documentação" />
+              )}
+            </ChartCard>
+          </div>
+        </>
       ) : null}
 
-      <Card className="mt-6">
+      {/* Attention */}
+      <Card>
         <CardHeader>
           <CardTitle>Precisa de atenção</CardTitle>
         </CardHeader>

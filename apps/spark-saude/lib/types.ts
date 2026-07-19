@@ -111,15 +111,27 @@ export interface PipelineView {
   total: number;
 }
 
-export interface OverviewMetric {
-  key: string;
+export interface ChartDatum {
   label: string;
   value: number;
-  hint?: string;
+}
+
+export interface OverviewKpis {
+  activeClients: number;
+  mrr: number; // monthly recurring revenue (sum of monthly premiums)
+  upcomingRenewals: number; // within 60 days
+  awaitingApproval: number;
+  applicationsInProgress: number;
+  totalClients: number; // linha_saude contacts
 }
 
 export interface OverviewSummary {
-  metrics: OverviewMetric[];
+  kpis: OverviewKpis;
+  bySeguradora: ChartDatum[];
+  byPlano: ChartDatum[];
+  docStatus: ChartDatum[];
+  renewalsByMonth: ChartDatum[];
+  renewalStatus: ChartDatum[];
   attention: Contact[];
 }
 
