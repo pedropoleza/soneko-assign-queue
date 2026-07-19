@@ -20,6 +20,7 @@ const iso = (days: number) => addDays(new Date(), days).toISOString();
 
 // Spread entry dates across recent months so the date filter has visible effect.
 let __seq = 0;
+const ORIGENS = ["origem_indicacao", "origem_whatsapp", "origem_organica"];
 
 function c(
   id: string,
@@ -28,13 +29,14 @@ function c(
   fields: Contact["fields"],
   extra: Partial<Contact> = {},
 ): Contact {
-  const daysAgo = 4 + __seq++ * 7;
+  const seq = __seq++;
+  const daysAgo = 4 + seq * 7;
   return {
     id,
     name,
     email: `${id}@exemplo.com`,
     phone: "+1 (786) 555-0100",
-    tags: ["linha_saude", ...tags],
+    tags: ["linha_saude", ORIGENS[seq % ORIGENS.length]!, ...tags],
     dateAdded: iso(-daysAgo),
     fields,
     ...extra,

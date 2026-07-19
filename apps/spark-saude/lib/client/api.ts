@@ -24,9 +24,19 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
   return (await res.json()) as T;
 }
 
+export interface ConfigTags {
+  linha: string;
+  active: string;
+  applicationsInProgress: string;
+  awaiting: string;
+  attention: string[];
+  renewal: { avisado: string; pendente: string; feito: string; naoRenovou: string };
+}
+
 export interface AppConfig {
   locationId: string;
   ghlAppBase: string;
+  tags: ConfigTags;
 }
 
 /** Deep link to a contact in the native GHL UI (opens in a new tab). */
@@ -37,6 +47,7 @@ export function ghlContactUrl(cfg: AppConfig | undefined, contactId: string): st
 
 export const api = {
   config: () => request<AppConfig>("/api/config"),
+  book: () => request<{ contacts: Contact[] }>("/api/book"),
   overview: (params: { from?: string; to?: string } = {}) => {
     const sp = new URLSearchParams();
     if (params.from) sp.set("from", params.from);

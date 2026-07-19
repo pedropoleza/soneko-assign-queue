@@ -12,10 +12,12 @@ export function DonutChart({
   data,
   colors,
   centerLabel = "Total",
+  onSelect,
 }: {
   data: ChartDatum[];
   colors: string[];
   centerLabel?: string;
+  onSelect?: (label: string) => void;
 }) {
   const total = data.reduce((s, d) => s + d.value, 0);
   const [hover, setHover] = React.useState<number | null>(null);
@@ -66,6 +68,7 @@ export function DonutChart({
                     strokeDashoffset={-s.offset}
                     onMouseEnter={() => setHover(s.i)}
                     onMouseLeave={() => setHover(null)}
+                    onClick={() => onSelect?.(s.label)}
                     style={{
                       cursor: "pointer",
                       transition: "stroke-width .18s ease, opacity .18s ease",
@@ -88,9 +91,10 @@ export function DonutChart({
         {segs.map((s) => (
           <li
             key={s.i}
-            className="flex cursor-default items-center gap-2.5 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-muted"
+            className={`flex items-center gap-2.5 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-muted ${onSelect ? "cursor-pointer" : "cursor-default"}`}
             onMouseEnter={() => setHover(s.i)}
             onMouseLeave={() => setHover(null)}
+            onClick={() => onSelect?.(s.label)}
           >
             <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: s.color }} />
             <span className="flex-1 truncate text-foreground">{s.label}</span>

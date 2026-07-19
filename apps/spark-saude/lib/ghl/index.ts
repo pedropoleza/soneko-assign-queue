@@ -3,6 +3,7 @@ import { getTenantConfig } from "./tenant";
 import { buildFieldResolver } from "./customFields";
 import {
   addContactTags,
+  fetchAllByTag,
   getContactDetail,
   listContactsByTag,
   quickSearchContacts,
@@ -23,8 +24,30 @@ import type { Contact, OverviewSummary, Paginated, PipelineView, RenewalItem, Se
  * function switches between fixtures (dev) and the real GHL API.
  */
 
-export async function getConfigData(locationIn?: string): Promise<{ locationId: string; ghlAppBase: string }> {
-  return { locationId: resolveLocationId(locationIn), ghlAppBase: serverEnv.ghlAppBase };
+export async function getConfigData(locationIn?: string) {
+  const locationId = resolveLocationId(locationIn);
+  const tenant = await getTenantConfig(locationId);
+  return {
+    locationId,
+    ghlAppBase: serverEnv.ghlAppBase,
+    tags: {
+      linha: tenant.linhaTag,
+      active: tenant.overviewTags.activeClients,
+      applicationsInProgress: tenant.overviewTags.applicationsInProgress,
+      awaiting: tenant.overviewTags.awaitingApproval,
+      attention: tenant.attentionTags,
+      renewal: tenant.renewalTags,
+    },
+  };
+}
+
+/** The full linha_saude book for client-side analytics (capped by fetchAllByTag). */
+export async function getBookData(locationIn?: string): Promise<Contact[]> {
+  const locationId = resolveLocationId(locationIn);
+  const tenant = await getTenantConfig(locationId);
+  if (serverEnv.useFixtures) return fx.FIXTURE_CONTACTS;
+  const resolver = await buildFieldResolver(locationId, tenant);
+  return fetchAllByTag({ locationId, tenant, resolver, tag: tenant.linhaTag });
 }
 
 export async function getOverviewData(

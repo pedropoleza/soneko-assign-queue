@@ -8,7 +8,15 @@ import type { ChartDatum } from "@/lib/types";
  * Horizontal bars for magnitude across categories. Each bar sits on a subtle
  * full-width track; category on the left, value at the tip. Single hue.
  */
-export function HBarChart({ data, color = SERIES_BLUE }: { data: ChartDatum[]; color?: string }) {
+export function HBarChart({
+  data,
+  color = SERIES_BLUE,
+  onSelect,
+}: {
+  data: ChartDatum[];
+  color?: string;
+  onSelect?: (label: string) => void;
+}) {
   const max = Math.max(1, ...data.map((d) => d.value));
 
   return (
@@ -16,7 +24,11 @@ export function HBarChart({ data, color = SERIES_BLUE }: { data: ChartDatum[]; c
       {data.map((d, i) => {
         const w = d.value > 0 ? Math.max((d.value / max) * 100, 2) : 0;
         return (
-          <li key={i} className="group flex items-center gap-3 text-sm">
+          <li
+            key={i}
+            onClick={() => onSelect?.(d.label)}
+            className={`group flex items-center gap-3 text-sm ${onSelect ? "-mx-1.5 cursor-pointer rounded-md px-1.5 py-0.5 hover:bg-muted" : ""}`}
+          >
             <span className="w-32 shrink-0 truncate text-muted-foreground" title={d.label}>
               {d.label}
             </span>

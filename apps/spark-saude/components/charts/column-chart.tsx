@@ -15,11 +15,13 @@ export function ColumnChart({
   color = SERIES_BLUE,
   height = 180,
   unit = "",
+  onSelect,
 }: {
   data: ChartDatum[];
   color?: string;
   height?: number;
   unit?: string;
+  onSelect?: (index: number, label: string) => void;
 }) {
   const rawMax = Math.max(1, ...data.map((d) => d.value));
   const niceMax = rawMax <= 4 ? rawMax : Math.ceil(rawMax / 2) * 2;
@@ -52,7 +54,11 @@ export function ColumnChart({
             {data.map((d, i) => {
               const h = d.value > 0 ? Math.max((d.value / niceMax) * 100, 1.5) : 0;
               return (
-                <div key={i} className="group relative flex h-full flex-1 items-end justify-center">
+                <div
+                  key={i}
+                  onClick={() => onSelect?.(i, d.label)}
+                  className={`group relative flex h-full flex-1 items-end justify-center ${onSelect ? "cursor-pointer" : ""}`}
+                >
                   <div
                     className="w-full max-w-[22px] rounded-t-[4px] transition-[filter] group-hover:brightness-90"
                     style={{ height: `${h}%`, background: color }}

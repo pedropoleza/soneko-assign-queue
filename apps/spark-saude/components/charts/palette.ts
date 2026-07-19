@@ -16,6 +16,13 @@ export const CHART_AXIS = "#d9dfe8";
 // Ordinal blue ramp (light → dark) around the GHL blue.
 export const BLUE_RAMP = ["#84adf5", "#4f88f0", "#155EEF", "#1146b8", "#0c3286"];
 
+// Categorical (distinct identity) — fixed order, never cycled.
+export const CATEGORICAL = ["#155EEF", "#7A5AF8", "#06AED4", "#12B76A", "#F79009", "#EE46BC"];
+
+export function categoricalFor(labels: string[]): string[] {
+  return labels.map((_, i) => CATEGORICAL[i % CATEGORICAL.length]!);
+}
+
 const PLANO_ORDER = ["Bronze", "Silver", "Gold", "Platinum"];
 
 /** Plano tiers coloured by rank along the blue ramp; extras stay neutral. */
