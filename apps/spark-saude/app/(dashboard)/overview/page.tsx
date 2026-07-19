@@ -8,6 +8,7 @@ import { api, ghlContactUrl } from "@/lib/client/api";
 import * as A from "@/lib/analytics";
 import type { DrillSpec } from "@/lib/analytics";
 import { PageHeader } from "@/components/shell/page-header";
+import { SectionHeader } from "@/components/shell/section-header";
 import { StatCard } from "@/components/overview/stat-card";
 import { DrillDrawer } from "@/components/overview/drill-drawer";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
@@ -70,11 +71,6 @@ const INFO = {
   origem:
     "Origem dos contatos pelas tags origem_indicacao, origem_whatsapp e origem_organica.",
 } as const;
-
-/** Título de seção no padrão GHL (texto limpo, sem ícone). */
-function SectionTitle({ children }: { children: React.ReactNode }) {
-  return <h2 className="mb-3 text-sm font-semibold tracking-tight">{children}</h2>;
-}
 
 export default function OverviewPage() {
   const presets = React.useMemo(buildPresets, []);
@@ -157,7 +153,7 @@ export default function OverviewPage() {
 
           {/* Carteira — composição do livro de clientes */}
           <section>
-            <SectionTitle>Carteira</SectionTitle>
+            <SectionHeader title="Carteira" className="mb-4" />
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
               <ChartCard title="Carteira por seguradora" info={INFO.seguradora} className="lg:col-span-2" right={chartFilter("seguradora")}>
                 {A.bySeguradora(dataFor("seguradora")).length ? (
@@ -211,7 +207,7 @@ export default function OverviewPage() {
 
           {/* Renovações — ciclo por data_renovacao */}
           <section>
-            <SectionTitle>Renovações</SectionTitle>
+            <SectionHeader title="Renovações" className="mb-4" />
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
               <ChartCard title="Renovações por mês" subtitle="Próximos 6 meses" info={INFO.renovMes} className="lg:col-span-2" right={chartFilter("renewals")}>
                 {A.renewalsByMonth(dataFor("renewals")).some((d) => d.value > 0) ? (
@@ -241,7 +237,7 @@ export default function OverviewPage() {
 
           {/* Receita e aquisição */}
           <section>
-            <SectionTitle>Receita e aquisição</SectionTitle>
+            <SectionHeader title="Receita e aquisição" className="mb-4" />
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
               <ChartCard title="Receita por seguradora" subtitle="Prêmio mensal (ativos)" info={INFO.mrrSeg} className="lg:col-span-2" right={chartFilter("mrrseg")}>
                 {tags && A.mrrBySeguradora(dataFor("mrrseg"), tags).length ? (
@@ -282,7 +278,7 @@ export default function OverviewPage() {
 
       {/* Pipeline */}
       <section>
-        <h2 className="mb-3 text-sm font-semibold tracking-tight">Pipeline</h2>
+        <SectionHeader title="Pipeline" className="mb-4" />
         {pipeline.isLoading ? (
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
             {Array.from({ length: 2 }).map((_, i) => (

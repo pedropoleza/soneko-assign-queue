@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/card";
 import { Badge, type BadgeProps } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/data-state";
 import { ChartCard } from "@/components/charts/chart-card";
+import { SectionHeader } from "@/components/shell/section-header";
 import { DonutChart } from "@/components/charts/donut-chart";
 import { HBarChart } from "@/components/charts/h-bar-chart";
 import { colorsByMap, categoricalFor } from "@/components/charts/palette";
@@ -45,7 +46,7 @@ function ChartEmpty({ label }: { label: string }) {
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section>
-      <h2 className="mb-3 text-sm font-semibold tracking-tight">{title}</h2>
+      <SectionHeader title={title} className="mb-4" />
       {children}
     </section>
   );
