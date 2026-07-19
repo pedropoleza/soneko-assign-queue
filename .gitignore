@@ -11,3 +11,4 @@ dist
 .tsbuild/
 *.tsbuildinfo
 
+.vercel
