@@ -22,6 +22,10 @@ export const FIXTURE_PLANS: PlanQuote[] = [
     emergencia: "$500 copay",
     saudeMental: "$0 copay",
     medicamentoGenerico: "$5 copay",
+    tipoPlano: "EPO",
+    qualityRating: 4,
+    hsaElegivel: false,
+    custoAnualEstimado: 6200,
     fonte: "api",
   },
   {
@@ -40,6 +44,10 @@ export const FIXTURE_PLANS: PlanQuote[] = [
     emergencia: "$400 copay",
     saudeMental: "$10 copay",
     medicamentoGenerico: "$3 copay",
+    tipoPlano: "HMO",
+    qualityRating: 3,
+    hsaElegivel: false,
+    custoAnualEstimado: 4800,
     fonte: "api",
   },
   {
@@ -58,6 +66,10 @@ export const FIXTURE_PLANS: PlanQuote[] = [
     emergencia: "50% coinsurance",
     saudeMental: "$25 copay",
     medicamentoGenerico: "$10 copay",
+    tipoPlano: "HMO",
+    qualityRating: null,
+    hsaElegivel: true,
+    custoAnualEstimado: 9100,
     fonte: "api",
   },
 ];

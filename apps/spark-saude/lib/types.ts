@@ -45,6 +45,7 @@ export type SemanticField =
   | "pessoasNaCasa"
   | "pessoasNoSeguro"
   | "rendaCasa"
+  | "dataNascimento"
   | "idioma"
   | "beneficiario"
   | "primaryBeneficiary"
@@ -65,6 +66,11 @@ export interface Contact {
   lastName?: string;
   email?: string;
   phone?: string;
+  /** Native GHL date of birth (ISO). Feeds exact-age quoting in Cotação. */
+  dateOfBirth?: string;
+  postalCode?: string;
+  state?: string;
+  city?: string;
   tags: string[];
   dateAdded?: string;
   dateUpdated?: string;

@@ -1,5 +1,13 @@
 import type { PlanOptionDraft, PublicProposal, Quote, QuoteProfile } from "@/lib/cotacao/types";
 import type { QuoteSearchResult } from "@/lib/cms";
+import type { PrefillResult } from "@/lib/cotacao/prefill";
+
+export interface SearchOptions {
+  sort?: "premium" | "deductible" | "oopc" | "total_costs" | "quality_rating";
+  metalLevels?: string[];
+  limit?: number;
+  offset?: number;
+}
 
 /** Front-end client for the Cotação endpoints. Browser talks only to /api/*. */
 
@@ -23,9 +31,13 @@ export interface CreateQuoteResult {
 }
 
 export const cotacaoApi = {
-  /** CMS estimate for a household profile. */
-  search: (profile: QuoteProfile) =>
-    request<QuoteSearchResult>("/api/quotes/search", { method: "POST", body: JSON.stringify(profile) }),
+  /** CMS estimate for a household profile (server-side sort/filter/paging). */
+  search: (profile: QuoteProfile, opts: SearchOptions = {}) =>
+    request<QuoteSearchResult>("/api/quotes/search", { method: "POST", body: JSON.stringify({ profile, ...opts }) }),
+
+  /** Seed the household from the picked GHL contact's real CRM data. */
+  prefill: (contactId: string, year: number) =>
+    request<PrefillResult>(`/api/quotes/prefill?contactId=${encodeURIComponent(contactId)}&year=${year}`),
 
   /** Upload a plan print (multipart) → private storage, returns a signed URL. */
   uploadPrint: async (file: File): Promise<{ url: string }> => {

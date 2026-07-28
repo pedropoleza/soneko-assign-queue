@@ -17,6 +17,10 @@ interface RawContact {
   lastName?: string;
   email?: string;
   phone?: string;
+  dateOfBirth?: string;
+  postalCode?: string;
+  state?: string;
+  city?: string;
   tags?: string[];
   dateAdded?: string;
   dateUpdated?: string;
@@ -41,6 +45,10 @@ export function normalizeContact(raw: RawContact, resolver: FieldResolver): Cont
     lastName: raw.lastName,
     email: raw.email,
     phone: raw.phone,
+    dateOfBirth: raw.dateOfBirth,
+    postalCode: raw.postalCode,
+    state: raw.state,
+    city: raw.city,
     tags: raw.tags ?? [],
     dateAdded: raw.dateAdded,
     dateUpdated: raw.dateUpdated,

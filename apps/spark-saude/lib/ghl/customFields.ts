@@ -72,6 +72,7 @@ const ALIASES: Partial<Record<SemanticField, string[]>> = {
   pessoasNaCasa: ["pessoasnacasa"],
   pessoasNoSeguro: ["pessoasnoseguro"],
   rendaCasa: ["rendacasa"],
+  dataNascimento: ["datanascimento", "datadenascimento", "dateofbirth", "dob"],
   idioma: ["idioma", "idiomapref", "language"],
   beneficiario: ["beneficirio", "beneficiario"],
   primaryBeneficiary: ["primarybeneficiary"],

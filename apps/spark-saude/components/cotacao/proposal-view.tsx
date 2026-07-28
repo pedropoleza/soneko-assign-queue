@@ -6,6 +6,7 @@ import { cotacaoApi } from "@/lib/client/cotacao";
 import type { PublicProposal } from "@/lib/cotacao/types";
 import { PlanCard } from "@/components/cotacao/plan-card";
 import { EstimateNote } from "@/components/cotacao/estimate-note";
+import { cn } from "@/lib/utils";
 
 /**
  * The client-facing proposal (CLAUDE.md §4 Ponta B, §8 brand). A premium,
@@ -100,7 +101,16 @@ export function ProposalView({ token }: { token: string }) {
               <EstimateNote text={brand?.disclaimer ?? ""} />
             </div>
 
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {/* Column count follows the number of options so two plans sit
+                centered side by side instead of leaving a dead third column. */}
+            <div
+              className={cn(
+                "mx-auto grid grid-cols-1 gap-4",
+                data.options.length === 1 && "max-w-sm",
+                data.options.length === 2 && "md:max-w-3xl md:grid-cols-2",
+                data.options.length >= 3 && "md:grid-cols-2 lg:grid-cols-3",
+              )}
+            >
               {data.options.map((opt) => {
                 const decided = responses[opt.id];
                 return (

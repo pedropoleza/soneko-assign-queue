@@ -1,9 +1,11 @@
 -- ============================================================================
--- Cotação Leão — persistence schema (CLAUDE.md §5)
+-- Cotação Leão — persistence schema (docs/cotacao.md §5)
 -- Isolated schema `spark_cotacao`, accessed ONLY through SECURITY DEFINER RPCs
 -- in `public` granted to service_role — the same isolation model as spark_saude.
 -- Nothing here is exposed to anon/authenticated or to other projects.
--- Apply once (Supabase SQL editor / migration) after the schema is approved.
+--
+-- This file is the source of truth and is idempotent: re-running it is safe.
+-- Applied to the pilot project via Supabase migrations.
 -- ============================================================================
 
 create schema if not exists spark_cotacao;
@@ -53,6 +55,12 @@ create table if not exists spark_cotacao.quote_option (
 );
 create index if not exists quote_option_quote_idx on spark_cotacao.quote_option (quote_id);
 
+-- Real CMS plan attributes a broker compares on (added after the first release).
+alter table spark_cotacao.quote_option add column if not exists tipo_plano text;             -- HMO / PPO / EPO / POS
+alter table spark_cotacao.quote_option add column if not exists quality_rating numeric;      -- CMS star rating 1-5
+alter table spark_cotacao.quote_option add column if not exists hsa_elegivel boolean;
+alter table spark_cotacao.quote_option add column if not exists custo_anual_estimado numeric; -- oopc
+
 create table if not exists spark_cotacao.quote_option_response (
   id               uuid primary key default gen_random_uuid(),
   quote_option_id  uuid not null references spark_cotacao.quote_option(id) on delete cascade,
@@ -64,6 +72,9 @@ create table if not exists spark_cotacao.quote_option_response (
 create index if not exists response_option_idx on spark_cotacao.quote_option_response (quote_option_id);
 
 -- --- RPCs (SECURITY DEFINER, service_role only) -----------------------------
+-- The app speaks camelCase end to end, so these RPCs take and return camelCase
+-- JSON and do the snake_case mapping here. Returning raw `to_jsonb(row)` would
+-- leak column names the TypeScript types don't have.
 
 create or replace function public.spark_cotacao_create_quote(p_quote jsonb)
 returns void language plpgsql security definer set search_path = spark_cotacao, public as $$
@@ -86,7 +97,8 @@ begin
       (id, quote_id, plan_id, seguradora, nome_plano, metal_level, premio_mensal,
        premio_sem_credito, credito_fiscal, dedutivel, max_bolso, atencao_primaria,
        atencao_especialista, atencao_urgencia, emergencia, saude_mental,
-       medicamento_generico, print_url, fonte)
+       medicamento_generico, tipo_plano, quality_rating, hsa_elegivel,
+       custo_anual_estimado, print_url, fonte)
     values (
       (opt->>'id')::uuid, (p_quote->>'id')::uuid, opt->>'planId', opt->>'seguradora',
       opt->>'nomePlano', opt->>'metalLevel', (opt->>'premioMensal')::numeric,
@@ -94,17 +106,64 @@ begin
       nullif(opt->>'dedutivel','')::numeric, nullif(opt->>'maxBolso','')::numeric,
       opt->>'atencaoPrimaria', opt->>'atencaoEspecialista', opt->>'atencaoUrgencia',
       opt->>'emergencia', opt->>'saudeMental', opt->>'medicamentoGenerico',
+      opt->>'tipoPlano', nullif(opt->>'qualityRating','')::numeric,
+      nullif(opt->>'hsaElegivel','')::boolean, nullif(opt->>'custoAnualEstimado','')::numeric,
       opt->>'printUrl', coalesce(opt->>'fonte','api'));
   end loop;
 end $$;
 
 create or replace function public.spark_cotacao_get_quote(p_id uuid)
 returns jsonb language sql security definer set search_path = spark_cotacao, public as $$
-  select to_jsonb(q) || jsonb_build_object(
+  select jsonb_build_object(
+    'id', q.id,
+    'ghlContactId', q.ghl_contact_id,
+    'corretoraId', q.corretora_id,
+    'createdAt', q.created_at,
+    'zipcode', q.zipcode,
+    'state', q.state,
+    'countyfips', q.countyfips,
+    'income', q.income,
+    'year', q.year,
+    'status', q.status,
+    'proposalToken', q.proposal_token,
+    'tokenExpiresAt', q.token_expires_at,
+    'householdJson', q.household_json,
     'options', coalesce((
-      select jsonb_agg(to_jsonb(o) || jsonb_build_object(
-        'response', (select to_jsonb(r) from spark_cotacao.quote_option_response r
-                     where r.quote_option_id = o.id order by r.respondido_em desc limit 1)))
+      select jsonb_agg(jsonb_build_object(
+        'id', o.id,
+        'quoteId', o.quote_id,
+        'planId', o.plan_id,
+        'seguradora', o.seguradora,
+        'nomePlano', o.nome_plano,
+        'metalLevel', o.metal_level,
+        'premioMensal', o.premio_mensal,
+        'premioSemCredito', o.premio_sem_credito,
+        'creditoFiscal', o.credito_fiscal,
+        'dedutivel', o.dedutivel,
+        'maxBolso', o.max_bolso,
+        'atencaoPrimaria', o.atencao_primaria,
+        'atencaoEspecialista', o.atencao_especialista,
+        'atencaoUrgencia', o.atencao_urgencia,
+        'emergencia', o.emergencia,
+        'saudeMental', o.saude_mental,
+        'medicamentoGenerico', o.medicamento_generico,
+        'tipoPlano', o.tipo_plano,
+        'qualityRating', o.quality_rating,
+        'hsaElegivel', o.hsa_elegivel,
+        'custoAnualEstimado', o.custo_anual_estimado,
+        'printUrl', o.print_url,
+        'fonte', o.fonte,
+        'response', (
+          select jsonb_build_object(
+            'id', r.id,
+            'quoteOptionId', r.quote_option_id,
+            'decisao', r.decisao,
+            'comentario', r.comentario,
+            'respondidoEm', r.respondido_em)
+          from spark_cotacao.quote_option_response r
+          where r.quote_option_id = o.id
+          order by r.respondido_em desc limit 1)
+      ) order by o.premio_mensal nulls last)
       from spark_cotacao.quote_option o where o.quote_id = q.id), '[]'::jsonb))
   from spark_cotacao.quote q where q.id = p_id;
 $$;

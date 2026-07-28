@@ -19,10 +19,22 @@ export type OptionSource = "api" | "manual";
 /** A member of the household, as the CMS expects it. */
 export interface QuotePerson {
   age: number;
+  /**
+   * ISO date of birth. When present it is sent INSTEAD of `age`, so the CMS
+   * derives the exact age at the coverage effective date — this is what fixes
+   * the known "o sistema não reconhece as idades das crianças" distortion
+   * (docs/cotacao.md §1), since child rating bands shift the premium sharply.
+   */
+  dob?: string | null;
   gender: Gender;
   relationship: Relationship;
   aptcEligible: boolean;
   usesTobacco: boolean;
+  /** Already covered elsewhere (Medicare/employer) → excluded from the subsidy. */
+  hasMec?: boolean;
+  isPregnant?: boolean;
+  /** Expected medical usage — drives the projected annual out-of-pocket cost. */
+  utilizationLevel?: "Low" | "Medium" | "High";
 }
 
 /** The broker's input for a quotation — becomes the CMS `household`/`place`/`year`. */
@@ -63,6 +75,13 @@ export interface PlanQuote {
   emergencia: string | null;
   saudeMental: string | null;
   medicamentoGenerico: string | null;
+  /** Plan design — HMO / PPO / EPO / POS. A real decision driver for the client. */
+  tipoPlano?: string | null;
+  /** CMS star rating (1–5); null when the plan is too new to be rated. */
+  qualityRating?: number | null;
+  hsaElegivel?: boolean | null;
+  /** Projected ANNUAL out-of-pocket cost for this household's utilization (oopc). */
+  custoAnualEstimado?: number | null;
   fonte: OptionSource;
 }
 
