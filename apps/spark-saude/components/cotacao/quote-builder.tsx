@@ -100,7 +100,12 @@ export function QuoteBuilder() {
   const [recommending, setRecommending] = React.useState(false);
   const [sending, setSending] = React.useState(false);
   const [sent, setSent] = React.useState(false);
-  const [channel, setChannel] = React.useState<"SMS" | "Email" | "WhatsApp">("SMS");
+  const [channel, setChannel] = React.useState<"WhatsApp" | "Email">("WhatsApp");
+  // The lead's real phone/e-mail, read when the proposal is ready — so the
+  // dispatch shows where it will land and can fill a missing field on the spot.
+  const [dest, setDest] = React.useState<{ phone?: string | null; email?: string | null } | null>(null);
+  const [destInput, setDestInput] = React.useState("");
+  const [savingDest, setSavingDest] = React.useState(false);
   const [generating, setGenerating] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [result, setResult] = React.useState<CreateQuoteResult | null>(null);
@@ -283,18 +288,54 @@ export function QuoteBuilder() {
     }
   };
 
+  // Read where the proposal will land (phone for WhatsApp, e-mail for e-mail).
+  React.useEffect(() => {
+    if (!result || !profile.contactId) return;
+    setDest(null);
+    setDestInput("");
+    api
+      .contact(profile.contactId)
+      .then((c) => setDest({ phone: c.phone, email: c.email }))
+      .catch(() => setDest({}));
+  }, [result, profile.contactId]);
+
+  const destField = channel === "Email" ? "email" : "phone";
+  const destValue = channel === "Email" ? dest?.email : dest?.phone;
+  const destMissing = dest !== null && !destValue;
+
   /** Send the proposal to the lead on the CRM's own channel. */
   const sendToLead = async () => {
     if (!result || !profile.contactId) return;
     setSending(true);
     setError(null);
     try {
-      await cotacaoApi.sendToLead(profile.contactId, clientMessage, channel);
+      // Missing the field the channel needs? Save it to the contact first
+      // (upsert), so next time it's already there — then send.
+      if (destMissing) {
+        const value = destInput.trim();
+        if (!value) {
+          setError(channel === "Email" ? "Informe o e-mail do contato." : "Informe o telefone do contato.");
+          setSending(false);
+          return;
+        }
+        setSavingDest(true);
+        await api.updateContactBasics(profile.contactId, { [destField]: value });
+        setDest((d) => ({ ...d, [destField]: value }));
+        setSavingDest(false);
+      }
+      await cotacaoApi.sendToLead({
+        contactId: profile.contactId,
+        message: clientMessage,
+        channel,
+        proposalUrl,
+        profile: { contactName: profile.contactName, year: profile.year },
+      });
       setSent(true);
     } catch (e) {
       setError((e as Error).message);
     } finally {
       setSending(false);
+      setSavingDest(false);
     }
   };
 
@@ -861,29 +902,70 @@ export function QuoteBuilder() {
               <div className="mt-3 rounded-lg bg-primary/[0.05] p-3 ring-1 ring-primary/15">
                 {sent ? (
                   <p className="flex items-center gap-1.5 text-sm font-medium text-[#0E9F6E]">
-                    <Check className="h-4 w-4" /> Enviada para {profile.contactName} por {channel}
+                    <Check className="h-4 w-4" /> Enviada para {profile.contactName} por{" "}
+                    {channel === "Email" ? "e-mail" : "WhatsApp"}
                   </p>
                 ) : (
                   <>
                     <p className="text-xs font-medium">
                       Enviar direto para <strong>{profile.contactName}</strong> pelo GHL
                     </p>
-                    <div className="mt-2 flex flex-wrap items-center gap-2">
-                      <select
-                        value={channel}
-                        onChange={(e) => setChannel(e.target.value as typeof channel)}
-                        className="h-9 rounded-md border border-input bg-background px-2 text-sm"
-                        aria-label="Canal de envio"
-                      >
-                        <option value="SMS">SMS</option>
-                        <option value="WhatsApp">WhatsApp</option>
-                        <option value="Email">E-mail</option>
-                      </select>
-                      <Button size="sm" onClick={sendToLead} disabled={sending} className="h-9">
-                        {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                        {sending ? "Enviando…" : "Enviar cotação ao lead"}
-                      </Button>
+                    <div className="mt-2 flex gap-1 rounded-lg bg-muted p-0.5 text-xs font-medium">
+                      {(["WhatsApp", "Email"] as const).map((c) => (
+                        <button
+                          key={c}
+                          type="button"
+                          onClick={() => {
+                            setChannel(c);
+                            setDestInput("");
+                          }}
+                          className={cn(
+                            "flex-1 rounded-md px-2 py-1.5 transition-colors",
+                            channel === c ? "bg-card shadow-card" : "text-muted-foreground hover:text-foreground",
+                          )}
+                        >
+                          {c === "Email" ? "E-mail" : "WhatsApp"}
+                        </button>
+                      ))}
                     </div>
+
+                    {/* Onde vai cair — e, se faltar o dado, preenche na hora (upsert). */}
+                    {destMissing ? (
+                      <div className="mt-2">
+                        <input
+                          value={destInput}
+                          onChange={(e) => setDestInput(e.target.value)}
+                          type={channel === "Email" ? "email" : "tel"}
+                          placeholder={channel === "Email" ? "email@cliente.com" : "+1 305 555 0100"}
+                          className="h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm"
+                        />
+                        <p className="mt-1 flex items-start gap-1 text-[10px] leading-snug text-muted-foreground">
+                          <Info className="mt-px h-3 w-3 shrink-0" />
+                          O contato não tem {channel === "Email" ? "e-mail" : "telefone"}. Salvamos no CRM ao enviar.
+                        </p>
+                      </div>
+                    ) : destValue ? (
+                      <p className="mt-1.5 text-[11px] text-muted-foreground">
+                        {channel === "Email" ? "Para" : "WhatsApp para"}{" "}
+                        <span className="font-medium text-foreground">{destValue}</span>
+                      </p>
+                    ) : null}
+
+                    <Button
+                      size="sm"
+                      onClick={sendToLead}
+                      disabled={sending || dest === null}
+                      className="mt-2 h-9 w-full"
+                    >
+                      {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                      {savingDest
+                        ? "Salvando contato…"
+                        : sending
+                          ? "Enviando…"
+                          : destMissing
+                            ? `Salvar e enviar por ${channel === "Email" ? "e-mail" : "WhatsApp"}`
+                            : `Enviar por ${channel === "Email" ? "e-mail" : "WhatsApp"}`}
+                    </Button>
                   </>
                 )}
               </div>

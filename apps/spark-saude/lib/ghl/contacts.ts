@@ -155,6 +155,19 @@ export async function getContactDetail(
   return normalizeContact(data.contact, resolver);
 }
 
+/**
+ * Just the destination fields (phone / e-mail), without resolving custom
+ * fields — the dispatch guard only needs to know where the proposal can land,
+ * so it skips the heavier `getContactDetail` path.
+ */
+export async function getContactChannels(
+  locationId: string,
+  id: string,
+): Promise<{ phone?: string | null; email?: string | null }> {
+  const data = await ghlFetch<{ contact?: RawContact }>(`/contacts/${id}`, { locationId });
+  return { phone: data.contact?.phone ?? null, email: data.contact?.email ?? null };
+}
+
 // --- Writes ----------------------------------------------------------------
 
 export interface CreateContactInput {
@@ -199,26 +212,26 @@ export async function createContact(
 }
 
 /**
- * Write the basics the quote form knows back onto the contact (native fields,
- * not custom), so the CRM record converges on what the broker just typed and
- * feeds exact-age pricing next time this person is quoted.
+ * Write native fields the quote/dispatch flow knows back onto the contact, so
+ * the CRM record converges on what the broker just typed: date of birth feeds
+ * exact-age pricing, phone/e-mail are what the proposal is actually sent to.
  *
  * GHL asymmetry (verified live): POST /contacts accepts `gender`, but
  * PUT /contacts/{id} rejects it ("property gender should not exist") — and one
- * rejected property fails the whole body. So updates send ONLY dateOfBirth;
- * gender is written at creation time and left alone afterwards.
+ * rejected property fails the whole body. So gender is written only at creation
+ * time; updates carry dateOfBirth / phone / e-mail, which PUT accepts.
  */
 export async function updateContactBasics(
   locationId: string,
   id: string,
-  basics: { dateOfBirth?: string; gender?: "male" | "female" },
+  basics: { dateOfBirth?: string; gender?: "male" | "female"; phone?: string; email?: string },
 ): Promise<void> {
-  if (!basics.dateOfBirth) return;
-  await ghlFetch(`/contacts/${id}`, {
-    locationId,
-    method: "PUT",
-    body: { dateOfBirth: basics.dateOfBirth },
-  });
+  const body: Record<string, unknown> = {};
+  if (basics.dateOfBirth) body.dateOfBirth = basics.dateOfBirth;
+  if (basics.phone) body.phone = basics.phone;
+  if (basics.email) body.email = basics.email;
+  if (!Object.keys(body).length) return;
+  await ghlFetch(`/contacts/${id}`, { locationId, method: "PUT", body });
 }
 
 export async function addContactTags(locationId: string, id: string, tags: string[]): Promise<string[]> {
@@ -251,18 +264,20 @@ export async function addContactNote(locationId: string, id: string, body: strin
 /**
  * Send a message to the lead through GHL Conversations, so the proposal goes
  * out on the channel the contact already uses and the thread stays in the CRM.
+ * For e-mail the caller passes a ready HTML body (branded); SMS/WhatsApp carry
+ * the plain text as-is.
  */
 export async function sendContactMessage(
   locationId: string,
   contactId: string,
   message: string,
   type: "SMS" | "Email" | "WhatsApp" = "SMS",
-  subject?: string,
+  email?: { subject: string; html: string },
 ): Promise<{ messageId?: string; conversationId?: string }> {
   const body: Record<string, unknown> = { type, contactId, message };
   if (type === "Email") {
-    body.subject = subject || "Sua cotação de seguro saúde";
-    body.html = message.replace(/\n/g, "<br/>");
+    body.subject = email?.subject || "Sua cotação de seguro saúde";
+    body.html = email?.html || message.replace(/\n/g, "<br/>");
   }
   const data = await ghlFetch<{ messageId?: string; conversationId?: string }>("/conversations/messages", {
     locationId,

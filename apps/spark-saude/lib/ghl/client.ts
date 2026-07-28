@@ -5,7 +5,8 @@ import { GhlApiError, GhlRateLimitError } from "./errors";
 /**
  * Typed fetch wrapper for the GHL API v2 (CLAUDE.md §2, §7).
  * - Injects Authorization (server token) + the required `Version` header.
- * - Retries transparently on 401 (refresh token) and on 429 (rate limit).
+ * - Retries transparently on 401 (refresh token), 429 (rate limit) and on
+ *   transient 5xx (502/503/504 — the GHL edge hiccups under load).
  * - Never runs in the browser; callers are route handlers / lib/ghl modules.
  */
 
@@ -20,6 +21,8 @@ interface RequestOptions {
 }
 
 const MAX_RATE_LIMIT_RETRIES = 3;
+const MAX_TRANSIENT_RETRIES = 3;
+const TRANSIENT_STATUS = new Set([502, 503, 504]);
 
 function buildUrl(path: string, query?: RequestOptions["query"]): string {
   const url = new URL(serverEnv.ghlApiBase + (path.startsWith("/") ? path : `/${path}`));
@@ -71,6 +74,7 @@ export async function ghlFetch<T = unknown>(path: string, opts: RequestOptions):
 
   let token = await getAccessToken(locationId);
   let attempt = 0;
+  let transientAttempt = 0;
   let refreshed = false;
 
   // eslint-disable-next-line no-constant-condition
@@ -102,6 +106,14 @@ export async function ghlFetch<T = unknown>(path: string, opts: RequestOptions):
       const retryAfter = Number(res.headers.get("Retry-After"));
       const waitMs = Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : 500 * 2 ** attempt;
       await new Promise((r) => setTimeout(r, waitMs));
+      continue;
+    }
+
+    // Transient 5xx -> the GHL edge hiccups intermittently; a short backoff
+    // usually clears it. Bounded so a real outage still surfaces as an error.
+    if (TRANSIENT_STATUS.has(res.status) && transientAttempt < MAX_TRANSIENT_RETRIES) {
+      transientAttempt += 1;
+      await new Promise((r) => setTimeout(r, 400 * 2 ** transientAttempt));
       continue;
     }
 

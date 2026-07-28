@@ -91,9 +91,11 @@ export const api = {
     gender?: "male" | "female";
   }) => request<{ id: string; name: string }>("/api/contacts", { method: "POST", body: JSON.stringify(input) }),
 
-  /** Upsert native basics (birth date, gender) onto an existing contact. */
-  updateContactBasics: (id: string, basics: { dateOfBirth?: string; gender?: "male" | "female" }) =>
-    request<{ ok: true }>(`/api/contacts/${id}`, { method: "PATCH", body: JSON.stringify(basics) }),
+  /** Upsert native fields (birth date, phone, e-mail) onto an existing contact. */
+  updateContactBasics: (
+    id: string,
+    basics: { dateOfBirth?: string; gender?: "male" | "female"; phone?: string; email?: string },
+  ) => request<{ ok: true }>(`/api/contacts/${id}`, { method: "PATCH", body: JSON.stringify(basics) }),
 
   addTags: (id: string, tags: string[]) =>
     request<{ tags: string[] }>(`/api/contacts/${id}/tags`, { method: "POST", body: JSON.stringify({ tags }) }),

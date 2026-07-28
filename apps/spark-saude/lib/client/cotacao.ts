@@ -76,10 +76,16 @@ export const cotacaoApi = {
     request<Recommendation>("/api/quotes/recommend", { method: "POST", body: JSON.stringify({ profile, options }) }),
 
   /** Deliver the proposal to the lead through GHL Conversations. */
-  sendToLead: (contactId: string, message: string, channel: "SMS" | "Email" | "WhatsApp" = "SMS") =>
+  sendToLead: (args: {
+    contactId: string;
+    message: string;
+    channel: "WhatsApp" | "Email";
+    proposalUrl?: string;
+    profile?: { contactName?: string; year?: number };
+  }) =>
     request<{ ok: true; messageId?: string }>("/api/quotes/send", {
       method: "POST",
-      body: JSON.stringify({ contactId, message, channel }),
+      body: JSON.stringify(args),
     }),
 
   get: (id: string) => request<Quote>(`/api/quotes/${id}`),

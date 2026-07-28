@@ -31,6 +31,11 @@ export const serverEnv = {
   anthropicApiKey: process.env.ANTHROPIC_API_KEY || "",
   // Contact↔contact association used to link household members (lib/ghl/associations.ts).
   ghlAssociationKey: process.env.GHL_ASSOCIATION_KEY || "familiar",
+  // How the "WhatsApp" button actually delivers. The pilot uses an UNOFFICIAL
+  // WhatsApp integration that rides the GHL SMS channel — so free text, no
+  // 24h-template rule. A tenant on the official WhatsApp API sets this to
+  // "WhatsApp". Never hardcoded (revenda, CLAUDE.md §1).
+  whatsappTransport: (process.env.GHL_WHATSAPP_TRANSPORT || "SMS") as "SMS" | "WhatsApp",
 
   useFixtures: (process.env.GHL_USE_FIXTURES || "false").toLowerCase() === "true",
 };

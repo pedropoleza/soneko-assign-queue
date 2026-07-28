@@ -17,12 +17,15 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
 const basicsSchema = z.object({
   dateOfBirth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   gender: z.enum(["male", "female"]).optional(),
+  phone: z.string().trim().min(1).optional(),
+  email: z.string().trim().email().optional(),
 });
 
 /**
- * PATCH /api/contacts/[id] — upsert native basics onto the contact. Called as
- * the broker fills a linked member's fields, so the CRM record converges on
- * what was just typed without waiting for the proposal.
+ * PATCH /api/contacts/[id] — upsert native fields onto the contact (birth date,
+ * phone, e-mail). Called as the broker fills a linked member's fields or a
+ * missing contact detail at dispatch, so the CRM record converges on what was
+ * just typed without waiting for the proposal.
  */
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {

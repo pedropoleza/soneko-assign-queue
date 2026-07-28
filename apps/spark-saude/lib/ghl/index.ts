@@ -6,6 +6,7 @@ import {
   addContactTags,
   createContact,
   fetchAllByTag,
+  getContactChannels,
   getContactDetail,
   listContactsByTag,
   quickSearchContacts,
@@ -141,11 +142,11 @@ export async function createContactData(
   return createContact(locationId, input);
 }
 
-/** Upsert native basics onto a contact (GHL updates accept only dateOfBirth). */
+/** Upsert native fields onto a contact (birth date, phone, e-mail). */
 export async function updateBasicsData(
   locationIn: string | undefined,
   id: string,
-  basics: { dateOfBirth?: string; gender?: "male" | "female" },
+  basics: { dateOfBirth?: string; gender?: "male" | "female"; phone?: string; email?: string },
 ): Promise<{ ok: true }> {
   const locationId = resolveLocationId(locationIn);
   if (serverEnv.useFixtures) return { ok: true };
@@ -163,6 +164,16 @@ export async function linkContactsData(
   if (serverEnv.useFixtures) return { ok: true };
   await linkContacts(locationId, firstId, secondId);
   return { ok: true };
+}
+
+/** Just the destination fields (phone/e-mail) — for the dispatch guard. */
+export async function getContactChannelsData(
+  locationIn: string | undefined,
+  id: string,
+): Promise<{ phone?: string | null; email?: string | null }> {
+  const locationId = resolveLocationId(locationIn);
+  if (serverEnv.useFixtures) return { phone: null, email: null };
+  return getContactChannels(locationId, id);
 }
 
 export async function getContactData(locationIn: string | undefined, id: string): Promise<Contact> {
@@ -203,10 +214,11 @@ export async function sendMessageData(
   contactId: string,
   message: string,
   type: "SMS" | "Email" | "WhatsApp" = "SMS",
+  email?: { subject: string; html: string },
 ): Promise<{ ok: true; messageId?: string }> {
   const locationId = resolveLocationId(locationIn);
   if (serverEnv.useFixtures) return { ok: true };
-  const res = await sendContactMessage(locationId, contactId, message, type);
+  const res = await sendContactMessage(locationId, contactId, message, type, email);
   return { ok: true, messageId: res.messageId };
 }
 
