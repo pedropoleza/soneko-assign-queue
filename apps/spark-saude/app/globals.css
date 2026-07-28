@@ -41,6 +41,42 @@
   --radius: 0.625rem;
 }
 
+/*
+ * Leão Insurances theme (docs/cotacao.md §8) — scoped to the Cotação product.
+ *
+ * Cotação is not a dashboard tab: it is client-facing material a broker sends,
+ * so it carries the brokerage's own identity (navy + mist + a restrained gold)
+ * instead of the GoHighLevel blue. Every shared component reads these same CSS
+ * variables, so wrapping a subtree in `.leao` re-skins Button, Card and Input
+ * without touching the dashboard.
+ */
+.leao {
+  --page: 216 29% 97%; /* #F4F6F9 mist */
+  --background: 0 0% 100%;
+  --foreground: 221 40% 14%;
+
+  --card: 0 0% 100%;
+  --card-foreground: 221 40% 14%;
+
+  --muted: 216 29% 96%;
+  --muted-foreground: 215 14% 45%;
+
+  --border: 216 22% 89%;
+  --input: 216 22% 85%;
+  --ring: 221 47% 20%;
+
+  /* Navy #1B2A4A, deep #14203A */
+  --primary: 221 47% 20%;
+  --primary-hover: 221 49% 15%;
+  --primary-foreground: 0 0% 100%;
+
+  /* Restrained gold — highlights only (best price, tier accents). */
+  --accent: 38 64% 44%;
+  --accent-soft: 38 70% 95%;
+
+  --radius: 0.875rem;
+}
+
 * {
   border-color: hsl(var(--border));
 }

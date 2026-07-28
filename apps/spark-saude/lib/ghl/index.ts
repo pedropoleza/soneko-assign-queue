@@ -2,12 +2,14 @@ import { resolveLocationId, serverEnv } from "@/lib/config";
 import { getTenantConfig } from "./tenant";
 import { buildFieldResolver } from "./customFields";
 import {
+  addContactNote,
   addContactTags,
   fetchAllByTag,
   getContactDetail,
   listContactsByTag,
   quickSearchContacts,
   removeContactTags,
+  sendContactMessage,
   updateContactCustomField,
 } from "./contacts";
 import { getRenewals } from "./renewals";
@@ -145,6 +147,27 @@ export async function removeTagsData(locationIn: string | undefined, id: string,
   const locationId = resolveLocationId(locationIn);
   if (serverEnv.useFixtures) return [];
   return removeContactTags(locationId, id, tags);
+}
+
+/** Register a note on the contact's timeline (quote history in the CRM). */
+export async function addNoteData(locationIn: string | undefined, id: string, body: string): Promise<{ ok: true }> {
+  const locationId = resolveLocationId(locationIn);
+  if (serverEnv.useFixtures) return { ok: true };
+  await addContactNote(locationId, id, body);
+  return { ok: true };
+}
+
+/** Send the proposal to the lead through GHL Conversations. */
+export async function sendMessageData(
+  locationIn: string | undefined,
+  contactId: string,
+  message: string,
+  type: "SMS" | "Email" | "WhatsApp" = "SMS",
+): Promise<{ ok: true; messageId?: string }> {
+  const locationId = resolveLocationId(locationIn);
+  if (serverEnv.useFixtures) return { ok: true };
+  const res = await sendContactMessage(locationId, contactId, message, type);
+  return { ok: true, messageId: res.messageId };
 }
 
 export async function updateFieldData(

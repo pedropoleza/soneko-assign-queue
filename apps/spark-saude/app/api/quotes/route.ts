@@ -2,7 +2,7 @@ import { z } from "zod";
 import { resolveLocationId } from "@/lib/config";
 import { createQuote, proposalUrl } from "@/lib/cotacao/quotes";
 import { buildSearchRequest } from "@/lib/cms/household";
-import { onProposalSent } from "@/lib/cotacao/ghl-sync";
+import { buildQuoteNote, onProposalSent } from "@/lib/cotacao/ghl-sync";
 import { jsonError, jsonOk, locationFromRequest } from "@/lib/http";
 import type { PlanOptionDraft, QuoteProfile } from "@/lib/cotacao/types";
 
@@ -48,6 +48,8 @@ const bodySchema = z.object({
   }),
   options: z.array(optionSchema).min(1),
   ttlDays: z.number().int().positive().optional(),
+  /** Plan the broker chose to highlight — recorded in the CRM note. */
+  recommendedPlanId: z.string().nullish(),
 });
 
 /** POST /api/quotes — persist a quote from the chosen options and mint the link. */
@@ -68,9 +70,23 @@ export async function POST(req: Request) {
       ttlDays: parsed.ttlDays,
     });
 
-    await onProposalSent(location, profile.contactId);
+    const url = proposalUrl(quote.proposalToken);
 
-    return jsonOk({ id: quote.id, token: quote.proposalToken, url: proposalUrl(quote.proposalToken), expiresAt: quote.tokenExpiresAt });
+    // Tag the contact AND record the quote on its timeline, so the lead in GHL
+    // shows what was quoted without anyone opening this app.
+    await onProposalSent(
+      location,
+      profile.contactId,
+      buildQuoteNote({
+        profile,
+        options: parsed.options as PlanOptionDraft[],
+        url,
+        expiresAt: quote.tokenExpiresAt,
+        recommendedPlanId: parsed.recommendedPlanId ?? null,
+      }),
+    );
+
+    return jsonOk({ id: quote.id, token: quote.proposalToken, url, expiresAt: quote.tokenExpiresAt });
   } catch (err) {
     return jsonError(err);
   }

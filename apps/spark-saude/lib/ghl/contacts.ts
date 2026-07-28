@@ -175,6 +175,39 @@ export async function removeContactTags(locationId: string, id: string, tags: st
   return data.tags ?? [];
 }
 
+/**
+ * Attach a note to the contact's timeline. This is how a quote stays tied to
+ * the lead inside the CRM: whoever opens the contact later sees what was quoted,
+ * when, and for how much — without leaving GHL.
+ */
+export async function addContactNote(locationId: string, id: string, body: string): Promise<void> {
+  await ghlFetch(`/contacts/${id}/notes`, { locationId, method: "POST", body: { body } });
+}
+
+/**
+ * Send a message to the lead through GHL Conversations, so the proposal goes
+ * out on the channel the contact already uses and the thread stays in the CRM.
+ */
+export async function sendContactMessage(
+  locationId: string,
+  contactId: string,
+  message: string,
+  type: "SMS" | "Email" | "WhatsApp" = "SMS",
+  subject?: string,
+): Promise<{ messageId?: string; conversationId?: string }> {
+  const body: Record<string, unknown> = { type, contactId, message };
+  if (type === "Email") {
+    body.subject = subject || "Sua cotação de seguro saúde";
+    body.html = message.replace(/\n/g, "<br/>");
+  }
+  const data = await ghlFetch<{ messageId?: string; conversationId?: string }>("/conversations/messages", {
+    locationId,
+    method: "POST",
+    body,
+  });
+  return { messageId: data.messageId, conversationId: data.conversationId };
+}
+
 export async function updateContactCustomField(
   locationId: string,
   id: string,

@@ -15,12 +15,14 @@ import {
   ImagePlus,
   Pencil,
   FileImage,
+  Send,
 } from "lucide-react";
 import { cotacaoApi, type CreateQuoteResult, type SearchOptions } from "@/lib/client/cotacao";
 import { LEAO_BRAND } from "@/lib/cotacao/brand";
 import { ageFrom } from "@/lib/cotacao/prefill";
 import { buildClientMessage } from "@/lib/cotacao/message";
 import type { EligibilitySummary } from "@/lib/cms";
+import type { Recommendation } from "@/lib/cotacao/recommend";
 import type { PlanOptionDraft, PlanQuote, QuotePerson, QuoteProfile } from "@/lib/cotacao/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -90,6 +92,12 @@ export function QuoteBuilder() {
   const [searching, setSearching] = React.useState(false);
   const [extracting, setExtracting] = React.useState<{ done: number; total: number } | null>(null);
   const [dragging, setDragging] = React.useState(false);
+  const [pasted, setPasted] = React.useState(false);
+  const [recommendation, setRecommendation] = React.useState<Recommendation | null>(null);
+  const [recommending, setRecommending] = React.useState(false);
+  const [sending, setSending] = React.useState(false);
+  const [sent, setSent] = React.useState(false);
+  const [channel, setChannel] = React.useState<"SMS" | "Email" | "WhatsApp">("SMS");
   const [generating, setGenerating] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [result, setResult] = React.useState<CreateQuoteResult | null>(null);
@@ -151,6 +159,34 @@ export function QuoteBuilder() {
     if (failures.length) setError(`Não consegui ler ${failures.length} print(s). ${failures.join(" · ")}`);
   };
 
+  /**
+   * Paste a print straight from the clipboard (Ctrl/⌘+V) — the broker screenshots
+   * a plan and pastes it without ever saving a file. Listens on the document so
+   * it works wherever the cursor is, except while typing in a field.
+   */
+  React.useEffect(() => {
+    const onPaste = (e: ClipboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target && ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName)) return;
+
+      const images = Array.from(e.clipboardData?.items ?? [])
+        .filter((item) => item.kind === "file" && item.type.startsWith("image/"))
+        .map((item) => item.getAsFile())
+        .filter((f): f is File => f !== null);
+
+      if (!images.length) return;
+      e.preventDefault();
+      setPasted(true);
+      setTimeout(() => setPasted(false), 1800);
+      void addFromPrints(images);
+    };
+
+    document.addEventListener("paste", onPaste);
+    return () => document.removeEventListener("paste", onPaste);
+    // addFromPrints only closes over setState functions, which are stable.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const search = async (override?: Partial<SearchOptions>) => {
     setSearching(true);
     setError(null);
@@ -193,16 +229,45 @@ export function QuoteBuilder() {
       return copy;
     });
 
+  /** Ask which plan to present. Advisory only — the broker accepts or ignores it. */
+  const askRecommendation = async () => {
+    if (!draft.length) return;
+    setRecommending(true);
+    setError(null);
+    try {
+      setRecommendation(await cotacaoApi.recommend(profile, draft));
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setRecommending(false);
+    }
+  };
+
   const generate = async () => {
     if (!draft.length) return;
     setGenerating(true);
     setError(null);
     try {
-      setResult(await cotacaoApi.create(profile, draft));
+      setResult(await cotacaoApi.create(profile, draft, recommendation?.planId ?? null));
     } catch (e) {
       setError((e as Error).message);
     } finally {
       setGenerating(false);
+    }
+  };
+
+  /** Send the proposal to the lead on the CRM's own channel. */
+  const sendToLead = async () => {
+    if (!result || !profile.contactId) return;
+    setSending(true);
+    setError(null);
+    try {
+      await cotacaoApi.sendToLead(profile.contactId, clientMessage, channel);
+      setSent(true);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setSending(false);
     }
   };
 
@@ -339,7 +404,7 @@ export function QuoteBuilder() {
     <div className="pb-24">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Nova cotação</h1>
+          <h1 className="font-display text-[28px] font-semibold leading-tight tracking-tight">Nova cotação</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             Escolha o cliente, solte os prints dos planos e gere a proposta.
           </p>
@@ -357,8 +422,8 @@ export function QuoteBuilder() {
       ) : null}
 
       {/* Cliente + dados da mensagem, lado a lado, ocupando a largura */}
-      <div className="mt-6 grid grid-cols-1 gap-5 lg:grid-cols-[minmax(320px,420px)_minmax(0,1fr)]">
-        <section>
+      <div className="mt-6 grid grid-cols-1 gap-5 lg:grid-cols-[minmax(320px,400px)_minmax(0,1fr)]">
+        <section className="rounded-[var(--radius)] bg-card p-5 shadow-raise ring-1 ring-border">
           <SectionTitle>Cliente</SectionTitle>
           <ContactPicker value={{ id: profile.contactId, name: profile.contactName }} onSelect={onPickContact} />
           {prefilling ? (
@@ -383,7 +448,7 @@ export function QuoteBuilder() {
           ) : null}
         </section>
 
-        <section>
+        <section className="rounded-[var(--radius)] bg-card p-5 shadow-raise ring-1 ring-border">
           <div className="flex items-baseline justify-between">
             <SectionTitle className="mb-0">Dados da cotação</SectionTitle>
             <span className="text-xs text-muted-foreground">Usados na mensagem enviada ao cliente</span>
@@ -505,7 +570,7 @@ export function QuoteBuilder() {
           </button>
         </div>
 
-        {/* Dropzone dos prints */}
+        {/* Dropzone dos prints — arrastar, clicar ou colar (Ctrl+V) */}
         <label
           onDragOver={(e) => {
             e.preventDefault();
@@ -518,9 +583,11 @@ export function QuoteBuilder() {
             void addFromPrints(Array.from(e.dataTransfer.files));
           }}
           className={cn(
-            "mt-4 flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed px-6 py-8 text-center transition-colors",
-            dragging ? "border-primary bg-[rgba(21,94,239,0.06)]" : "border-input hover:border-primary/50 hover:bg-muted/40",
-            busy && "pointer-events-none opacity-70",
+            "group/drop relative mt-4 flex cursor-pointer flex-col items-center justify-center overflow-hidden rounded-[var(--radius)] border-2 border-dashed px-6 py-10 text-center transition-all duration-200",
+            dragging
+              ? "scale-[1.005] border-accent bg-accent-soft shadow-raise"
+              : "border-input bg-card/60 hover:border-primary/40 hover:bg-card hover:shadow-raise",
+            busy && "pointer-events-none opacity-80",
           )}
         >
           <input
@@ -536,35 +603,69 @@ export function QuoteBuilder() {
           />
           {busy ? (
             <>
-              <Loader2 className="h-6 w-6 animate-spin text-primary" />
-              <p className="mt-2 text-sm font-medium">
+              <span className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
+                <Loader2 className="h-6 w-6 animate-spin text-primary" />
+              </span>
+              <p className="mt-3 font-display text-base font-semibold">
                 Lendo os prints… {extracting!.done}/{extracting!.total}
               </p>
+              <div className="mt-3 h-1 w-48 overflow-hidden rounded-full bg-muted">
+                <div
+                  className="h-full rounded-full bg-primary transition-all duration-300"
+                  style={{ width: `${Math.round((extracting!.done / extracting!.total) * 100)}%` }}
+                />
+              </div>
             </>
           ) : (
             <>
-              <ImagePlus className="h-6 w-6 text-muted-foreground" />
-              <p className="mt-2 text-sm font-medium">Arraste os prints dos planos aqui</p>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                Ou clique para escolher. Lemos o print e preenchemos os campos — você só confere.
+              <span
+                className={cn(
+                  "flex h-12 w-12 items-center justify-center rounded-full transition-all duration-200",
+                  dragging
+                    ? "scale-110 bg-accent/15 text-accent"
+                    : "bg-primary/8 text-primary group-hover/drop:scale-105 group-hover/drop:bg-primary/12",
+                )}
+              >
+                <ImagePlus className="h-6 w-6" />
+              </span>
+              <p className="mt-3 font-display text-base font-semibold tracking-tight">
+                {dragging ? "Solte para adicionar" : "Arraste os prints dos planos aqui"}
+              </p>
+              <p className="mt-1 text-[13px] text-muted-foreground">
+                Lemos o print e preenchemos os campos — você só confere.
+              </p>
+              <p className="mt-3 flex flex-wrap items-center justify-center gap-1.5 text-[11px] text-muted-foreground">
+                <span className="rounded-md bg-muted px-2 py-1 font-medium">clique para escolher</span>
+                <span>ou cole com</span>
+                <kbd className="rounded-md bg-muted px-1.5 py-1 font-sans font-semibold text-foreground">Ctrl</kbd>
+                <span>+</span>
+                <kbd className="rounded-md bg-muted px-1.5 py-1 font-sans font-semibold text-foreground">V</kbd>
               </p>
             </>
           )}
         </label>
 
+        {pasted ? (
+          <p className="mt-2 flex items-center justify-center gap-1.5 text-xs font-medium text-primary">
+            <Check className="h-3.5 w-3.5" /> Print colado
+          </p>
+        ) : null}
+
         {draft.length ? (
           <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
             {draft.map((o, i) => (
-              <div key={o.planId || i} className="flex flex-col gap-2">
-                <PlanCard plan={o} readOnly printUrl={o.printUrl} />
-                <div className="flex items-center gap-2 text-xs">
+              <div key={o.planId || i} className="group/opt flex flex-col gap-2">
+                <div className="transition-transform duration-200 group-hover/opt:-translate-y-1">
+                  <PlanCard plan={o} readOnly printUrl={o.printUrl} />
+                </div>
+                <div className="flex items-center gap-2 text-xs opacity-70 transition-opacity duration-200 group-hover/opt:opacity-100">
                   <button
                     type="button"
                     onClick={() => {
                       setEditIndex(i);
                       setEditorOpen(true);
                     }}
-                    className="inline-flex items-center gap-1 font-medium text-primary hover:underline"
+                    className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 font-medium text-primary transition-colors hover:bg-primary/10"
                   >
                     <Pencil className="h-3.5 w-3.5" /> Revisar
                   </button>
@@ -576,13 +677,72 @@ export function QuoteBuilder() {
                   <button
                     type="button"
                     onClick={() => removeOption(i)}
-                    className="ml-auto inline-flex items-center gap-1 text-muted-foreground hover:text-foreground"
+                    className="ml-auto inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-muted-foreground transition-colors hover:bg-status-red-bg hover:text-status-red-fg"
                   >
                     <Trash2 className="h-3.5 w-3.5" /> Remover
                   </button>
                 </div>
               </div>
             ))}
+          </div>
+        ) : null}
+
+        {/* Sugestão da IA — a corretora decide se usa */}
+        {draft.length >= 1 ? (
+          <div className="mt-5">
+            {recommendation ? (
+              <div className="overflow-hidden rounded-[var(--radius)] bg-card shadow-raise ring-1 ring-primary/25">
+                <div className="flex items-center gap-2 bg-primary/[0.06] px-5 py-2.5">
+                  <Sparkles className="h-4 w-4 text-primary" />
+                  <p className="text-xs font-semibold uppercase tracking-wide text-primary">Sugestão para apresentar</p>
+                  <button
+                    type="button"
+                    onClick={() => setRecommendation(null)}
+                    className="ml-auto text-xs text-muted-foreground transition-colors hover:text-foreground"
+                  >
+                    Descartar
+                  </button>
+                </div>
+                <div className="p-5">
+                  <p className="font-display text-lg font-semibold tracking-tight">{recommendation.titulo}</p>
+                  <p className="mt-0.5 text-sm text-muted-foreground">
+                    {draft.find((d) => d.planId === recommendation.planId)?.nomePlano ?? "—"}
+                  </p>
+                  <p className="mt-3 text-sm leading-relaxed">{recommendation.motivo}</p>
+                  <ul className="mt-3 grid gap-1.5 sm:grid-cols-2">
+                    {recommendation.pontos.map((p) => (
+                      <li key={p} className="flex items-start gap-2 text-sm text-muted-foreground">
+                        <Check className="mt-0.5 h-4 w-4 shrink-0 text-[#0E9F6E]" />
+                        <span>{p}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  {recommendation.alerta ? (
+                    <p className="mt-3 flex items-start gap-2 rounded-lg bg-status-amber-bg px-3 py-2 text-xs text-status-amber-fg">
+                      <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                      <span>{recommendation.alerta}</span>
+                    </p>
+                  ) : null}
+                  <p className="mt-3 text-[11px] text-muted-foreground">
+                    Sugestão gerada por IA a partir das opções escolhidas — confira antes de apresentar.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={askRecommendation}
+                disabled={recommending}
+                className="group/ai inline-flex items-center gap-2 rounded-lg bg-card px-4 py-2.5 text-sm font-medium shadow-raise ring-1 ring-border transition-all hover:-translate-y-0.5 hover:shadow-raise-lg disabled:translate-y-0 disabled:opacity-70"
+              >
+                {recommending ? (
+                  <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                ) : (
+                  <Sparkles className="h-4 w-4 text-primary transition-transform group-hover/ai:scale-110" />
+                )}
+                {recommending ? "Analisando as opções…" : "Sugerir a melhor opção para este cliente"}
+              </button>
+            )}
           </div>
         ) : null}
 
@@ -622,8 +782,47 @@ export function QuoteBuilder() {
               rows={9}
               className="mt-1.5 w-full resize-none rounded-lg border bg-muted/30 p-3 text-xs leading-relaxed"
             />
-            <div className="mt-2 flex flex-wrap items-center gap-2">
-              <Button size="sm" onClick={copyMessage} className="h-9">
+
+            {/* Enviar direto ao lead pelo GHL */}
+            {profile.contactId ? (
+              <div className="mt-3 rounded-lg bg-primary/[0.05] p-3 ring-1 ring-primary/15">
+                {sent ? (
+                  <p className="flex items-center gap-1.5 text-sm font-medium text-[#0E9F6E]">
+                    <Check className="h-4 w-4" /> Enviada para {profile.contactName} por {channel}
+                  </p>
+                ) : (
+                  <>
+                    <p className="text-xs font-medium">
+                      Enviar direto para <strong>{profile.contactName}</strong> pelo GHL
+                    </p>
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <select
+                        value={channel}
+                        onChange={(e) => setChannel(e.target.value as typeof channel)}
+                        className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+                        aria-label="Canal de envio"
+                      >
+                        <option value="SMS">SMS</option>
+                        <option value="WhatsApp">WhatsApp</option>
+                        <option value="Email">E-mail</option>
+                      </select>
+                      <Button size="sm" onClick={sendToLead} disabled={sending} className="h-9">
+                        {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                        {sending ? "Enviando…" : "Enviar cotação ao lead"}
+                      </Button>
+                    </div>
+                  </>
+                )}
+              </div>
+            ) : (
+              <p className="mt-3 flex items-start gap-1.5 rounded-lg bg-muted/60 px-3 py-2 text-xs text-muted-foreground">
+                <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                Vincule um contato para enviar direto pelo GHL e registrar a cotação nas notas do lead.
+              </p>
+            )}
+
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <Button variant="outline" size="sm" onClick={copyMessage} className="h-9">
                 {copiedMsg ? <Check className="h-4 w-4" /> : null} {copiedMsg ? "Copiado" : "Copiar mensagem + link"}
               </Button>
               <Button variant="outline" size="sm" onClick={copy} className="h-9">
@@ -661,12 +860,15 @@ function BottomBar({
   onBack?: () => void;
 }) {
   return (
-    <div className="fixed inset-x-0 bottom-0 z-20 border-t bg-background/95 backdrop-blur">
-      <div className="flex w-full items-center gap-3 px-6 py-3">
+    <div className="fixed inset-x-0 bottom-0 z-20 border-t border-border/70 bg-background/85 shadow-[0_-8px_24px_-16px_rgb(20_32_58/0.35)] backdrop-blur-md">
+      <div className="flex w-full items-center gap-3 px-6 py-3.5">
         <p className="text-sm text-muted-foreground">
           {count ? (
             <>
-              <strong className="text-foreground">{count}</strong> {count === 1 ? "plano" : "planos"} na proposta
+              <span className="mr-2 inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-primary px-2 text-xs font-semibold text-primary-foreground">
+                {count}
+              </span>
+              {count === 1 ? "plano na proposta" : "planos na proposta"}
             </>
           ) : (
             "Adicione ao menos um plano para gerar a proposta."
@@ -677,7 +879,11 @@ function BottomBar({
             Voltar à proposta
           </Button>
         ) : null}
-        <Button onClick={onGenerate} disabled={!count || generating} className="ml-auto h-10">
+        <Button
+          onClick={onGenerate}
+          disabled={!count || generating}
+          className="ml-auto h-11 px-5 text-[15px] shadow-raise transition-all hover:-translate-y-0.5 hover:shadow-raise-lg disabled:translate-y-0 disabled:shadow-none"
+        >
           {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Link2 className="h-4 w-4" />}
           Gerar proposta
         </Button>

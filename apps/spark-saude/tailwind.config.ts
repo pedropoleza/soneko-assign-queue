@@ -25,6 +25,8 @@ const config: Config = {
           "Arial",
           "sans-serif",
         ],
+        // Display face for the Leão brand headings (docs/cotacao.md §8).
+        display: ["var(--font-display)", "Outfit", "Inter", "system-ui", "sans-serif"],
       },
       colors: {
         border: "hsl(var(--border))",
@@ -45,6 +47,10 @@ const config: Config = {
         card: {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
+        },
+        accent: {
+          DEFAULT: "hsl(var(--accent))",
+          soft: "hsl(var(--accent-soft))",
         },
         // Soft status palette (not saturated) — for badges.
         status: {
@@ -68,6 +74,9 @@ const config: Config = {
       boxShadow: {
         card: "0 1px 2px 0 rgb(16 24 40 / 0.04)",
         "card-hover": "0 2px 8px -2px rgb(16 24 40 / 0.08)",
+        // Layered elevation for the Leão surfaces — depth instead of a 1px line.
+        raise: "0 1px 2px rgb(20 32 58 / 0.04), 0 8px 24px -12px rgb(20 32 58 / 0.18)",
+        "raise-lg": "0 2px 4px rgb(20 32 58 / 0.05), 0 20px 40px -16px rgb(20 32 58 / 0.28)",
       },
     },
   },

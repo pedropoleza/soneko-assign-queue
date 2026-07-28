@@ -1,6 +1,7 @@
 import type { PlanOptionDraft, PlanQuote, PublicProposal, Quote, QuoteProfile } from "@/lib/cotacao/types";
 import type { QuoteSearchResult } from "@/lib/cms";
 import type { PrefillResult } from "@/lib/cotacao/prefill";
+import type { Recommendation } from "@/lib/cotacao/recommend";
 
 export interface SearchOptions {
   sort?: "premium" | "deductible" | "oopc" | "total_costs" | "quality_rating";
@@ -64,8 +65,22 @@ export const cotacaoApi = {
   },
 
   /** Persist a quote from the chosen options and get its shareable link. */
-  create: (profile: QuoteProfile, options: PlanOptionDraft[], ttlDays?: number) =>
-    request<CreateQuoteResult>("/api/quotes", { method: "POST", body: JSON.stringify({ profile, options, ttlDays }) }),
+  create: (profile: QuoteProfile, options: PlanOptionDraft[], recommendedPlanId?: string | null, ttlDays?: number) =>
+    request<CreateQuoteResult>("/api/quotes", {
+      method: "POST",
+      body: JSON.stringify({ profile, options, recommendedPlanId, ttlDays }),
+    }),
+
+  /** Ask which of the chosen plans to present as the recommendation. */
+  recommend: (profile: QuoteProfile, options: PlanOptionDraft[]) =>
+    request<Recommendation>("/api/quotes/recommend", { method: "POST", body: JSON.stringify({ profile, options }) }),
+
+  /** Deliver the proposal to the lead through GHL Conversations. */
+  sendToLead: (contactId: string, message: string, channel: "SMS" | "Email" | "WhatsApp" = "SMS") =>
+    request<{ ok: true; messageId?: string }>("/api/quotes/send", {
+      method: "POST",
+      body: JSON.stringify({ contactId, message, channel }),
+    }),
 
   get: (id: string) => request<Quote>(`/api/quotes/${id}`),
 

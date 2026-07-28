@@ -1,18 +1,17 @@
-import { Check, Star } from "lucide-react";
+import { Check, Star, ZoomIn } from "lucide-react";
 import type { PlanQuote } from "@/lib/cotacao/types";
-import { Card } from "@/components/ui/card";
+import { metalStyle } from "@/lib/cotacao/metal";
 import { formatMoneyBR, cn } from "@/lib/utils";
 
-/** Metal-level accent color — a quiet visual anchor per tier. */
-const METAL: Record<string, { bar: string; chip: string; label: string }> = {
-  Bronze: { bar: "#B45309", chip: "bg-[rgba(180,83,9,0.10)] text-[#B45309]", label: "Bronze" },
-  Silver: { bar: "#64748B", chip: "bg-[rgba(100,116,139,0.12)] text-[#475569]", label: "Silver" },
-  Gold: { bar: "#CA8A04", chip: "bg-[rgba(202,138,4,0.12)] text-[#A16207]", label: "Gold" },
-  Platinum: { bar: "#4F46E5", chip: "bg-[rgba(79,70,229,0.12)] text-[#4338CA]", label: "Platinum" },
-};
-const metalOf = (m: string) => METAL[m] ?? { bar: "#98A2B3", chip: "bg-muted text-muted-foreground", label: m };
-
-/** A structured plan card — mirrors the Oscar print fields (§5). Selectable. */
+/**
+ * A plan, as both the broker and the client see it (docs/cotacao.md §5, §8).
+ *
+ * The tier drives the card's identity — accent rail, chip and price color — so
+ * a row of plans reads as distinct options rather than repeated boxes. The
+ * price block leads, because it is the one number every client looks for; the
+ * gross premium and the credit sit under it, which is how §7 requires an
+ * estimate to be shown (never a bare final price).
+ */
 export function PlanCard({
   plan,
   selected,
@@ -28,91 +27,162 @@ export function PlanCard({
   readOnly?: boolean;
   printUrl?: string | null;
 }) {
-  const metal = metalOf(plan.metalLevel);
+  const metal = metalStyle(plan.metalLevel);
+  const hasCredit = plan.creditoFiscal > 0;
+
   return (
-    <Card
+    <article
       className={cn(
-        "relative flex flex-col overflow-hidden p-4 transition-all duration-200",
-        !readOnly && "hover:-translate-y-0.5 hover:shadow-card-hover",
+        "group relative flex h-full flex-col overflow-hidden rounded-[var(--radius)] bg-card shadow-raise ring-1 ring-border transition-all duration-200",
+        !readOnly && "hover:-translate-y-1 hover:shadow-raise-lg",
         selected && "ring-2 ring-primary",
       )}
     >
-      {/* metal accent rail */}
-      <span className="absolute inset-x-0 top-0 h-1" style={{ backgroundColor: metal.bar }} aria-hidden />
+      {/* Tier accent rail */}
+      <span className="h-1.5 w-full shrink-0" style={{ background: metal.rail }} aria-hidden />
 
-      <div className="mt-1 flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <p className="truncate text-sm font-semibold tracking-tight">{plan.nomePlano}</p>
-          <p className="truncate text-xs text-muted-foreground">{plan.seguradora}</p>
+      <div className="flex flex-1 flex-col p-5">
+        {/* Identidade */}
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            {/* Two lines before truncating — plan names are long and the tier
+                is what distinguishes them at a glance, not a cut-off word. */}
+            <h3 className="line-clamp-2 font-display text-[17px] font-semibold leading-tight tracking-tight">
+              {plan.nomePlano}
+            </h3>
+            <p className="mt-1 line-clamp-1 text-[13px] text-muted-foreground">{plan.seguradora}</p>
+          </div>
+          <span className={cn("shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold tracking-wide", metal.chip)}>
+            {metal.label}
+          </span>
         </div>
-        <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold", metal.chip)}>{metal.label}</span>
-      </div>
 
-      {best ? (
-        <span className="mt-2 inline-flex w-fit items-center gap-1 rounded-full bg-[rgba(18,183,106,0.12)] px-2 py-0.5 text-[11px] font-semibold text-[#0E9F6E]">
-          <Star className="h-3 w-3 fill-current" /> Melhor preço
-        </span>
-      ) : null}
+        {/* Marcadores */}
+        {best || plan.tipoPlano || plan.qualityRating != null ? (
+          <div className="mt-3 flex flex-wrap items-center gap-1.5">
+            {best ? (
+              <span className="inline-flex items-center gap-1 rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-semibold text-accent">
+                <Star className="h-3 w-3 fill-current" /> Melhor preço
+              </span>
+            ) : null}
+            {plan.tipoPlano ? (
+              <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                {plan.tipoPlano}
+              </span>
+            ) : null}
+            {plan.qualityRating != null ? (
+              <span
+                className="inline-flex items-center gap-0.5 rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground"
+                title={`${plan.qualityRating} de 5 estrelas (CMS)`}
+              >
+                <Star className="h-3 w-3 fill-current text-accent" />
+                {plan.qualityRating.toFixed(1)}
+              </span>
+            ) : null}
+          </div>
+        ) : null}
 
-      {/* Prêmio: estimado (com crédito) em destaque + bruto ao lado (§7) */}
-      <div className="mt-3">
-        <div className="flex items-baseline gap-1.5">
-          <span className="text-[28px] font-semibold leading-none tracking-tight">{formatMoneyBR(plan.premioMensal)}</span>
-          <span className="text-xs text-muted-foreground">/mês</span>
-        </div>
-        <p className="mt-1.5 text-xs text-muted-foreground">
-          Bruto <span className="font-medium text-foreground">{formatMoneyBR(plan.premioSemCredito)}</span> · crédito{" "}
-          <span className="font-medium text-[#0E9F6E]">{formatMoneyBR(plan.creditoFiscal)}</span>
-        </p>
-      </div>
-
-      <dl className="mt-3 space-y-1.5 border-t pt-3 text-xs">
-        <Row label="Dedutível" value={plan.dedutivel != null ? formatMoneyBR(plan.dedutivel) : "—"} strong />
-        <Row label="Máx. do bolso" value={plan.maxBolso != null ? formatMoneyBR(plan.maxBolso) : "—"} strong />
-        <Row label="Atenção primária" value={plan.atencaoPrimaria} />
-        <Row label="Especialista" value={plan.atencaoEspecialista} />
-        <Row label="Urgência" value={plan.atencaoUrgencia} />
-        <Row label="Emergência" value={plan.emergencia} />
-        <Row label="Saúde mental" value={plan.saudeMental} />
-        <Row label="Genéricos" value={plan.medicamentoGenerico} />
-      </dl>
-
-      {printUrl ? (
-        <a
-          href={printUrl}
-          target="_blank"
-          rel="noreferrer"
-          className="group mt-3 flex items-center gap-2 rounded-lg border bg-muted/30 p-2 text-xs text-muted-foreground transition-colors hover:bg-muted"
-          title="Ver print oficial (ampliar)"
-        >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={printUrl} alt="Print do plano" className="h-10 w-10 rounded border object-cover" />
-          <span className="font-medium group-hover:text-foreground">Ver print oficial da seguradora →</span>
-        </a>
-      ) : null}
-
-      {!readOnly && onToggle ? (
-        <button
-          type="button"
-          onClick={onToggle}
-          className={cn(
-            "mt-4 inline-flex h-9 items-center justify-center gap-1.5 rounded-md text-sm font-medium transition-colors",
-            selected ? "bg-primary text-primary-foreground hover:bg-primary-hover" : "border border-input bg-background hover:bg-muted",
+        {/* Preço — o número que o cliente procura */}
+        <div className="relative -mx-5 mt-4 px-5 py-4" style={{ background: metal.wash }}>
+          <div className="flex items-baseline gap-1.5">
+            <span
+              className="font-display text-[38px] font-semibold leading-none tracking-tight"
+              style={{ color: metal.ink }}
+            >
+              {formatMoneyBR(plan.premioMensal)}
+            </span>
+            <span className="text-sm text-muted-foreground">/mês</span>
+          </div>
+          {hasCredit ? (
+            <p className="mt-2 text-[12px] leading-relaxed text-muted-foreground">
+              <span className="line-through">{formatMoneyBR(plan.premioSemCredito)}</span>
+              <span className="mx-1.5">·</span>
+              <span className="font-medium text-[#0E9F6E]">−{formatMoneyBR(plan.creditoFiscal)}</span> de crédito fiscal
+            </p>
+          ) : (
+            <p className="mt-2 text-[12px] text-muted-foreground">Sem crédito fiscal estimado</p>
           )}
-        >
-          {selected ? <Check className="h-4 w-4" /> : null}
-          {selected ? "Selecionado" : "Selecionar"}
-        </button>
-      ) : null}
-    </Card>
+        </div>
+
+        {/* Números que decidem */}
+        <dl className="mt-4 grid grid-cols-2 gap-3">
+          <Figure label="Dedutível" value={formatMoneyBR(plan.dedutivel)} />
+          <Figure label="Máx. do bolso" value={formatMoneyBR(plan.maxBolso)} />
+        </dl>
+
+        {/* Você paga */}
+        <div className="mt-4 border-t pt-3">
+          <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">Você paga</p>
+          <dl className="space-y-1.5">
+            <Row label="Atenção primária" value={plan.atencaoPrimaria} />
+            <Row label="Especialista" value={plan.atencaoEspecialista} />
+            <Row label="Urgência" value={plan.atencaoUrgencia} />
+            <Row label="Emergência" value={plan.emergencia} />
+            <Row label="Saúde mental" value={plan.saudeMental} />
+            <Row label="Genéricos" value={plan.medicamentoGenerico} />
+          </dl>
+        </div>
+
+        {printUrl ? (
+          <a
+            href={printUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="mt-4 flex items-center gap-2.5 rounded-lg bg-muted/60 p-2 text-xs transition-colors hover:bg-muted"
+            title="Ver print oficial (ampliar)"
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={printUrl} alt="Print do plano" className="h-11 w-11 rounded-md object-cover ring-1 ring-border" />
+            <span className="flex items-center gap-1 font-medium text-muted-foreground">
+              <ZoomIn className="h-3.5 w-3.5" /> Ver print da seguradora
+            </span>
+          </a>
+        ) : null}
+
+        {!readOnly && onToggle ? (
+          // mt-auto pins the CTA to the bottom so a row of cards lines up even
+          // when the cost-sharing text wraps to different heights.
+          <div className="mt-auto pt-5">
+            <button
+              type="button"
+              onClick={onToggle}
+              className={cn(
+                "inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-lg text-sm font-semibold transition-all",
+                selected
+                  ? "bg-primary text-primary-foreground hover:bg-primary-hover"
+                  : "ring-1 ring-inset ring-border hover:bg-muted",
+              )}
+            >
+              {selected ? <Check className="h-4 w-4" /> : null}
+              {selected ? "Na proposta" : "Adicionar à proposta"}
+            </button>
+          </div>
+        ) : null}
+      </div>
+    </article>
   );
 }
 
-function Row({ label, value, strong }: { label: string; value?: string | null; strong?: boolean }) {
+/** A headline figure — deductible / out-of-pocket max. */
+function Figure({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-center justify-between gap-2">
+    <div className="rounded-lg bg-muted/50 px-3 py-2.5">
+      <dt className="text-[11px] text-muted-foreground">{label}</dt>
+      <dd className="mt-0.5 font-display text-[15px] font-semibold tracking-tight">{value}</dd>
+    </div>
+  );
+}
+
+/**
+ * A cost-sharing line. Values here are free text straight from the plan card
+ * ("25% coaseguro después del deducible"), so the value column must be allowed
+ * to wrap — a fixed leader would clip exactly the rows that matter most.
+ */
+function Row({ label, value }: { label: string; value?: string | null }) {
+  return (
+    <div className="grid grid-cols-[minmax(0,auto)_minmax(0,1fr)] items-baseline gap-x-3 text-xs">
       <dt className="text-muted-foreground">{label}</dt>
-      <dd className={cn("text-right", strong ? "font-semibold" : "font-medium")}>{value || "—"}</dd>
+      <dd className="text-right font-medium leading-snug">{value || "—"}</dd>
     </div>
   );
 }
