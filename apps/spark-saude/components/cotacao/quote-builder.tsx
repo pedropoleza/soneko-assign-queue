@@ -1,7 +1,20 @@
 "use client";
 
 import * as React from "react";
-import { Plus, Trash2, Search, Link2, Check, Loader2, ExternalLink } from "lucide-react";
+import {
+  Plus,
+  Trash2,
+  Search,
+  Link2,
+  Check,
+  Loader2,
+  ExternalLink,
+  Layers,
+  Wallet,
+  BadgePercent,
+  CheckCircle2,
+  Users,
+} from "lucide-react";
 import { cotacaoApi, type CreateQuoteResult } from "@/lib/client/cotacao";
 import { LEAO_BRAND } from "@/lib/cotacao/brand";
 import type { PlanQuote, QuotePerson, QuoteProfile } from "@/lib/cotacao/types";
@@ -9,9 +22,12 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { SectionHeader } from "@/components/shell/section-header";
+import { StatCard } from "@/components/overview/stat-card";
 import { EstimateNote } from "@/components/cotacao/estimate-note";
 import { PlanCard } from "@/components/cotacao/plan-card";
 import { ErrorState } from "@/components/ui/data-state";
+import { formatMoneyBR } from "@/lib/utils";
 
 const emptyPerson = (relationship: QuotePerson["relationship"] = "Self"): QuotePerson => ({
   age: 30,
@@ -22,9 +38,10 @@ const emptyPerson = (relationship: QuotePerson["relationship"] = "Self"): QuoteP
 });
 
 /**
- * Ponta A (foundation) — the broker builds a quote: household → CMS estimate →
- * pick options → generate the shareable proposal link. Print upload and the
- * full option editor come in the approved phase; this proves the data path.
+ * Ponta A — the broker builds a quote: household → CMS estimate → pick options →
+ * generate the shareable proposal link. Styled to camouflage inside GHL: glass
+ * section bars, color-coded summary tiles and clean hover cards, matching the
+ * Spark Saúde dashboard.
  */
 export function QuoteBuilder() {
   const nextYear = new Date().getFullYear() + 1;
@@ -67,6 +84,9 @@ export function QuoteBuilder() {
   };
 
   const chosen = (plans ?? []).filter((p) => selected[p.planId]);
+  const minPremio = plans?.length ? Math.min(...plans.map((p) => p.premioMensal)) : 0;
+  const maxCredito = plans?.length ? Math.max(...plans.map((p) => p.creditoFiscal)) : 0;
+  const bestId = plans?.find((p) => p.premioMensal === minPremio)?.planId;
 
   const generate = async () => {
     if (!chosen.length) return;
@@ -91,118 +111,156 @@ export function QuoteBuilder() {
   return (
     <div className="space-y-6">
       {/* Perfil da família */}
-      <Card className="p-5">
-        <h2 className="text-sm font-semibold tracking-tight">Perfil da família</h2>
-        <p className="mt-0.5 text-xs text-muted-foreground">Dados enviados à API do CMS para estimar preço e crédito fiscal.</p>
+      <section>
+        <SectionHeader title="Perfil da família" className="mb-4" />
+        <Card className="p-5">
+          <p className="text-xs text-muted-foreground">Dados enviados à API do CMS (Marketplace) para estimar preço e crédito fiscal.</p>
 
-        <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <Field label="CEP (zipcode)">
-            <Input value={profile.zipcode} onChange={(e) => patch({ zipcode: e.target.value })} inputMode="numeric" />
-          </Field>
-          <Field label="Estado">
-            <Input value={profile.state} onChange={(e) => patch({ state: e.target.value.toUpperCase().slice(0, 2) })} />
-          </Field>
-          <Field label="Renda anual (US$)">
-            <Input type="number" value={profile.income} onChange={(e) => patch({ income: Number(e.target.value) })} />
-          </Field>
-          <Field label="Ano">
-            <Input type="number" value={profile.year} onChange={(e) => patch({ year: Number(e.target.value) })} />
-          </Field>
-        </div>
+          <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <Field label="CEP (zipcode)">
+              <Input value={profile.zipcode} onChange={(e) => patch({ zipcode: e.target.value })} inputMode="numeric" />
+            </Field>
+            <Field label="Estado">
+              <Input value={profile.state} onChange={(e) => patch({ state: e.target.value.toUpperCase().slice(0, 2) })} />
+            </Field>
+            <Field label="Renda anual (US$)">
+              <Input type="number" value={profile.income} onChange={(e) => patch({ income: Number(e.target.value) })} />
+            </Field>
+            <Field label="Ano">
+              <Input type="number" value={profile.year} onChange={(e) => patch({ year: Number(e.target.value) })} />
+            </Field>
+          </div>
 
-        <div className="mt-4 space-y-2">
-          <p className="text-xs font-medium text-muted-foreground">Pessoas no núcleo familiar</p>
-          {profile.people.map((pers, i) => (
-            <div key={i} className="flex flex-wrap items-end gap-2 rounded-lg border bg-muted/30 p-2.5">
-              <Field label="Idade" className="w-20">
-                <Input type="number" value={pers.age} onChange={(e) => patchPerson(i, { age: Number(e.target.value) })} />
-              </Field>
-              <Field label="Gênero" className="w-28">
-                <Select value={pers.gender} onChange={(v) => patchPerson(i, { gender: v as QuotePerson["gender"] })} options={["Male", "Female"]} />
-              </Field>
-              <Field label="Relação" className="w-32">
-                <Select
-                  value={pers.relationship}
-                  onChange={(v) => patchPerson(i, { relationship: v as QuotePerson["relationship"] })}
-                  options={["Self", "Spouse", "Child", "Dependent"]}
-                />
-              </Field>
-              <label className="flex h-9 items-center gap-1.5 text-xs text-muted-foreground">
-                <input type="checkbox" checked={pers.usesTobacco} onChange={(e) => patchPerson(i, { usesTobacco: e.target.checked })} />
-                Tabaco
-              </label>
-              {profile.people.length > 1 ? (
-                <Button variant="ghost" size="icon" onClick={() => removePerson(i)} aria-label="Remover pessoa" className="ml-auto text-muted-foreground">
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              ) : null}
+          <div className="mt-5">
+            <div className="mb-2 flex items-center gap-2">
+              <Users className="h-4 w-4 text-muted-foreground" />
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Núcleo familiar · {profile.people.length}
+              </p>
             </div>
-          ))}
-          <Button variant="outline" size="sm" onClick={addPerson}>
-            <Plus className="h-4 w-4" /> Adicionar pessoa
-          </Button>
-        </div>
+            <div className="space-y-2">
+              {profile.people.map((pers, i) => (
+                <div key={i} className="flex flex-wrap items-end gap-2.5 rounded-lg border bg-muted/30 p-3">
+                  <span className="flex h-9 w-6 items-center justify-center text-xs font-semibold text-muted-foreground">{i + 1}</span>
+                  <Field label="Idade" className="w-20">
+                    <Input type="number" value={pers.age} onChange={(e) => patchPerson(i, { age: Number(e.target.value) })} />
+                  </Field>
+                  <Field label="Gênero" className="w-28">
+                    <Select value={pers.gender} onChange={(v) => patchPerson(i, { gender: v as QuotePerson["gender"] })} options={["Male", "Female"]} />
+                  </Field>
+                  <Field label="Relação" className="w-32">
+                    <Select
+                      value={pers.relationship}
+                      onChange={(v) => patchPerson(i, { relationship: v as QuotePerson["relationship"] })}
+                      options={["Self", "Spouse", "Child", "Dependent"]}
+                    />
+                  </Field>
+                  <label className="flex h-9 items-center gap-1.5 text-xs text-muted-foreground">
+                    <input type="checkbox" checked={pers.usesTobacco} onChange={(e) => patchPerson(i, { usesTobacco: e.target.checked })} />
+                    Tabaco
+                  </label>
+                  {profile.people.length > 1 ? (
+                    <Button variant="ghost" size="icon" onClick={() => removePerson(i)} aria-label="Remover pessoa" className="ml-auto text-muted-foreground">
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+            <Button variant="outline" size="sm" onClick={addPerson} className="mt-2.5">
+              <Plus className="h-4 w-4" /> Adicionar pessoa
+            </Button>
+          </div>
 
-        <div className="mt-4 flex items-center gap-3">
-          <Button onClick={search} disabled={searching}>
-            {searching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
-            Buscar planos
-          </Button>
-          {usingFixtures && plans ? <Badge tone="amber">Dados de exemplo (sem chave do CMS)</Badge> : null}
-        </div>
-      </Card>
+          <div className="mt-5 flex items-center gap-3 border-t pt-4">
+            <Button onClick={search} disabled={searching}>
+              {searching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+              Buscar planos
+            </Button>
+            {usingFixtures && plans ? <Badge tone="amber">Dados de exemplo (sem chave do CMS)</Badge> : null}
+          </div>
+        </Card>
+      </section>
 
       {error ? <ErrorState message={error} /> : null}
 
-      {/* Planos + seleção */}
+      {/* Resultado */}
       {plans ? (
-        <div className="space-y-3">
-          <EstimateNote text={LEAO_BRAND.disclaimer} />
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold tracking-tight">Planos disponíveis ({plans.length})</h2>
-            <p className="text-xs text-muted-foreground">{chosen.length} selecionado(s) para propor</p>
-          </div>
-          <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
-            {plans.map((p) => (
-              <PlanCard
-                key={p.planId}
-                plan={p}
-                selected={!!selected[p.planId]}
-                onToggle={() => setSelected((s) => ({ ...s, [p.planId]: !s[p.planId] }))}
-              />
-            ))}
+        <>
+          {/* Resumo — tiles no padrão do dashboard */}
+          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+            <StatCard label="Planos encontrados" value={plans.length} icon={Layers} tone="blue" hint="Na sua região" />
+            <StatCard label="Menor prêmio/mês" value={formatMoneyBR(minPremio)} icon={Wallet} tone="green" accent hint="Estimado, com crédito" />
+            <StatCard label="Maior crédito fiscal" value={formatMoneyBR(maxCredito)} icon={BadgePercent} tone="violet" hint="APTC estimado / mês" />
+            <StatCard label="Selecionados" value={chosen.length} icon={CheckCircle2} tone="amber" hint="Para propor" />
           </div>
 
-          <div className="flex items-center gap-3 pt-1">
+          <section>
+            <SectionHeader title="Planos disponíveis" className="mb-4" />
+            <EstimateNote text={LEAO_BRAND.disclaimer} />
+            <div className="mt-3 grid grid-cols-1 gap-4 lg:grid-cols-3">
+              {plans.map((p) => (
+                <PlanCard
+                  key={p.planId}
+                  plan={p}
+                  selected={!!selected[p.planId]}
+                  best={p.planId === bestId}
+                  onToggle={() => setSelected((s) => ({ ...s, [p.planId]: !s[p.planId] }))}
+                />
+              ))}
+            </div>
+          </section>
+
+          {/* Ação — gerar proposta */}
+          <div className="sticky bottom-4 z-10 flex items-center justify-between gap-3 rounded-xl border bg-background/95 px-4 py-3 shadow-card-hover backdrop-blur">
+            <p className="text-sm text-muted-foreground">
+              {chosen.length ? (
+                <>
+                  <span className="font-semibold text-foreground">{chosen.length}</span> plano(s) selecionado(s) para a proposta
+                </>
+              ) : (
+                "Selecione os planos que quer propor ao cliente."
+              )}
+            </p>
             <Button onClick={generate} disabled={!chosen.length || generating}>
               {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Link2 className="h-4 w-4" />}
-              Gerar proposta ({chosen.length})
+              Gerar proposta
             </Button>
           </div>
-        </div>
+        </>
       ) : null}
 
       {/* Link gerado */}
       {result ? (
-        <Card className="border-primary/30 p-5">
-          <div className="flex items-center gap-2 text-sm font-semibold text-primary">
-            <Check className="h-4 w-4" /> Proposta gerada
-          </div>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Link válido até {new Date(result.expiresAt).toLocaleDateString("pt-BR")}. O contato foi marcado com <code>cotacao_enviada</code> no GHL.
-          </p>
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            <Input readOnly value={result.url || `${typeof location !== "undefined" ? location.origin : ""}/proposta/${result.token}`} className="max-w-md font-mono text-xs" />
-            <Button variant="outline" size="sm" onClick={copy}>
-              {copied ? <Check className="h-4 w-4" /> : <Link2 className="h-4 w-4" />} {copied ? "Copiado" : "Copiar"}
-            </Button>
-            <a href={`/proposta/${result.token}`} target="_blank" rel="noopener noreferrer">
-              <Button variant="ghost" size="sm">
-                <ExternalLink className="h-4 w-4" /> Abrir proposta
+        <section>
+          <SectionHeader title="Proposta gerada" className="mb-4" />
+          <Card className="border-primary/30 p-5">
+            <div className="flex items-center gap-2 text-sm font-semibold text-primary">
+              <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[rgba(21,94,239,0.10)]">
+                <Check className="h-4 w-4" />
+              </span>
+              Link pronto para enviar ao cliente
+            </div>
+            <p className="mt-1.5 text-xs text-muted-foreground">
+              Válido até {new Date(result.expiresAt).toLocaleDateString("pt-BR")}. O contato foi marcado com <code className="rounded bg-muted px-1 py-0.5">cotacao_enviada</code> no GHL.
+            </p>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <Input
+                readOnly
+                value={result.url || `${typeof location !== "undefined" ? location.origin : ""}/proposta/${result.token}`}
+                className="max-w-md font-mono text-xs"
+              />
+              <Button variant="outline" size="sm" onClick={copy}>
+                {copied ? <Check className="h-4 w-4" /> : <Link2 className="h-4 w-4" />} {copied ? "Copiado" : "Copiar"}
               </Button>
-            </a>
-          </div>
-        </Card>
+              <a href={`/proposta/${result.token}`} target="_blank" rel="noopener noreferrer">
+                <Button variant="ghost" size="sm">
+                  <ExternalLink className="h-4 w-4" /> Abrir proposta
+                </Button>
+              </a>
+            </div>
+          </Card>
+        </section>
       ) : null}
     </div>
   );
