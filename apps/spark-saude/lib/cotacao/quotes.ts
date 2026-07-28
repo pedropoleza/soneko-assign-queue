@@ -15,8 +15,26 @@ import type { PlanOptionDraft, PublicProposal, Quote, QuoteOption, QuoteProfile 
 
 const MEM = new Map<string, Quote>();
 
+/**
+ * The in-memory store is a DEV convenience only. On a serverless deploy each
+ * request can land on a different instance, so a quote written to memory is
+ * effectively gone by the time the client opens its proposal link — the link
+ * would 404 and the broker would only find out from the client. Better to
+ * refuse the write with an actionable message than to hand out a dead link.
+ */
 function persistenceMode(): "db" | "memory" {
-  return supabaseAdmin() ? "db" : "memory";
+  if (supabaseAdmin()) return "db";
+  if (isServerlessRuntime()) {
+    throw new Error(
+      "Persistência não configurada: defina SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY. " +
+        "Sem banco, o link da proposta não sobrevive entre requisições.",
+    );
+  }
+  return "memory";
+}
+
+function isServerlessRuntime(): boolean {
+  return Boolean(process.env.VERCEL) || process.env.NODE_ENV === "production";
 }
 
 export interface CreateQuoteInput {
