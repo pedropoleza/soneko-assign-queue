@@ -29,6 +29,8 @@ export const serverEnv = {
   proposalTokenSecret: process.env.PROPOSAL_TOKEN_SECRET || "",
   // Reads the plan screenshots the broker already takes (lib/cotacao/extract.ts).
   anthropicApiKey: process.env.ANTHROPIC_API_KEY || "",
+  // Contact↔contact association used to link household members (lib/ghl/associations.ts).
+  ghlAssociationKey: process.env.GHL_ASSOCIATION_KEY || "familiar",
 
   useFixtures: (process.env.GHL_USE_FIXTURES || "false").toLowerCase() === "true",
 };

@@ -71,14 +71,25 @@ export const api = {
     const qs = sp.toString();
     return request<ActivitySummary>(`/api/activity${qs ? `?${qs}` : ""}`);
   },
-  contacts: (params: { q?: string; cursor?: (string | number)[]; limit?: number }) => {
+  contacts: (params: { q?: string; cursor?: (string | number)[]; limit?: number; all?: boolean }) => {
     const sp = new URLSearchParams();
     if (params.q) sp.set("q", params.q);
     if (params.limit) sp.set("limit", String(params.limit));
     if (params.cursor?.length) sp.set("cursor", JSON.stringify(params.cursor));
+    if (params.all) sp.set("all", "1");
     return request<Paginated<Contact>>(`/api/contacts?${sp.toString()}`);
   },
   contact: (id: string) => request<Contact>(`/api/contacts/${id}`),
+
+  /** Create a household member — phone/e-mail optional by design. */
+  createContact: (input: {
+    firstName: string;
+    lastName?: string;
+    email?: string;
+    phone?: string;
+    dateOfBirth?: string;
+    gender?: "male" | "female";
+  }) => request<{ id: string; name: string }>("/api/contacts", { method: "POST", body: JSON.stringify(input) }),
 
   addTags: (id: string, tags: string[]) =>
     request<{ tags: string[] }>(`/api/contacts/${id}/tags`, { method: "POST", body: JSON.stringify({ tags }) }),

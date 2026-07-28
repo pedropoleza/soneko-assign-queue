@@ -18,6 +18,9 @@ export type OptionSource = "api" | "manual";
 
 /** A member of the household, as the CMS expects it. */
 export interface QuotePerson {
+  /** GHL contact this member is linked to (associated to the policyholder). */
+  contactId?: string | null;
+  contactName?: string | null;
   age: number;
   /**
    * ISO date of birth. When present it is sent INSTEAD of `age`, so the CMS

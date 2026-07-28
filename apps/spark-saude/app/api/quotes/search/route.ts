@@ -6,6 +6,11 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const personSchema = z.object({
+  // Passthrough of the CRM link — zod strips unknown keys, and the search
+  // response's profile is merged back into client state, so dropping these
+  // here would silently unlink every household member after a search.
+  contactId: z.string().nullish(),
+  contactName: z.string().nullish(),
   age: z.number().int().min(0).max(120),
   dob: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullish(),
   gender: z.enum(["Male", "Female"]),

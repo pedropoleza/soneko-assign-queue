@@ -4,6 +4,7 @@ import { buildFieldResolver } from "./customFields";
 import {
   addContactNote,
   addContactTags,
+  createContact,
   fetchAllByTag,
   getContactDetail,
   listContactsByTag,
@@ -11,7 +12,9 @@ import {
   removeContactTags,
   sendContactMessage,
   updateContactCustomField,
+  type CreateContactInput,
 } from "./contacts";
+import { linkContacts } from "./associations";
 import { getRenewals } from "./renewals";
 import { getOverview } from "./overview";
 import { getPipelineViews } from "./pipelineView";
@@ -94,7 +97,7 @@ export async function getPipelineData(locationIn?: string): Promise<PipelineView
 
 export async function getContactsData(
   locationIn: string | undefined,
-  params: { q?: string; cursor?: (string | number)[]; limit?: number },
+  params: { q?: string; cursor?: (string | number)[]; limit?: number; all?: boolean },
 ): Promise<Paginated<Contact>> {
   const locationId = resolveLocationId(locationIn);
   const tenant = await getTenantConfig(locationId);
@@ -117,12 +120,36 @@ export async function getContactsData(
       locationId,
       resolver,
       query: params.q,
-      restrictTag: tenant.linhaTag,
+      // `all` lifts the linha_saude restriction — household members (spouse,
+      // children) usually exist in the CRM without the product tag.
+      restrictTag: params.all ? undefined : tenant.linhaTag,
       limit,
     });
     return { items, total: items.length, nextCursor: null };
   }
   return listContactsByTag({ locationId, tenant, resolver, limit, searchAfter: params.cursor });
+}
+
+/** Create a contact (household member) — phone/e-mail optional by design. */
+export async function createContactData(
+  locationIn: string | undefined,
+  input: CreateContactInput,
+): Promise<{ id: string; name: string }> {
+  const locationId = resolveLocationId(locationIn);
+  if (serverEnv.useFixtures) return { id: `fx_${Date.now()}`, name: [input.firstName, input.lastName].filter(Boolean).join(" ") };
+  return createContact(locationId, input);
+}
+
+/** Link two contacts under the household association. */
+export async function linkContactsData(
+  locationIn: string | undefined,
+  firstId: string,
+  secondId: string,
+): Promise<{ ok: true }> {
+  const locationId = resolveLocationId(locationIn);
+  if (serverEnv.useFixtures) return { ok: true };
+  await linkContacts(locationId, firstId, secondId);
+  return { ok: true };
 }
 
 export async function getContactData(locationIn: string | undefined, id: string): Promise<Contact> {

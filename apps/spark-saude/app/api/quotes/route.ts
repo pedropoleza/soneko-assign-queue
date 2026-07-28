@@ -2,7 +2,7 @@ import { z } from "zod";
 import { resolveLocationId } from "@/lib/config";
 import { createQuote, proposalUrl } from "@/lib/cotacao/quotes";
 import { buildSearchRequest } from "@/lib/cms/household";
-import { buildQuoteNote, onProposalSent } from "@/lib/cotacao/ghl-sync";
+import { buildQuoteNote, linkHouseholdMembers, onProposalSent } from "@/lib/cotacao/ghl-sync";
 import { jsonError, jsonOk, locationFromRequest } from "@/lib/http";
 import type { PlanOptionDraft, QuoteProfile } from "@/lib/cotacao/types";
 
@@ -72,6 +72,11 @@ export async function POST(req: Request) {
     });
 
     const url = proposalUrl(quote.proposalToken);
+
+    // Family links are history too: associate each attached member to the
+    // policyholder so the household reads as one inside the CRM. Best-effort —
+    // never blocks the quote.
+    await linkHouseholdMembers(location, profile.contactId, profile.people ?? []).catch(() => undefined);
 
     // Tag the contact AND record the quote on its timeline, so the lead in GHL
     // shows what was quoted without anyone opening this app.

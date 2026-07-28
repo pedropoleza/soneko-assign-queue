@@ -1,4 +1,4 @@
-import { addNoteData, addTagsData, updateFieldData } from "@/lib/ghl";
+import { addNoteData, addTagsData, linkContactsData, updateFieldData } from "@/lib/ghl";
 import { formatMoneyBR } from "@/lib/utils";
 import type { PlanOptionDraft, QuoteProfile } from "./types";
 
@@ -25,7 +25,9 @@ export function buildQuoteNote(args: {
   recommendedPlanId?: string | null;
 }): string {
   const { profile, options, url, expiresAt, recommendedPlanId } = args;
-  const people = profile.people.map((p) => `${p.relationship} ${p.age}a`).join(", ");
+  const people = profile.people
+    .map((p) => (p.contactName ? `${p.contactName} (${p.relationship}, ${p.age}a)` : `${p.relationship} ${p.age}a`))
+    .join(", ");
 
   const lines = [
     `COTAÇÃO ENVIADA · ${new Date().toLocaleDateString("pt-BR")}`,
@@ -63,6 +65,22 @@ export async function onProposalSent(
     // broker has already generated and can already send.
     await addNoteData(location, contactId, note).catch(() => undefined);
   }
+}
+
+/**
+ * Link every household member to the policyholder via the contact association,
+ * so the family reads as a family inside the CRM. Best-effort per member: one
+ * failed link (missing scope, member deleted) must not undo the others nor the
+ * quote itself.
+ */
+export async function linkHouseholdMembers(
+  location: string | undefined,
+  primaryContactId: string | undefined,
+  people: QuoteProfile["people"],
+): Promise<void> {
+  if (!primaryContactId) return;
+  const members = people.map((p) => p.contactId).filter((id): id is string => Boolean(id) && id !== primaryContactId);
+  await Promise.allSettled(members.map((id) => linkContactsData(location, primaryContactId, id)));
 }
 
 /** Client approved an option → record the chosen plan + tag on the contact. */

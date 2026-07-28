@@ -28,6 +28,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { EstimateNote } from "@/components/cotacao/estimate-note";
 import { ContactPicker } from "@/components/cotacao/contact-picker";
+import { MemberPicker } from "@/components/cotacao/member-picker";
 import { OptionEditor } from "@/components/cotacao/option-editor";
 import { PlanCard } from "@/components/cotacao/plan-card";
 import { EligibilityBanner } from "@/components/cotacao/eligibility-banner";
@@ -543,6 +544,26 @@ export function QuoteBuilder() {
                   />
                   Fuma
                 </label>
+                <div className="flex h-9 items-center">
+                  <MemberPicker
+                    value={{ id: pers.contactId, name: pers.contactName }}
+                    onSelect={(m) => {
+                      if (!m) {
+                        patchPerson(i, { contactId: null, contactName: null });
+                        return;
+                      }
+                      // O CRM manda a data de nascimento? Preenche — preço exato.
+                      const raw = m.dateOfBirth;
+                      const dob = raw && /^\d{4}-\d{2}-\d{2}/.test(raw) ? raw.slice(0, 10) : pers.dob;
+                      patchPerson(i, {
+                        contactId: m.id,
+                        contactName: m.name,
+                        dob: dob ?? null,
+                        age: dob ? ageFrom(dob) ?? pers.age : pers.age,
+                      });
+                    }}
+                  />
+                </div>
                 {profile.people.length > 1 ? (
                   <button
                     type="button"

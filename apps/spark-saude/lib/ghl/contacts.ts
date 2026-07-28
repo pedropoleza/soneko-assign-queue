@@ -157,6 +157,53 @@ export async function getContactDetail(
 
 // --- Writes ----------------------------------------------------------------
 
+export interface CreateContactInput {
+  firstName: string;
+  lastName?: string;
+  /** Both optional on purpose — a dependent often has neither. */
+  email?: string;
+  phone?: string;
+  dateOfBirth?: string;
+  gender?: string;
+  tags?: string[];
+}
+
+/**
+ * Create a contact. Phone and e-mail are optional — household members
+ * (children, spouses) often have neither, and that must not block the quote.
+ * If the location blocks duplicates and GHL reports the existing record, we
+ * return that id instead of failing: the broker wanted "this person", and the
+ * person already existing IS success.
+ */
+export async function createContact(
+  locationId: string,
+  input: CreateContactInput,
+): Promise<{ id: string; name: string }> {
+  const body: Record<string, unknown> = { locationId, firstName: input.firstName };
+  if (input.lastName) body.lastName = input.lastName;
+  if (input.email) body.email = input.email;
+  if (input.phone) body.phone = input.phone;
+  if (input.dateOfBirth) body.dateOfBirth = input.dateOfBirth;
+  if (input.gender) body.gender = input.gender;
+  if (input.tags?.length) body.tags = input.tags;
+
+  const name = [input.firstName, input.lastName].filter(Boolean).join(" ");
+  try {
+    const data = await ghlFetch<{ contact?: { id: string } }>("/contacts/", {
+      locationId,
+      method: "POST",
+      body,
+    });
+    if (!data.contact?.id) throw new Error("O GHL não retornou o contato criado.");
+    return { id: data.contact.id, name };
+  } catch (err) {
+    // Duplicate guard: GHL answers 400 with meta.contactId pointing at the match.
+    const dupId = (err as { body?: { meta?: { contactId?: string } } })?.body?.meta?.contactId;
+    if (dupId) return { id: dupId, name };
+    throw err;
+  }
+}
+
 export async function addContactTags(locationId: string, id: string, tags: string[]): Promise<string[]> {
   const data = await ghlFetch<{ tags?: string[] }>(`/contacts/${id}/tags`, {
     locationId,
