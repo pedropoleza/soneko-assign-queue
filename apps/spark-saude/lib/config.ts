@@ -19,6 +19,15 @@ export const serverEnv = {
   supabaseUrl: process.env.SUPABASE_URL || "",
   supabaseServiceKey: process.env.SUPABASE_SERVICE_ROLE_KEY || "",
 
+  // --- Cotação Leão (CMS Marketplace) ---
+  // Key expires every 60 days; rotating it is just updating this env (no deploy).
+  cmsApiKey: process.env.CMS_MARKETPLACE_API_KEY || "",
+  cmsApiBase: (process.env.CMS_API_BASE || "https://marketplace.api.healthcare.gov/api/v1").replace(/\/+$/, ""),
+  // Public base URL of this app — used to build the proposal share links.
+  appUrl: (process.env.NEXT_PUBLIC_APP_URL || "").replace(/\/+$/, ""),
+  // HMAC secret that signs the public proposal tokens.
+  proposalTokenSecret: process.env.PROPOSAL_TOKEN_SECRET || "",
+
   useFixtures: (process.env.GHL_USE_FIXTURES || "false").toLowerCase() === "true",
 };
 

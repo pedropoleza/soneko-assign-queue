@@ -8,6 +8,7 @@ const TABS = [
   { href: "/overview", label: "Visão geral" },
   { href: "/renewals", label: "Renovações" },
   { href: "/clients", label: "Clientes" },
+  { href: "/quotes", label: "Cotações" },
 ];
 
 /**
