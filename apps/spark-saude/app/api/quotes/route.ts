@@ -25,6 +25,12 @@ const optionSchema = z.object({
   emergencia: z.string().nullable(),
   saudeMental: z.string().nullable(),
   medicamentoGenerico: z.string().nullable(),
+  // Real CMS plan attributes. These MUST be declared: zod strips unknown keys,
+  // so anything missing here is silently dropped before it reaches the database.
+  tipoPlano: z.string().nullable().optional(),
+  qualityRating: z.number().nullable().optional(),
+  hsaElegivel: z.boolean().nullable().optional(),
+  custoAnualEstimado: z.number().nullable().optional(),
   fonte: z.enum(["api", "manual"]),
   printUrl: z.string().nullable().optional(),
 });
