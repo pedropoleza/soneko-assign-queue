@@ -26,6 +26,7 @@ import { SectionHeader } from "@/components/shell/section-header";
 import { StatCard } from "@/components/overview/stat-card";
 import { EstimateNote } from "@/components/cotacao/estimate-note";
 import { PlanCard } from "@/components/cotacao/plan-card";
+import { ContactPicker } from "@/components/cotacao/contact-picker";
 import { ErrorState } from "@/components/ui/data-state";
 import { formatMoneyBR } from "@/lib/utils";
 
@@ -114,6 +115,14 @@ export function QuoteBuilder() {
       <section>
         <SectionHeader title="Perfil da família" className="mb-4" />
         <Card className="p-5">
+          <div className="mb-4">
+            <span className="mb-1.5 block text-[11px] font-medium text-muted-foreground">Cliente (contato no GHL)</span>
+            <ContactPicker
+              value={{ id: profile.contactId, name: profile.contactName }}
+              onSelect={(c) => patch({ contactId: c.id, contactName: c.name })}
+            />
+          </div>
+
           <p className="text-xs text-muted-foreground">Dados enviados à API do CMS (Marketplace) para estimar preço e crédito fiscal.</p>
 
           <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
