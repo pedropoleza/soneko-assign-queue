@@ -4,7 +4,7 @@ import { createQuote, proposalUrl } from "@/lib/cotacao/quotes";
 import { buildSearchRequest } from "@/lib/cms/household";
 import { onProposalSent } from "@/lib/cotacao/ghl-sync";
 import { jsonError, jsonOk, locationFromRequest } from "@/lib/http";
-import type { PlanQuote, QuoteProfile } from "@/lib/cotacao/types";
+import type { PlanOptionDraft, QuoteProfile } from "@/lib/cotacao/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -26,6 +26,7 @@ const optionSchema = z.object({
   saudeMental: z.string().nullable(),
   medicamentoGenerico: z.string().nullable(),
   fonte: z.enum(["api", "manual"]),
+  printUrl: z.string().nullable().optional(),
 });
 
 const bodySchema = z.object({
@@ -55,7 +56,7 @@ export async function POST(req: Request) {
 
     const quote = await createQuote({
       profile,
-      options: parsed.options as PlanQuote[],
+      options: parsed.options as PlanOptionDraft[],
       corretoraId: resolveLocationId(location),
       householdJson,
       ttlDays: parsed.ttlDays,

@@ -3,7 +3,7 @@ import { serverEnv } from "@/lib/config";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { signProposalToken, verifyProposalToken } from "./token";
 import { getBrand } from "./brand";
-import type { PlanQuote, PublicProposal, Quote, QuoteOption, QuoteProfile } from "./types";
+import type { PlanOptionDraft, PublicProposal, Quote, QuoteOption, QuoteProfile } from "./types";
 
 /**
  * Persistence facade for cotações (CLAUDE.md §5). Production reads/writes the
@@ -21,7 +21,7 @@ function persistenceMode(): "db" | "memory" {
 
 export interface CreateQuoteInput {
   profile: QuoteProfile;
-  options: PlanQuote[];
+  options: PlanOptionDraft[];
   corretoraId: string;
   householdJson: unknown;
   ttlDays?: number;
@@ -36,7 +36,7 @@ export async function createQuote(input: CreateQuoteInput): Promise<Quote> {
     ...p,
     id: crypto.randomUUID(),
     quoteId: id,
-    printUrl: null,
+    printUrl: p.printUrl ?? null,
     response: null,
   }));
 

@@ -66,6 +66,9 @@ export interface PlanQuote {
   fonte: OptionSource;
 }
 
+/** A draft option in the builder — a plan (CMS or manual) plus an optional print. */
+export type PlanOptionDraft = PlanQuote & { printUrl?: string | null };
+
 /** A plan the broker chose to propose, within a quote (persisted). */
 export interface QuoteOption extends PlanQuote {
   id: string;

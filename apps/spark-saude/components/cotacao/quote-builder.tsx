@@ -14,10 +14,11 @@ import {
   BadgePercent,
   CheckCircle2,
   Users,
+  Image as ImageIcon,
 } from "lucide-react";
 import { cotacaoApi, type CreateQuoteResult } from "@/lib/client/cotacao";
 import { LEAO_BRAND } from "@/lib/cotacao/brand";
-import type { PlanQuote, QuotePerson, QuoteProfile } from "@/lib/cotacao/types";
+import type { PlanOptionDraft, PlanQuote, QuotePerson, QuoteProfile } from "@/lib/cotacao/types";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -56,9 +57,10 @@ export function QuoteBuilder() {
   });
   const [plans, setPlans] = React.useState<PlanQuote[] | null>(null);
   const [usingFixtures, setUsingFixtures] = React.useState(false);
-  const [draft, setDraft] = React.useState<PlanQuote[]>([]);
+  const [draft, setDraft] = React.useState<PlanOptionDraft[]>([]);
   const [editorOpen, setEditorOpen] = React.useState(false);
   const [editIndex, setEditIndex] = React.useState<number | null>(null);
+  const [uploading, setUploading] = React.useState<number | null>(null);
   const [searching, setSearching] = React.useState(false);
   const [generating, setGenerating] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -103,9 +105,23 @@ export function QuoteBuilder() {
     setDraft((d) => {
       if (editIndex == null) return [...d, o];
       const copy = [...d];
-      copy[editIndex] = o;
+      copy[editIndex] = { ...o, printUrl: copy[editIndex]?.printUrl ?? null };
       return copy;
     });
+  const setPrint = (i: number, url: string | null) => setDraft((d) => d.map((o, idx) => (idx === i ? { ...o, printUrl: url } : o)));
+  const attachPrint = async (i: number, file?: File) => {
+    if (!file) return;
+    setUploading(i);
+    setError(null);
+    try {
+      const { url } = await cotacaoApi.uploadPrint(file);
+      setPrint(i, url);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setUploading(null);
+    }
+  };
 
   const minPremio = plans?.length ? Math.min(...plans.map((p) => p.premioMensal)) : 0;
   const maxCredito = plans?.length ? Math.max(...plans.map((p) => p.creditoFiscal)) : 0;
@@ -258,7 +274,23 @@ export function QuoteBuilder() {
                         </div>
                         {o.fonte === "manual" ? <Badge tone="gray">manual</Badge> : null}
                       </div>
-                      <div className="flex shrink-0 items-center gap-1">
+                      <div className="flex shrink-0 items-center gap-1.5">
+                        {o.printUrl ? (
+                          <span className="flex items-center gap-1">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <a href={o.printUrl} target="_blank" rel="noreferrer" title="Ver print">
+                              <img src={o.printUrl} alt="print" className="h-9 w-9 rounded border object-cover" />
+                            </a>
+                            <button type="button" onClick={() => setPrint(i, null)} className="text-[11px] text-muted-foreground hover:text-foreground">
+                              remover
+                            </button>
+                          </span>
+                        ) : (
+                          <label className="inline-flex h-8 cursor-pointer items-center gap-1 rounded-md border border-input bg-background px-2.5 text-xs font-medium hover:bg-muted">
+                            <input type="file" accept="image/*" className="hidden" onChange={(e) => attachPrint(i, e.target.files?.[0])} />
+                            {uploading === i ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ImageIcon className="h-3.5 w-3.5" />} Print
+                          </label>
+                        )}
                         <Button variant="ghost" size="sm" onClick={() => openEdit(i)}>
                           Editar
                         </Button>

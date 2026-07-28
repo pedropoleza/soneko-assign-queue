@@ -105,7 +105,7 @@ export function ProposalView({ token }: { token: string }) {
                 const decided = responses[opt.id];
                 return (
                   <div key={opt.id} className="flex flex-col gap-2">
-                    <PlanCard plan={opt} readOnly />
+                    <PlanCard plan={opt} readOnly printUrl={opt.printUrl} />
                     {decided ? (
                       <div
                         className={`inline-flex items-center justify-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium ${

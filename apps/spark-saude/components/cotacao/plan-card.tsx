@@ -19,12 +19,14 @@ export function PlanCard({
   best,
   onToggle,
   readOnly = false,
+  printUrl,
 }: {
   plan: PlanQuote;
   selected?: boolean;
   best?: boolean;
   onToggle?: () => void;
   readOnly?: boolean;
+  printUrl?: string | null;
 }) {
   const metal = metalOf(plan.metalLevel);
   return (
@@ -74,6 +76,20 @@ export function PlanCard({
         <Row label="Saúde mental" value={plan.saudeMental} />
         <Row label="Genéricos" value={plan.medicamentoGenerico} />
       </dl>
+
+      {printUrl ? (
+        <a
+          href={printUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="group mt-3 flex items-center gap-2 rounded-lg border bg-muted/30 p-2 text-xs text-muted-foreground transition-colors hover:bg-muted"
+          title="Ver print oficial (ampliar)"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={printUrl} alt="Print do plano" className="h-10 w-10 rounded border object-cover" />
+          <span className="font-medium group-hover:text-foreground">Ver print oficial da seguradora →</span>
+        </a>
+      ) : null}
 
       {!readOnly && onToggle ? (
         <button
