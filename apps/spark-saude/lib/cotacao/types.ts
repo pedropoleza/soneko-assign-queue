@@ -123,6 +123,8 @@ export interface Quote {
   tokenExpiresAt: string;
   /** The exact household JSON sent to the CMS (audit + regenerate). */
   householdJson: unknown;
+  /** Plan the broker chose to highlight to the client. */
+  recommendedPlanId?: string | null;
   options: QuoteOption[];
 }
 
@@ -136,6 +138,8 @@ export interface PublicProposal {
   createdAt: string;
   year: number;
   expired: boolean;
+  /** Plan the broker highlighted — shown as "recomendada" to the client. */
+  recommendedPlanId?: string | null;
   options: QuoteOption[];
 }
 

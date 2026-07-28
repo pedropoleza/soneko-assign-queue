@@ -63,11 +63,11 @@
 
   --border: 216 22% 89%;
   --input: 216 22% 85%;
-  --ring: 221 47% 20%;
+  --ring: 221 83% 53%;
 
-  /* Navy #1B2A4A, deep #14203A */
-  --primary: 221 47% 20%;
-  --primary-hover: 221 49% 15%;
+  /* Vivid action blue — the product's working color. Navy stays for text. */
+  --primary: 221 83% 53%;
+  --primary-hover: 221 78% 45%;
   --primary-foreground: 0 0% 100%;
 
   /* Restrained gold — highlights only (best price, tier accents). */
@@ -92,6 +92,56 @@ body {
   font-feature-settings: "cv11", "ss01";
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+}
+
+/*
+ * Motion for the Cotação product — fluid entrances between views, staggered
+ * card arrivals, and the "scan" beam that runs over a print while its fields
+ * are being read. All of it is decorative, so reduced-motion turns it off.
+ */
+@keyframes leao-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes leao-scan {
+  0% {
+    transform: translateY(-140%);
+  }
+  100% {
+    transform: translateY(440%);
+  }
+}
+.animate-fade-up {
+  animation: leao-fade-up 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.animate-scan {
+  animation: leao-scan 1.5s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+}
+.stagger > * {
+  animation: leao-fade-up 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.stagger > *:nth-child(1) { animation-delay: 40ms; }
+.stagger > *:nth-child(2) { animation-delay: 80ms; }
+.stagger > *:nth-child(3) { animation-delay: 120ms; }
+.stagger > *:nth-child(4) { animation-delay: 160ms; }
+.stagger > *:nth-child(5) { animation-delay: 200ms; }
+.stagger > *:nth-child(6) { animation-delay: 240ms; }
+.stagger > *:nth-child(7) { animation-delay: 280ms; }
+.stagger > *:nth-child(8) { animation-delay: 320ms; }
+.stagger > *:nth-child(9) { animation-delay: 360ms; }
+.stagger > *:nth-child(10) { animation-delay: 400ms; }
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-up,
+  .animate-scan,
+  .stagger > * {
+    animation: none;
+  }
 }
 
 /* Thin, discreet scrollbars — matches GHL density. */

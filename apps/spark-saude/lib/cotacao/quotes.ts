@@ -42,6 +42,7 @@ export interface CreateQuoteInput {
   options: PlanOptionDraft[];
   corretoraId: string;
   householdJson: unknown;
+  recommendedPlanId?: string | null;
   ttlDays?: number;
 }
 
@@ -72,6 +73,7 @@ export async function createQuote(input: CreateQuoteInput): Promise<Quote> {
     proposalToken: token,
     tokenExpiresAt: expiresAt,
     householdJson: input.householdJson,
+    recommendedPlanId: input.recommendedPlanId ?? null,
     options,
   };
 
@@ -106,6 +108,7 @@ export async function getProposalByToken(token: string): Promise<PublicProposal 
     createdAt: quote.createdAt,
     year: quote.year,
     expired,
+    recommendedPlanId: quote.recommendedPlanId ?? null,
     options: quote.options,
   };
 }

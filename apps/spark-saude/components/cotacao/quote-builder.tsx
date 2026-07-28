@@ -93,6 +93,7 @@ export function QuoteBuilder() {
   const [extracting, setExtracting] = React.useState<{ done: number; total: number } | null>(null);
   const [dragging, setDragging] = React.useState(false);
   const [pasted, setPasted] = React.useState(false);
+  const [scanPreview, setScanPreview] = React.useState<string | null>(null);
   const [recommendation, setRecommendation] = React.useState<Recommendation | null>(null);
   const [recommending, setRecommending] = React.useState(false);
   const [sending, setSending] = React.useState(false);
@@ -146,15 +147,21 @@ export function QuoteBuilder() {
 
     const failures: string[] = [];
     for (const [i, file] of images.entries()) {
+      // Show the print being read, with the scan beam running over it.
+      const preview = URL.createObjectURL(file);
+      setScanPreview(preview);
       try {
         const { plan, printUrl } = await cotacaoApi.extractFromPrint(file);
         setDraft((d) => [...d, { ...plan, printUrl }]);
       } catch (e) {
         failures.push(`${file.name}: ${(e as Error).message}`);
+      } finally {
+        URL.revokeObjectURL(preview);
       }
       setExtracting({ done: i + 1, total: images.length });
     }
 
+    setScanPreview(null);
     setExtracting(null);
     if (failures.length) setError(`Não consegui ler ${failures.length} print(s). ${failures.join(" · ")}`);
   };
@@ -296,7 +303,7 @@ export function QuoteBuilder() {
   // ------------------------------------------------- Buscar no Marketplace --
   if (view === "buscar") {
     return (
-      <div className="pb-24">
+      <div key="buscar" className="animate-fade-up pb-24">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
           <button
             type="button"
@@ -377,7 +384,7 @@ export function QuoteBuilder() {
             <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Consultando o Marketplace…
           </div>
         ) : plans && plans.length ? (
-          <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+          <div className="stagger mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
             {plans.map((p) => (
               <PlanCard
                 key={p.planId}
@@ -401,7 +408,7 @@ export function QuoteBuilder() {
   const busy = extracting !== null;
 
   return (
-    <div className="pb-24">
+    <div key="montar" className="animate-fade-up pb-24">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="font-display text-[28px] font-semibold leading-tight tracking-tight">Nova cotação</h1>
@@ -603,15 +610,33 @@ export function QuoteBuilder() {
           />
           {busy ? (
             <>
-              <span className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-                <Loader2 className="h-6 w-6 animate-spin text-primary" />
-              </span>
-              <p className="mt-3 font-display text-base font-semibold">
-                Lendo os prints… {extracting!.done}/{extracting!.total}
+              {/* O print em leitura, com o feixe de escaneamento passando por cima */}
+              <div className="relative w-full max-w-md overflow-hidden rounded-xl bg-foreground/[0.03] ring-1 ring-primary/25">
+                {scanPreview ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={scanPreview} alt="Print em leitura" className="max-h-44 w-full object-cover object-top" />
+                ) : (
+                  <div className="h-32 w-full animate-pulse bg-muted" />
+                )}
+                <span
+                  className="animate-scan absolute inset-x-0 top-0 h-1/3"
+                  style={{
+                    background:
+                      "linear-gradient(180deg, rgba(37,99,235,0) 0%, rgba(37,99,235,0.22) 45%, rgba(37,99,235,0.45) 50%, rgba(37,99,235,0.22) 55%, rgba(37,99,235,0) 100%)",
+                  }}
+                  aria-hidden
+                />
+                <span className="absolute inset-0 ring-2 ring-inset ring-primary/20" aria-hidden />
+              </div>
+              <p className="mt-4 flex items-center gap-2 font-display text-base font-semibold tracking-tight">
+                <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                Lendo as informações do print… {extracting!.done + 1 > extracting!.total ? extracting!.total : extracting!.done + 1}/
+                {extracting!.total}
               </p>
-              <div className="mt-3 h-1 w-48 overflow-hidden rounded-full bg-muted">
+              <p className="mt-1 text-xs text-muted-foreground">Seguradora, plano, valores e coberturas</p>
+              <div className="mt-3 h-1.5 w-56 overflow-hidden rounded-full bg-muted">
                 <div
-                  className="h-full rounded-full bg-primary transition-all duration-300"
+                  className="h-full rounded-full bg-primary transition-all duration-500"
                   style={{ width: `${Math.round((extracting!.done / extracting!.total) * 100)}%` }}
                 />
               </div>
@@ -652,7 +677,7 @@ export function QuoteBuilder() {
         ) : null}
 
         {draft.length ? (
-          <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+          <div className="stagger mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
             {draft.map((o, i) => (
               <div key={o.planId || i} className="group/opt flex flex-col gap-2">
                 <div className="transition-transform duration-200 group-hover/opt:-translate-y-1">

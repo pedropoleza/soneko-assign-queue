@@ -27,7 +27,9 @@ create table if not exists spark_cotacao.quote (
                    check (status in ('rascunho','enviada','respondida')),
   proposal_token  text not null unique,
   token_expires_at timestamptz not null,
-  household_json  jsonb not null
+  household_json  jsonb not null,
+  -- Plano que a corretora destacou como recomendado (mostrado ao cliente).
+  recommended_plan_id text
 );
 create index if not exists quote_contact_idx on spark_cotacao.quote (ghl_contact_id);
 create index if not exists quote_corretora_idx on spark_cotacao.quote (corretora_id, created_at desc);
@@ -82,7 +84,8 @@ declare opt jsonb;
 begin
   insert into spark_cotacao.quote
     (id, ghl_contact_id, corretora_id, created_at, zipcode, state, countyfips,
-     income, year, status, proposal_token, token_expires_at, household_json)
+     income, year, status, proposal_token, token_expires_at, household_json,
+     recommended_plan_id)
   values (
     (p_quote->>'id')::uuid, p_quote->>'ghlContactId', p_quote->>'corretoraId',
     coalesce((p_quote->>'createdAt')::timestamptz, now()),
@@ -90,7 +93,8 @@ begin
     (p_quote->>'income')::numeric, (p_quote->>'year')::int,
     coalesce(p_quote->>'status','rascunho'),
     p_quote->>'proposalToken', (p_quote->>'tokenExpiresAt')::timestamptz,
-    coalesce(p_quote->'householdJson', '{}'::jsonb));
+    coalesce(p_quote->'householdJson', '{}'::jsonb),
+    p_quote->>'recommendedPlanId');
 
   for opt in select * from jsonb_array_elements(coalesce(p_quote->'options','[]'::jsonb)) loop
     insert into spark_cotacao.quote_option
@@ -128,6 +132,7 @@ returns jsonb language sql security definer set search_path = spark_cotacao, pub
     'proposalToken', q.proposal_token,
     'tokenExpiresAt', q.token_expires_at,
     'householdJson', q.household_json,
+    'recommendedPlanId', q.recommended_plan_id,
     'options', coalesce((
       select jsonb_agg(jsonb_build_object(
         'id', o.id,

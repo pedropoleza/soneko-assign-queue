@@ -67,6 +67,7 @@ export async function POST(req: Request) {
       options: parsed.options as PlanOptionDraft[],
       corretoraId: resolveLocationId(location),
       householdJson,
+      recommendedPlanId: parsed.recommendedPlanId ?? null,
       ttlDays: parsed.ttlDays,
     });
 
