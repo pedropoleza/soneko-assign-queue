@@ -27,6 +27,7 @@ import { StatCard } from "@/components/overview/stat-card";
 import { EstimateNote } from "@/components/cotacao/estimate-note";
 import { PlanCard } from "@/components/cotacao/plan-card";
 import { ContactPicker } from "@/components/cotacao/contact-picker";
+import { OptionEditor } from "@/components/cotacao/option-editor";
 import { ErrorState } from "@/components/ui/data-state";
 import { formatMoneyBR } from "@/lib/utils";
 
@@ -55,7 +56,9 @@ export function QuoteBuilder() {
   });
   const [plans, setPlans] = React.useState<PlanQuote[] | null>(null);
   const [usingFixtures, setUsingFixtures] = React.useState(false);
-  const [selected, setSelected] = React.useState<Record<string, boolean>>({});
+  const [draft, setDraft] = React.useState<PlanQuote[]>([]);
+  const [editorOpen, setEditorOpen] = React.useState(false);
+  const [editIndex, setEditIndex] = React.useState<number | null>(null);
   const [searching, setSearching] = React.useState(false);
   const [generating, setGenerating] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -76,7 +79,7 @@ export function QuoteBuilder() {
       const res = await cotacaoApi.search(profile);
       setPlans(res.plans);
       setUsingFixtures(res.usingFixtures);
-      setSelected({});
+      setDraft([]);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -84,17 +87,36 @@ export function QuoteBuilder() {
     }
   };
 
-  const chosen = (plans ?? []).filter((p) => selected[p.planId]);
+  const inDraft = (planId: string) => draft.some((d) => d.planId === planId);
+  const toggle = (p: PlanQuote) =>
+    setDraft((d) => (d.some((x) => x.planId === p.planId) ? d.filter((x) => x.planId !== p.planId) : [...d, { ...p }]));
+  const removeOption = (i: number) => setDraft((d) => d.filter((_, idx) => idx !== i));
+  const openEdit = (i: number) => {
+    setEditIndex(i);
+    setEditorOpen(true);
+  };
+  const openManualAdd = () => {
+    setEditIndex(null);
+    setEditorOpen(true);
+  };
+  const saveOption = (o: PlanQuote) =>
+    setDraft((d) => {
+      if (editIndex == null) return [...d, o];
+      const copy = [...d];
+      copy[editIndex] = o;
+      return copy;
+    });
+
   const minPremio = plans?.length ? Math.min(...plans.map((p) => p.premioMensal)) : 0;
   const maxCredito = plans?.length ? Math.max(...plans.map((p) => p.creditoFiscal)) : 0;
   const bestId = plans?.find((p) => p.premioMensal === minPremio)?.planId;
 
   const generate = async () => {
-    if (!chosen.length) return;
+    if (!draft.length) return;
     setGenerating(true);
     setError(null);
     try {
-      setResult(await cotacaoApi.create(profile, chosen));
+      setResult(await cotacaoApi.create(profile, draft));
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -201,7 +223,7 @@ export function QuoteBuilder() {
             <StatCard label="Planos encontrados" value={plans.length} icon={Layers} tone="blue" hint="Na sua região" />
             <StatCard label="Menor prêmio/mês" value={formatMoneyBR(minPremio)} icon={Wallet} tone="green" accent hint="Estimado, com crédito" />
             <StatCard label="Maior crédito fiscal" value={formatMoneyBR(maxCredito)} icon={BadgePercent} tone="violet" hint="APTC estimado / mês" />
-            <StatCard label="Selecionados" value={chosen.length} icon={CheckCircle2} tone="amber" hint="Para propor" />
+            <StatCard label="Na proposta" value={draft.length} icon={CheckCircle2} tone="amber" hint="Opções escolhidas" />
           </div>
 
           <section>
@@ -209,29 +231,63 @@ export function QuoteBuilder() {
             <EstimateNote text={LEAO_BRAND.disclaimer} />
             <div className="mt-3 grid grid-cols-1 gap-4 lg:grid-cols-3">
               {plans.map((p) => (
-                <PlanCard
-                  key={p.planId}
-                  plan={p}
-                  selected={!!selected[p.planId]}
-                  best={p.planId === bestId}
-                  onToggle={() => setSelected((s) => ({ ...s, [p.planId]: !s[p.planId] }))}
-                />
+                <PlanCard key={p.planId} plan={p} selected={inDraft(p.planId)} best={p.planId === bestId} onToggle={() => toggle(p)} />
               ))}
             </div>
+          </section>
+
+          {/* Opções da proposta — modelo híbrido (editar / adicionar manual) */}
+          <section>
+            <SectionHeader title="Opções da proposta" className="mb-4" />
+            <Card className="p-4">
+              {draft.length === 0 ? (
+                <p className="px-1 py-3 text-sm text-muted-foreground">
+                  Selecione planos acima ou adicione uma opção manual. Você pode ajustar qualquer campo antes de gerar a proposta.
+                </p>
+              ) : (
+                <ul className="divide-y">
+                  {draft.map((o, i) => (
+                    <li key={o.planId || i} className="flex items-center justify-between gap-3 py-2.5">
+                      <div className="flex min-w-0 items-center gap-3">
+                        <span className="text-xs font-semibold text-muted-foreground">{i + 1}</span>
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium">{o.nomePlano}</p>
+                          <p className="truncate text-xs text-muted-foreground">
+                            {o.seguradora} · {o.metalLevel} · {formatMoneyBR(o.premioMensal)}/mês
+                          </p>
+                        </div>
+                        {o.fonte === "manual" ? <Badge tone="gray">manual</Badge> : null}
+                      </div>
+                      <div className="flex shrink-0 items-center gap-1">
+                        <Button variant="ghost" size="sm" onClick={() => openEdit(i)}>
+                          Editar
+                        </Button>
+                        <Button variant="ghost" size="icon" aria-label="Remover" onClick={() => removeOption(i)} className="text-muted-foreground">
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <Button variant="outline" size="sm" onClick={openManualAdd} className="mt-3">
+                <Plus className="h-4 w-4" /> Adicionar plano manual
+              </Button>
+            </Card>
           </section>
 
           {/* Ação — gerar proposta */}
           <div className="sticky bottom-4 z-10 flex items-center justify-between gap-3 rounded-xl border bg-background/95 px-4 py-3 shadow-card-hover backdrop-blur">
             <p className="text-sm text-muted-foreground">
-              {chosen.length ? (
+              {draft.length ? (
                 <>
-                  <span className="font-semibold text-foreground">{chosen.length}</span> plano(s) selecionado(s) para a proposta
+                  <span className="font-semibold text-foreground">{draft.length}</span> opção(ões) na proposta
                 </>
               ) : (
                 "Selecione os planos que quer propor ao cliente."
               )}
             </p>
-            <Button onClick={generate} disabled={!chosen.length || generating}>
+            <Button onClick={generate} disabled={!draft.length || generating}>
               {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Link2 className="h-4 w-4" />}
               Gerar proposta
             </Button>
@@ -271,6 +327,13 @@ export function QuoteBuilder() {
           </Card>
         </section>
       ) : null}
+
+      <OptionEditor
+        open={editorOpen}
+        onOpenChange={setEditorOpen}
+        option={editIndex != null ? draft[editIndex] ?? null : null}
+        onSave={saveOption}
+      />
     </div>
   );
 }
