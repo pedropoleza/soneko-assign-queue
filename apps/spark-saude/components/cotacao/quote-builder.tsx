@@ -14,6 +14,7 @@ import {
   ArrowLeft,
   ImagePlus,
   Pencil,
+  FileImage,
 } from "lucide-react";
 import { cotacaoApi, type CreateQuoteResult, type SearchOptions } from "@/lib/client/cotacao";
 import { LEAO_BRAND } from "@/lib/cotacao/brand";
@@ -60,13 +61,14 @@ const SORTS: Array<{ value: NonNullable<SearchOptions["sort"]>; label: string }>
 /**
  * Ponta A — a corretora monta a cotação.
  *
- * Two steps instead of one dense workspace: define WHO is being quoted, then
- * compare plans. Showing the household form, the plan list and the proposal
- * cart at the same time made every screen look busy; the broker only ever does
- * one of those at a time, so the UI now follows that rhythm.
+ * The prints ARE the primary path, not a fallback: today she screenshots each
+ * plan and sends them on WhatsApp, and until the CMS key arrives that is the
+ * only source of real prices. So the default screen is "drop the prints, pick
+ * the client, send" — searching the Marketplace is a second, optional route
+ * that simply adds plans to the same proposal.
  */
 export function QuoteBuilder() {
-  const [step, setStep] = React.useState<"perfil" | "planos">("perfil");
+  const [view, setView] = React.useState<"montar" | "buscar">("montar");
   const [profile, setProfile] = React.useState<QuoteProfile>(() => ({
     zipcode: "33073",
     state: "FL",
@@ -77,7 +79,6 @@ export function QuoteBuilder() {
   const [plans, setPlans] = React.useState<PlanQuote[] | null>(null);
   const [meta, setMeta] = React.useState<{
     usingFixtures: boolean;
-    total: number;
     county: string | null;
     eligibility: EligibilitySummary | null;
   } | null>(null);
@@ -86,9 +87,9 @@ export function QuoteBuilder() {
   const [draft, setDraft] = React.useState<PlanOptionDraft[]>([]);
   const [editorOpen, setEditorOpen] = React.useState(false);
   const [editIndex, setEditIndex] = React.useState<number | null>(null);
-  const [seed, setSeed] = React.useState<PlanQuote | null>(null);
   const [searching, setSearching] = React.useState(false);
-  const [extracting, setExtracting] = React.useState(false);
+  const [extracting, setExtracting] = React.useState<{ done: number; total: number } | null>(null);
+  const [dragging, setDragging] = React.useState(false);
   const [generating, setGenerating] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [result, setResult] = React.useState<CreateQuoteResult | null>(null);
@@ -107,7 +108,6 @@ export function QuoteBuilder() {
     }));
   const removePerson = (i: number) => setProfile((s) => ({ ...s, people: s.people.filter((_, idx) => idx !== i) }));
 
-  /** Picking a client pulls their real CRM data into the household. */
   const onPickContact = async (c: { id?: string; name?: string }) => {
     patch({ contactId: c.id, contactName: c.name });
     setPrefill(null);
@@ -125,10 +125,35 @@ export function QuoteBuilder() {
     }
   };
 
+  /**
+   * Drop the prints she already takes. Each screenshot is read and added to the
+   * proposal directly — she reviews the cards instead of filling a form per
+   * plan. One bad print never blocks the rest of the batch.
+   */
+  const addFromPrints = async (files: File[]) => {
+    const images = files.filter((f) => f.type.startsWith("image/"));
+    if (!images.length) return;
+    setError(null);
+    setExtracting({ done: 0, total: images.length });
+
+    const failures: string[] = [];
+    for (const [i, file] of images.entries()) {
+      try {
+        const { plan, printUrl } = await cotacaoApi.extractFromPrint(file);
+        setDraft((d) => [...d, { ...plan, printUrl }]);
+      } catch (e) {
+        failures.push(`${file.name}: ${(e as Error).message}`);
+      }
+      setExtracting({ done: i + 1, total: images.length });
+    }
+
+    setExtracting(null);
+    if (failures.length) setError(`Não consegui ler ${failures.length} print(s). ${failures.join(" · ")}`);
+  };
+
   const search = async (override?: Partial<SearchOptions>) => {
     setSearching(true);
     setError(null);
-    setResult(null);
     try {
       const res = await cotacaoApi.search(profile, {
         sort,
@@ -136,16 +161,12 @@ export function QuoteBuilder() {
         ...override,
       });
       setPlans(res.plans);
-      setMeta({
-        usingFixtures: res.usingFixtures,
-        total: res.total,
-        county: res.county,
-        eligibility: res.eligibility,
-      });
+      setMeta({ usingFixtures: res.usingFixtures, county: res.county, eligibility: res.eligibility });
       if (res.profile) setProfile((s) => ({ ...s, ...res.profile }));
-      setStep("planos");
+      setView("buscar");
     } catch (e) {
       setError((e as Error).message);
+      setView("montar");
     } finally {
       setSearching(false);
     }
@@ -166,34 +187,11 @@ export function QuoteBuilder() {
   const removeOption = (i: number) => setDraft((d) => d.filter((_, idx) => idx !== i));
   const saveOption = (o: PlanQuote) =>
     setDraft((d) => {
-      if (editIndex == null) return [...d, { ...o, printUrl: seed ? (seed as PlanOptionDraft).printUrl ?? null : null }];
+      if (editIndex == null) return [...d, { ...o, printUrl: null }];
       const copy = [...d];
       copy[editIndex] = { ...o, printUrl: copy[editIndex]?.printUrl ?? null };
       return copy;
     });
-
-  /**
-   * Add a plan from the screenshot the broker already takes today: the image is
-   * stored privately and read by Claude, which fills the plan fields so she
-   * reviews instead of retypes.
-   */
-  const addFromPrint = async (file: File) => {
-    setExtracting(true);
-    setError(null);
-    try {
-      const { plan, printUrl } = await cotacaoApi.extractFromPrint(file);
-      setSeed({ ...plan, printUrl } as PlanQuote);
-      setEditIndex(null);
-      setEditorOpen(true);
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setExtracting(false);
-    }
-  };
-
-  const minPremio = plans?.length ? Math.min(...plans.map((p) => p.premioMensal)) : 0;
-  const bestId = plans?.find((p) => p.premioMensal === minPremio)?.planId;
 
   const generate = async () => {
     if (!draft.length) return;
@@ -208,43 +206,160 @@ export function QuoteBuilder() {
     }
   };
 
-  const proposalUrl = result ? result.url || `${typeof location !== "undefined" ? location.origin : ""}/proposta/${result.token}` : "";
+  const proposalUrl = result
+    ? result.url || `${typeof location !== "undefined" ? location.origin : ""}/proposta/${result.token}`
+    : "";
   const clientMessage = React.useMemo(
     () => (result ? `${buildClientMessage(profile)}\n\n${proposalUrl}` : ""),
     [result, profile, proposalUrl],
   );
 
   const copy = async () => {
-    if (!result) return;
     await navigator.clipboard.writeText(proposalUrl);
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   };
-
   const copyMessage = async () => {
-    if (!result) return;
     await navigator.clipboard.writeText(clientMessage);
     setCopiedMsg(true);
     setTimeout(() => setCopiedMsg(false), 1500);
   };
 
-  // ---------------------------------------------------------------- Perfil --
-  if (step === "perfil") {
+  const minPremio = plans?.length ? Math.min(...plans.map((p) => p.premioMensal)) : 0;
+  const bestId = plans?.find((p) => p.premioMensal === minPremio)?.planId;
+
+  // ------------------------------------------------- Buscar no Marketplace --
+  if (view === "buscar") {
     return (
-      <div className="mx-auto max-w-2xl pb-12">
-        <h1 className="text-2xl font-semibold tracking-tight">Nova cotação</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Diga para quem é e quem entra no plano. O resto vem do Marketplace.
-        </p>
+      <div className="pb-24">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <button
+            type="button"
+            onClick={() => setView("montar")}
+            className="inline-flex items-center gap-1.5 rounded-md border border-input px-2.5 py-1.5 text-sm font-medium transition-colors hover:bg-muted"
+          >
+            <ArrowLeft className="h-4 w-4" /> Voltar à proposta
+          </button>
+          <p className="text-sm text-muted-foreground">
+            {profile.zipcode}
+            {meta?.county ? ` · ${meta.county}/${profile.state}` : ` · ${profile.state}`} ·{" "}
+            {profile.people.length === 1 ? "1 pessoa" : `${profile.people.length} pessoas`} ·{" "}
+            {formatMoneyBR(profile.income)}/ano · {profile.year}
+          </p>
+          {meta?.usingFixtures ? (
+            <span className="rounded-full bg-status-amber-bg px-2.5 py-0.5 text-xs font-medium text-status-amber-fg">
+              Dados de exemplo · sem chave do CMS
+            </span>
+          ) : null}
+        </div>
 
         {error ? (
-          <div className="mt-5">
+          <div className="mt-4">
             <ErrorState message={error} />
           </div>
         ) : null}
+        {meta?.eligibility ? (
+          <div className="mt-4">
+            <EligibilityBanner eligibility={meta.eligibility} />
+          </div>
+        ) : null}
 
-        <section className="mt-8">
-          <SectionTitle>Para quem é</SectionTitle>
+        <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-b pb-3">
+          <div className="flex items-baseline gap-2">
+            <h2 className="text-lg font-semibold tracking-tight">
+              {plans?.length ?? 0} {plans?.length === 1 ? "plano" : "planos"}
+            </h2>
+            {plans?.length ? (
+              <span className="text-sm text-muted-foreground">
+                a partir de <strong className="text-foreground">{formatMoneyBR(minPremio)}</strong>/mês
+              </span>
+            ) : null}
+          </div>
+          <div className="flex flex-wrap items-center gap-1.5">
+            {METALS.map((m) => {
+              const on = metals.includes(m);
+              return (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => rerun({ metals: on ? metals.filter((x) => x !== m) : [...metals, m] })}
+                  className={cn(
+                    "rounded-full px-3 py-1.5 text-sm font-medium transition-colors",
+                    on ? "bg-foreground text-background" : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                  )}
+                >
+                  {m}
+                </button>
+              );
+            })}
+            <select
+              value={sort}
+              onChange={(e) => rerun({ sort: e.target.value as NonNullable<SearchOptions["sort"]> })}
+              className="ml-1 h-9 rounded-md border border-input bg-background px-2 text-sm"
+              aria-label="Ordenar"
+            >
+              {SORTS.map((s) => (
+                <option key={s.value} value={s.value}>
+                  {s.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {searching ? (
+          <div className="flex items-center justify-center py-28 text-sm text-muted-foreground">
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Consultando o Marketplace…
+          </div>
+        ) : plans && plans.length ? (
+          <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+            {plans.map((p) => (
+              <PlanCard
+                key={p.planId}
+                plan={p}
+                selected={inDraft(p.planId)}
+                best={p.planId === bestId}
+                onToggle={() => toggle(p)}
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="py-28 text-center text-sm text-muted-foreground">Nenhum plano para esse perfil.</div>
+        )}
+
+        <BottomBar count={draft.length} generating={generating} onGenerate={generate} onBack={() => setView("montar")} />
+      </div>
+    );
+  }
+
+  // -------------------------------------------------------- Montar (print) --
+  const busy = extracting !== null;
+
+  return (
+    <div className="pb-24">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Nova cotação</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Escolha o cliente, solte os prints dos planos e gere a proposta.
+          </p>
+        </div>
+        <Button variant="outline" onClick={() => search()} disabled={searching} className="h-10">
+          {searching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+          Buscar no Marketplace
+        </Button>
+      </div>
+
+      {error ? (
+        <div className="mt-4">
+          <ErrorState message={error} />
+        </div>
+      ) : null}
+
+      {/* Cliente + dados da mensagem, lado a lado, ocupando a largura */}
+      <div className="mt-6 grid grid-cols-1 gap-5 lg:grid-cols-[minmax(320px,420px)_minmax(0,1fr)]">
+        <section>
+          <SectionTitle>Cliente</SectionTitle>
           <ContactPicker value={{ id: profile.contactId, name: profile.contactName }} onSelect={onPickContact} />
           {prefilling ? (
             <p className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -268,9 +383,12 @@ export function QuoteBuilder() {
           ) : null}
         </section>
 
-        <section className="mt-8">
-          <SectionTitle>Onde mora e quanto ganha</SectionTitle>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <section>
+          <div className="flex items-baseline justify-between">
+            <SectionTitle className="mb-0">Dados da cotação</SectionTitle>
+            <span className="text-xs text-muted-foreground">Usados na mensagem enviada ao cliente</span>
+          </div>
+          <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
             <Field label="CEP">
               <Input value={profile.zipcode} onChange={(e) => patch({ zipcode: e.target.value })} inputMode="numeric" />
             </Field>
@@ -284,11 +402,9 @@ export function QuoteBuilder() {
               <Input type="number" value={profile.year} onChange={(e) => patch({ year: Number(e.target.value) })} />
             </Field>
           </div>
-        </section>
 
-        <section className="mt-8">
-          <div className="flex items-baseline justify-between">
-            <SectionTitle className="mb-0">Quem entra no plano</SectionTitle>
+          <div className="mt-4 flex items-baseline justify-between">
+            <p className="text-sm font-medium">Quem entra no plano</p>
             <button
               type="button"
               onClick={addPerson}
@@ -297,11 +413,10 @@ export function QuoteBuilder() {
               <Plus className="h-4 w-4" /> Adicionar pessoa
             </button>
           </div>
-
-          <div className="mt-3 divide-y rounded-xl border">
+          <div className="mt-2 divide-y rounded-xl border">
             {profile.people.map((pers, i) => (
-              <div key={i} className="flex flex-wrap items-end gap-3 p-3.5">
-                <label className="w-[120px]">
+              <div key={i} className="flex flex-wrap items-end gap-3 p-3">
+                <label className="w-[118px]">
                   <FieldLabel>Relação</FieldLabel>
                   <select
                     value={pers.relationship}
@@ -315,7 +430,6 @@ export function QuoteBuilder() {
                     ))}
                   </select>
                 </label>
-
                 <label className="w-[92px]">
                   <FieldLabel>Gênero</FieldLabel>
                   <select
@@ -327,9 +441,8 @@ export function QuoteBuilder() {
                     <option value="Female">Fem.</option>
                   </select>
                 </label>
-
-                <label className="w-[150px]">
-                  <FieldLabel>Data de nascimento</FieldLabel>
+                <label className="w-[148px]">
+                  <FieldLabel>Nascimento</FieldLabel>
                   <input
                     type="date"
                     value={pers.dob ?? ""}
@@ -340,7 +453,6 @@ export function QuoteBuilder() {
                     className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
                   />
                 </label>
-
                 <label className="w-[72px]">
                   <FieldLabel>Idade</FieldLabel>
                   <input
@@ -351,7 +463,6 @@ export function QuoteBuilder() {
                     className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm disabled:bg-muted disabled:text-muted-foreground"
                   />
                 </label>
-
                 <label className="flex h-9 items-center gap-1.5 text-sm text-muted-foreground">
                   <input
                     type="checkbox"
@@ -360,7 +471,6 @@ export function QuoteBuilder() {
                   />
                   Fuma
                 </label>
-
                 {profile.people.length > 1 ? (
                   <button
                     type="button"
@@ -374,201 +484,115 @@ export function QuoteBuilder() {
               </div>
             ))}
           </div>
-
-          <p className="mt-2.5 text-xs leading-relaxed text-muted-foreground">
-            Com a <strong className="font-medium text-foreground">data de nascimento</strong>, o Marketplace calcula a
-            idade exata na vigência — é o que corrige o preço dos dependentes.
-          </p>
         </section>
-
-        <div className="mt-8">
-          <Button onClick={() => search()} disabled={searching} className="h-11 w-full text-[15px]">
-            {searching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
-            Buscar planos
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
-  // ---------------------------------------------------------------- Planos --
-  const familia = profile.people.length === 1 ? "1 pessoa" : `${profile.people.length} pessoas`;
-
-  return (
-    <div className="pb-24">
-      {/* Resumo do perfil — editável, sem ocupar a tela inteira */}
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-        <button
-          type="button"
-          onClick={() => setStep("perfil")}
-          className="inline-flex items-center gap-1.5 rounded-md border border-input px-2.5 py-1.5 text-sm font-medium transition-colors hover:bg-muted"
-        >
-          <ArrowLeft className="h-4 w-4" /> Perfil
-        </button>
-        <p className="text-sm text-muted-foreground">
-          {profile.contactName ? <span className="font-medium text-foreground">{profile.contactName} · </span> : null}
-          {profile.zipcode}
-          {meta?.county ? ` · ${meta.county}/${profile.state}` : ` · ${profile.state}`} · {familia} ·{" "}
-          {formatMoneyBR(profile.income)}/ano · {profile.year}
-        </p>
-        {meta?.usingFixtures ? (
-          <span className="rounded-full bg-status-amber-bg px-2.5 py-0.5 text-xs font-medium text-status-amber-fg">
-            Dados de exemplo
-          </span>
-        ) : null}
       </div>
 
-      {error ? (
-        <div className="mt-4">
-          <ErrorState message={error} />
-        </div>
-      ) : null}
-
-      {meta?.eligibility ? (
-        <div className="mt-4">
-          <EligibilityBanner eligibility={meta.eligibility} />
-        </div>
-      ) : null}
-
-      {/* Filtros */}
-      <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-b pb-3">
-        <div className="flex items-baseline gap-2">
+      {/* Planos da proposta — o coração da tela */}
+      <section className="mt-8">
+        <div className="flex flex-wrap items-baseline justify-between gap-2 border-b pb-3">
           <h2 className="text-lg font-semibold tracking-tight">
-            {plans?.length ?? 0} {plans?.length === 1 ? "plano" : "planos"}
+            Planos da proposta{draft.length ? ` · ${draft.length}` : ""}
           </h2>
-          {plans?.length ? (
-            <span className="text-sm text-muted-foreground">
-              a partir de <strong className="text-foreground">{formatMoneyBR(minPremio)}</strong>/mês
-            </span>
-          ) : null}
-        </div>
-
-        <div className="flex flex-wrap items-center gap-1.5">
-          {METALS.map((m) => {
-            const on = metals.includes(m);
-            return (
-              <button
-                key={m}
-                type="button"
-                onClick={() => rerun({ metals: on ? metals.filter((x) => x !== m) : [...metals, m] })}
-                className={cn(
-                  "rounded-full px-3 py-1.5 text-sm font-medium transition-colors",
-                  on ? "bg-foreground text-background" : "text-muted-foreground hover:bg-muted hover:text-foreground",
-                )}
-              >
-                {m}
-              </button>
-            );
-          })}
-          <select
-            value={sort}
-            onChange={(e) => rerun({ sort: e.target.value as NonNullable<SearchOptions["sort"]> })}
-            className="ml-1 h-9 rounded-md border border-input bg-background px-2 text-sm"
-            aria-label="Ordenar"
+          <button
+            type="button"
+            onClick={() => {
+              setEditIndex(null);
+              setEditorOpen(true);
+            }}
+            className="text-sm font-medium text-primary hover:underline"
           >
-            {SORTS.map((s) => (
-              <option key={s.value} value={s.value}>
-                {s.label}
-              </option>
-            ))}
-          </select>
+            Adicionar manualmente
+          </button>
         </div>
-      </div>
 
-      {/* Planos */}
-      {searching ? (
-        <div className="flex items-center justify-center py-28 text-sm text-muted-foreground">
-          <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Consultando o Marketplace…
-        </div>
-      ) : plans && plans.length ? (
-        <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
-          {plans.map((p) => (
-            <PlanCard
-              key={p.planId}
-              plan={p}
-              selected={inDraft(p.planId)}
-              best={p.planId === bestId}
-              onToggle={() => toggle(p)}
-            />
-          ))}
-        </div>
-      ) : (
-        <div className="py-28 text-center text-sm text-muted-foreground">
-          Nenhum plano para esse perfil e filtros.
-        </div>
-      )}
+        {/* Dropzone dos prints */}
+        <label
+          onDragOver={(e) => {
+            e.preventDefault();
+            setDragging(true);
+          }}
+          onDragLeave={() => setDragging(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setDragging(false);
+            void addFromPrints(Array.from(e.dataTransfer.files));
+          }}
+          className={cn(
+            "mt-4 flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed px-6 py-8 text-center transition-colors",
+            dragging ? "border-primary bg-[rgba(21,94,239,0.06)]" : "border-input hover:border-primary/50 hover:bg-muted/40",
+            busy && "pointer-events-none opacity-70",
+          )}
+        >
+          <input
+            type="file"
+            accept="image/*"
+            multiple
+            className="hidden"
+            disabled={busy}
+            onChange={(e) => {
+              void addFromPrints(Array.from(e.target.files ?? []));
+              e.target.value = "";
+            }}
+          />
+          {busy ? (
+            <>
+              <Loader2 className="h-6 w-6 animate-spin text-primary" />
+              <p className="mt-2 text-sm font-medium">
+                Lendo os prints… {extracting!.done}/{extracting!.total}
+              </p>
+            </>
+          ) : (
+            <>
+              <ImagePlus className="h-6 w-6 text-muted-foreground" />
+              <p className="mt-2 text-sm font-medium">Arraste os prints dos planos aqui</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Ou clique para escolher. Lemos o print e preenchemos os campos — você só confere.
+              </p>
+            </>
+          )}
+        </label>
 
-      <div className="mt-6">
-        <EstimateNote text={LEAO_BRAND.disclaimer} variant="inline" />
-      </div>
-
-      {/* Barra de ação — só aparece quando há algo a fazer */}
-      <div className="fixed inset-x-0 bottom-0 z-20 border-t bg-background/95 backdrop-blur">
-        <div className="mx-auto flex max-w-[1800px] flex-wrap items-center gap-3 px-5 py-3">
-          <label
-            className={cn(
-              "inline-flex cursor-pointer items-center gap-2 rounded-md border border-input px-3 py-2 text-sm font-medium transition-colors hover:bg-muted",
-              extracting && "pointer-events-none opacity-60",
-            )}
-            title="Anexe o print do plano e nós preenchemos os campos"
-          >
-            <input
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) void addFromPrint(f);
-                e.target.value = "";
-              }}
-            />
-            {extracting ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImagePlus className="h-4 w-4" />}
-            {extracting ? "Lendo o print…" : "Adicionar pelo print"}
-          </label>
-
-          {draft.length ? (
-            <div className="flex min-w-0 flex-wrap items-center gap-2">
-              {draft.map((o, i) => (
-                <span
-                  key={o.planId || i}
-                  className="inline-flex max-w-[240px] items-center gap-1.5 rounded-full bg-muted py-1 pl-3 pr-1.5 text-sm"
-                >
-                  <span className="truncate">{o.nomePlano}</span>
+        {draft.length ? (
+          <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+            {draft.map((o, i) => (
+              <div key={o.planId || i} className="flex flex-col gap-2">
+                <PlanCard plan={o} readOnly printUrl={o.printUrl} />
+                <div className="flex items-center gap-2 text-xs">
                   <button
                     type="button"
                     onClick={() => {
                       setEditIndex(i);
-                      setSeed(null);
                       setEditorOpen(true);
                     }}
-                    aria-label="Editar"
-                    className="text-muted-foreground hover:text-foreground"
+                    className="inline-flex items-center gap-1 font-medium text-primary hover:underline"
                   >
-                    <Pencil className="h-3.5 w-3.5" />
+                    <Pencil className="h-3.5 w-3.5" /> Revisar
                   </button>
+                  {o.printUrl ? (
+                    <span className="inline-flex items-center gap-1 text-muted-foreground">
+                      <FileImage className="h-3.5 w-3.5" /> print anexado
+                    </span>
+                  ) : null}
                   <button
                     type="button"
                     onClick={() => removeOption(i)}
-                    aria-label="Remover"
-                    className="text-muted-foreground hover:text-foreground"
+                    className="ml-auto inline-flex items-center gap-1 text-muted-foreground hover:text-foreground"
                   >
-                    <Trash2 className="h-3.5 w-3.5" />
+                    <Trash2 className="h-3.5 w-3.5" /> Remover
                   </button>
-                </span>
-              ))}
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground">Escolha os planos que quer propor.</p>
-          )}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : null}
 
-          <Button onClick={generate} disabled={!draft.length || generating} className="ml-auto h-10">
-            {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Link2 className="h-4 w-4" />}
-            Gerar proposta
-          </Button>
+        <div className="mt-5">
+          <EstimateNote text={LEAO_BRAND.disclaimer} variant="inline" />
         </div>
-      </div>
+      </section>
 
-      {/* Proposta gerada — link + a mensagem pronta para enviar */}
+      <BottomBar count={draft.length} generating={generating} onGenerate={generate} />
+
       {result ? (
         <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/20 p-4 sm:items-center">
           <div className="max-h-full w-full max-w-xl overflow-y-auto rounded-xl border bg-background p-5 shadow-card-hover">
@@ -617,13 +641,47 @@ export function QuoteBuilder() {
 
       <OptionEditor
         open={editorOpen}
-        onOpenChange={(o) => {
-          setEditorOpen(o);
-          if (!o) setSeed(null);
-        }}
-        option={editIndex != null ? draft[editIndex] ?? null : seed}
+        onOpenChange={setEditorOpen}
+        option={editIndex != null ? draft[editIndex] ?? null : null}
         onSave={saveOption}
       />
+    </div>
+  );
+}
+
+function BottomBar({
+  count,
+  generating,
+  onGenerate,
+  onBack,
+}: {
+  count: number;
+  generating: boolean;
+  onGenerate: () => void;
+  onBack?: () => void;
+}) {
+  return (
+    <div className="fixed inset-x-0 bottom-0 z-20 border-t bg-background/95 backdrop-blur">
+      <div className="flex w-full items-center gap-3 px-6 py-3">
+        <p className="text-sm text-muted-foreground">
+          {count ? (
+            <>
+              <strong className="text-foreground">{count}</strong> {count === 1 ? "plano" : "planos"} na proposta
+            </>
+          ) : (
+            "Adicione ao menos um plano para gerar a proposta."
+          )}
+        </p>
+        {onBack ? (
+          <Button variant="ghost" size="sm" onClick={onBack} className="h-10">
+            Voltar à proposta
+          </Button>
+        ) : null}
+        <Button onClick={onGenerate} disabled={!count || generating} className="ml-auto h-10">
+          {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Link2 className="h-4 w-4" />}
+          Gerar proposta
+        </Button>
+      </div>
     </div>
   );
 }
