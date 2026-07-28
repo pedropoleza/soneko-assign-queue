@@ -27,6 +27,8 @@ export const serverEnv = {
   appUrl: (process.env.NEXT_PUBLIC_APP_URL || "").replace(/\/+$/, ""),
   // HMAC secret that signs the public proposal tokens.
   proposalTokenSecret: process.env.PROPOSAL_TOKEN_SECRET || "",
+  // Reads the plan screenshots the broker already takes (lib/cotacao/extract.ts).
+  anthropicApiKey: process.env.ANTHROPIC_API_KEY || "",
 
   useFixtures: (process.env.GHL_USE_FIXTURES || "false").toLowerCase() === "true",
 };

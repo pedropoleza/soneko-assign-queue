@@ -31,6 +31,10 @@ export async function GET() {
       // Without it the quote falls back to fixture plans (flagged in the UI).
       configured: Boolean(serverEnv.cmsApiKey),
     },
+    printExtraction: {
+      // Without it "Adicionar pelo print" can't read the screenshot.
+      configured: Boolean(serverEnv.anthropicApiKey),
+    },
   };
 
   const blocking = [
@@ -40,6 +44,7 @@ export async function GET() {
 
   const degraded = [
     !checks.cmsMarketplace.configured && "CMS_MARKETPLACE_API_KEY (planos de exemplo)",
+    !checks.printExtraction.configured && "ANTHROPIC_API_KEY (leitura de prints)",
     !checks.proposalLinks.appUrlConfigured && "NEXT_PUBLIC_APP_URL (link montado pelo browser)",
     checks.ghl.usingFixtures && "GHL_USE_FIXTURES=true (dados de exemplo)",
   ].filter(Boolean) as string[];

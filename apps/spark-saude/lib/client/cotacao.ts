@@ -1,4 +1,4 @@
-import type { PlanOptionDraft, PublicProposal, Quote, QuoteProfile } from "@/lib/cotacao/types";
+import type { PlanOptionDraft, PlanQuote, PublicProposal, Quote, QuoteProfile } from "@/lib/cotacao/types";
 import type { QuoteSearchResult } from "@/lib/cms";
 import type { PrefillResult } from "@/lib/cotacao/prefill";
 
@@ -49,6 +49,18 @@ export const cotacaoApi = {
       throw new Error(body.error || `Erro ${res.status}`);
     }
     return (await res.json()) as { url: string };
+  },
+
+  /** Read a plan print: returns the extracted fields plus the stored print. */
+  extractFromPrint: async (file: File): Promise<{ plan: PlanQuote; printUrl: string }> => {
+    const fd = new FormData();
+    fd.append("file", file);
+    const res = await fetch("/api/quotes/extract", { method: "POST", body: fd });
+    if (!res.ok) {
+      const body = (await res.json().catch(() => ({}))) as { error?: string };
+      throw new Error(body.error || `Erro ${res.status}`);
+    }
+    return (await res.json()) as { plan: PlanQuote; printUrl: string };
   },
 
   /** Persist a quote from the chosen options and get its shareable link. */

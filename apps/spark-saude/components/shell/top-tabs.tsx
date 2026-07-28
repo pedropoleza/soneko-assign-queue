@@ -4,11 +4,12 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 
+// Cotação is a separate product with its own shell and its own GHL menu link
+// (see app/cotacao/layout.tsx) — it is deliberately NOT a tab here.
 const TABS = [
   { href: "/overview", label: "Visão geral" },
   { href: "/renewals", label: "Renovações" },
   { href: "/clients", label: "Clientes" },
-  { href: "/quotes", label: "Cotações" },
 ];
 
 /**
