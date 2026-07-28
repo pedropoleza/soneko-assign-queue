@@ -1,4 +1,4 @@
-import { addNoteData, addTagsData, linkContactsData, updateFieldData } from "@/lib/ghl";
+import { addNoteData, addTagsData, linkContactsData, updateBasicsData, updateFieldData } from "@/lib/ghl";
 import { formatMoneyBR } from "@/lib/utils";
 import type { PlanOptionDraft, QuoteProfile } from "./types";
 
@@ -67,20 +67,32 @@ export async function onProposalSent(
   }
 }
 
+const GHL_GENDER: Record<string, "male" | "female"> = { Male: "male", Female: "female" };
+
 /**
- * Link every household member to the policyholder via the contact association,
- * so the family reads as a family inside the CRM. Best-effort per member: one
- * failed link (missing scope, member deleted) must not undo the others nor the
- * quote itself.
+ * Sync every household member back into the CRM: upsert the basics the broker
+ * just typed (birth date, gender) onto each linked contact — the titular
+ * included, via the "Self" row — and link members to the policyholder through
+ * the contact association, so the family reads as a family inside GHL.
+ * Best-effort per member: one failed write (missing scope, member deleted)
+ * must not undo the others nor the quote itself.
  */
-export async function linkHouseholdMembers(
+export async function syncHouseholdMembers(
   location: string | undefined,
   primaryContactId: string | undefined,
   people: QuoteProfile["people"],
 ): Promise<void> {
   if (!primaryContactId) return;
-  const members = people.map((p) => p.contactId).filter((id): id is string => Boolean(id) && id !== primaryContactId);
-  await Promise.allSettled(members.map((id) => linkContactsData(location, primaryContactId, id)));
+  const jobs: Promise<unknown>[] = [];
+  for (const p of people) {
+    // A "Self" row without an explicit link IS the policyholder.
+    const id: string | undefined = p.contactId ?? (p.relationship === "Self" ? primaryContactId : undefined);
+    if (!id) continue;
+    const basics = { dateOfBirth: p.dob ?? undefined, gender: GHL_GENDER[p.gender] };
+    if (basics.dateOfBirth || basics.gender) jobs.push(updateBasicsData(location, id, basics));
+    if (id !== primaryContactId) jobs.push(linkContactsData(location, primaryContactId, id));
+  }
+  await Promise.allSettled(jobs);
 }
 
 /** Client approved an option → record the chosen plan + tag on the contact. */

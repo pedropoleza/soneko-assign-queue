@@ -25,9 +25,12 @@ export interface PickedMember {
  */
 export function MemberPicker({
   value,
+  defaults,
   onSelect,
 }: {
   value: { id?: string | null; name?: string | null };
+  /** What the row already knows — creation carries it into the CRM upsert. */
+  defaults?: { dateOfBirth?: string | null; gender?: "male" | "female" };
   onSelect: (member: PickedMember | null) => void;
 }) {
   const [open, setOpen] = React.useState(false);
@@ -72,6 +75,8 @@ export function MemberPicker({
         lastName: form.lastName.trim() || undefined,
         phone: form.phone.trim() || undefined,
         email: form.email.trim() || undefined,
+        dateOfBirth: defaults?.dateOfBirth || undefined,
+        gender: defaults?.gender,
       });
       onSelect({ id: res.id, name: res.name });
       setOpen(false);

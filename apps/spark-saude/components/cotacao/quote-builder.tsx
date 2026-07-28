@@ -17,6 +17,7 @@ import {
   FileImage,
   Send,
 } from "lucide-react";
+import { api } from "@/lib/client/api";
 import { cotacaoApi, type CreateQuoteResult, type SearchOptions } from "@/lib/client/cotacao";
 import { LEAO_BRAND } from "@/lib/cotacao/brand";
 import { ageFrom } from "@/lib/cotacao/prefill";
@@ -111,6 +112,24 @@ export function QuoteBuilder() {
   const patch = (p: Partial<QuoteProfile>) => setProfile((s) => ({ ...s, ...p }));
   const patchPerson = (i: number, p: Partial<QuotePerson>) =>
     setProfile((s) => ({ ...s, people: s.people.map((x, idx) => (idx === i ? { ...x, ...p } : x)) }));
+
+  // "Preencheu → upsert": as the broker fills a linked member's fields, the CRM
+  // record converges on what was just typed. Debounced per contact so keystrokes
+  // in the date input don't hammer the API; best-effort — a CRM hiccup never
+  // interrupts the quote being built.
+  const syncTimers = React.useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const queueBasicsSync = (contactId: string, basics: { dateOfBirth?: string; gender?: "male" | "female" }) => {
+    if (!basics.dateOfBirth && !basics.gender) return;
+    clearTimeout(syncTimers.current[contactId]);
+    syncTimers.current[contactId] = setTimeout(() => {
+      void api.updateContactBasics(contactId, basics).catch(() => undefined);
+    }, 800);
+  };
+  React.useEffect(() => {
+    const timers = syncTimers.current;
+    return () => Object.values(timers).forEach(clearTimeout);
+  }, []);
+  const ghlGender = (g: QuotePerson["gender"]): "male" | "female" => (g === "Male" ? "male" : "female");
   const addPerson = () =>
     setProfile((s) => ({
       ...s,
@@ -505,6 +524,7 @@ export function QuoteBuilder() {
                 </label>
                 <label className="w-[92px]">
                   <FieldLabel>Gênero</FieldLabel>
+                  {/* Gênero sincroniza na criação do contato — o PUT do GHL não aceita o campo. */}
                   <select
                     value={pers.gender}
                     onChange={(e) => patchPerson(i, { gender: e.target.value as QuotePerson["gender"] })}
@@ -522,6 +542,7 @@ export function QuoteBuilder() {
                     onChange={(e) => {
                       const dob = e.target.value || null;
                       patchPerson(i, { dob, age: dob ? ageFrom(dob) ?? pers.age : pers.age });
+                      if (pers.contactId && dob) queueBasicsSync(pers.contactId, { dateOfBirth: dob });
                     }}
                     className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
                   />
@@ -547,6 +568,7 @@ export function QuoteBuilder() {
                 <div className="flex h-9 items-center">
                   <MemberPicker
                     value={{ id: pers.contactId, name: pers.contactName }}
+                    defaults={{ dateOfBirth: pers.dob, gender: ghlGender(pers.gender) }}
                     onSelect={(m) => {
                       if (!m) {
                         patchPerson(i, { contactId: null, contactName: null });
@@ -561,6 +583,11 @@ export function QuoteBuilder() {
                         dob: dob ?? null,
                         age: dob ? ageFrom(dob) ?? pers.age : pers.age,
                       });
+                      // A linha tem a data que o CRM não tem? Upsert — o contato
+                      // converge para o que a corretora acabou de preencher.
+                      if (!raw && pers.dob) {
+                        queueBasicsSync(m.id, { dateOfBirth: pers.dob, gender: ghlGender(pers.gender) });
+                      }
                     }}
                   />
                 </div>

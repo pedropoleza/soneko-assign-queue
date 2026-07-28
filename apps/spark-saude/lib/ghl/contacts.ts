@@ -169,11 +169,11 @@ export interface CreateContactInput {
 }
 
 /**
- * Create a contact. Phone and e-mail are optional — household members
- * (children, spouses) often have neither, and that must not block the quote.
- * If the location blocks duplicates and GHL reports the existing record, we
- * return that id instead of failing: the broker wanted "this person", and the
- * person already existing IS success.
+ * Create-or-upsert a contact. GHL's upsert dedupes by e-mail/phone, so filling
+ * the same person twice converges on one record — but it REJECTS a body with
+ * neither ("Pass at least one of number, email"). Dependents (children,
+ * spouses) often have neither, and that must not block the quote: those go
+ * through the plain create endpoint instead.
  */
 export async function createContact(
   locationId: string,
@@ -188,20 +188,37 @@ export async function createContact(
   if (input.tags?.length) body.tags = input.tags;
 
   const name = [input.firstName, input.lastName].filter(Boolean).join(" ");
-  try {
-    const data = await ghlFetch<{ contact?: { id: string } }>("/contacts/", {
-      locationId,
-      method: "POST",
-      body,
-    });
-    if (!data.contact?.id) throw new Error("O GHL não retornou o contato criado.");
-    return { id: data.contact.id, name };
-  } catch (err) {
-    // Duplicate guard: GHL answers 400 with meta.contactId pointing at the match.
-    const dupId = (err as { body?: { meta?: { contactId?: string } } })?.body?.meta?.contactId;
-    if (dupId) return { id: dupId, name };
-    throw err;
-  }
+  const canUpsert = Boolean(input.email || input.phone);
+  const data = await ghlFetch<{ contact?: { id: string } }>(canUpsert ? "/contacts/upsert" : "/contacts/", {
+    locationId,
+    method: "POST",
+    body,
+  });
+  if (!data.contact?.id) throw new Error("O GHL não retornou o contato.");
+  return { id: data.contact.id, name };
+}
+
+/**
+ * Write the basics the quote form knows back onto the contact (native fields,
+ * not custom), so the CRM record converges on what the broker just typed and
+ * feeds exact-age pricing next time this person is quoted.
+ *
+ * GHL asymmetry (verified live): POST /contacts accepts `gender`, but
+ * PUT /contacts/{id} rejects it ("property gender should not exist") — and one
+ * rejected property fails the whole body. So updates send ONLY dateOfBirth;
+ * gender is written at creation time and left alone afterwards.
+ */
+export async function updateContactBasics(
+  locationId: string,
+  id: string,
+  basics: { dateOfBirth?: string; gender?: "male" | "female" },
+): Promise<void> {
+  if (!basics.dateOfBirth) return;
+  await ghlFetch(`/contacts/${id}`, {
+    locationId,
+    method: "PUT",
+    body: { dateOfBirth: basics.dateOfBirth },
+  });
 }
 
 export async function addContactTags(locationId: string, id: string, tags: string[]): Promise<string[]> {

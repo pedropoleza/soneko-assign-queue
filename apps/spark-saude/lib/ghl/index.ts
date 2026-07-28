@@ -11,6 +11,7 @@ import {
   quickSearchContacts,
   removeContactTags,
   sendContactMessage,
+  updateContactBasics,
   updateContactCustomField,
   type CreateContactInput,
 } from "./contacts";
@@ -138,6 +139,18 @@ export async function createContactData(
   const locationId = resolveLocationId(locationIn);
   if (serverEnv.useFixtures) return { id: `fx_${Date.now()}`, name: [input.firstName, input.lastName].filter(Boolean).join(" ") };
   return createContact(locationId, input);
+}
+
+/** Upsert native basics onto a contact (GHL updates accept only dateOfBirth). */
+export async function updateBasicsData(
+  locationIn: string | undefined,
+  id: string,
+  basics: { dateOfBirth?: string; gender?: "male" | "female" },
+): Promise<{ ok: true }> {
+  const locationId = resolveLocationId(locationIn);
+  if (serverEnv.useFixtures) return { ok: true };
+  await updateContactBasics(locationId, id, basics);
+  return { ok: true };
 }
 
 /** Link two contacts under the household association. */
