@@ -33,3 +33,29 @@ export async function uploadPrint(file: File): Promise<{ url: string; path: stri
   const b64 = Buffer.from(bytes).toString("base64");
   return { url: `data:${file.type || "image/png"};base64,${b64}`, path: null };
 }
+
+/**
+ * Store the generated proposal PDF and hand back a fetchable URL.
+ *
+ * The URL is signed rather than public: GHL fetches it server-side to attach
+ * the file to the message, and the link dies with the proposal instead of
+ * leaving a client's income and household exposed on a guessable path.
+ */
+export async function uploadProposalPdf(
+  bytes: Uint8Array,
+  filename: string,
+): Promise<{ url: string; path: string | null }> {
+  const db = supabaseAdmin();
+  if (!db) throw new Error("Supabase não configurado — necessário para gerar o PDF da proposta.");
+
+  const safe = filename.replace(/[^\w.-]+/g, "-");
+  const path = `propostas/${crypto.randomUUID()}-${safe}`;
+  const up = await db.storage
+    .from(BUCKET)
+    .upload(path, bytes, { contentType: "application/pdf", upsert: false });
+  if (up.error) throw new Error(`Falha ao guardar o PDF: ${up.error.message}`);
+
+  const signed = await db.storage.from(BUCKET).createSignedUrl(path, SIGNED_TTL);
+  if (signed.error || !signed.data) throw new Error("Falha ao assinar a URL do PDF.");
+  return { url: signed.data.signedUrl, path };
+}

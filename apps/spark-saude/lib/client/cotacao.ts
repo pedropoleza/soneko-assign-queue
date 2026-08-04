@@ -75,18 +75,23 @@ export const cotacaoApi = {
   recommend: (profile: QuoteProfile, options: PlanOptionDraft[]) =>
     request<Recommendation>("/api/quotes/recommend", { method: "POST", body: JSON.stringify({ profile, options }) }),
 
-  /** Deliver the proposal to the lead through GHL Conversations. */
+  /** Deliver the proposal to the lead through GHL Conversations (PDF attached). */
   sendToLead: (args: {
     contactId: string;
     message: string;
     channel: "WhatsApp" | "Email";
     proposalUrl?: string;
     profile?: { contactName?: string; year?: number };
+    quoteId?: string;
+    attachPdf?: boolean;
   }) =>
-    request<{ ok: true; messageId?: string }>("/api/quotes/send", {
+    request<{ ok: true; messageId?: string; pdfAttached?: boolean; pdfError?: string }>("/api/quotes/send", {
       method: "POST",
       body: JSON.stringify(args),
     }),
+
+  /** Where the broker can open/download the branded PDF for a quote. */
+  pdfUrl: (quoteId: string) => `/api/quotes/${quoteId}/pdf`,
 
   get: (id: string) => request<Quote>(`/api/quotes/${id}`),
 

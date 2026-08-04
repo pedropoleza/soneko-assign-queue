@@ -38,11 +38,11 @@ const SCHEMA = {
         "Linguagem simples, sem jargão. Cite apenas números que estão nas opções.",
     },
     pontos: {
+      // Structured outputs não aceitam minItems/maxItems em array — a
+      // quantidade vai na descrição e é aparada depois da validação.
       type: "array",
-      minItems: 1,
-      maxItems: 4,
       items: { type: "string" },
-      description: "Argumentos curtos (até 70 caracteres cada) para a corretora usar na conversa.",
+      description: "De 1 a 4 argumentos curtos (até 70 caracteres cada) para a corretora usar na conversa.",
     },
     alerta: {
       type: ["string", "null"],
@@ -127,10 +127,10 @@ Qual apresentar como recomendada, e por quê?`,
   const parsed = Recommendation.safeParse(JSON.parse(raw));
   if (!parsed.success) throw new Error("Não foi possível gerar a recomendação.");
 
+  // A contagem de argumentos vira regra nossa (o schema não pode limitá-la).
+  const pontos = parsed.data.pontos.slice(0, 4);
+
   // Never let the model point at a plan that isn't on the table.
   const known = options.some((o) => o.planId === parsed.data.planId);
-  if (!known) {
-    return { ...parsed.data, planId: options[0].planId };
-  }
-  return parsed.data;
+  return { ...parsed.data, pontos, planId: known ? parsed.data.planId : options[0].planId };
 }

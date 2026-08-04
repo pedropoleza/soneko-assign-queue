@@ -273,8 +273,11 @@ export async function sendContactMessage(
   message: string,
   type: "SMS" | "Email" | "WhatsApp" = "SMS",
   email?: { subject: string; html: string },
+  /** File URLs GHL fetches server-side — how the proposal PDF rides along. */
+  attachments?: string[],
 ): Promise<{ messageId?: string; conversationId?: string }> {
   const body: Record<string, unknown> = { type, contactId, message };
+  if (attachments?.length) body.attachments = attachments;
   if (type === "Email") {
     body.subject = email?.subject || "Sua cotação de seguro saúde";
     body.html = email?.html || message.replace(/\n/g, "<br/>");

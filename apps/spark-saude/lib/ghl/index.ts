@@ -215,10 +215,11 @@ export async function sendMessageData(
   message: string,
   type: "SMS" | "Email" | "WhatsApp" = "SMS",
   email?: { subject: string; html: string },
+  attachments?: string[],
 ): Promise<{ ok: true; messageId?: string }> {
   const locationId = resolveLocationId(locationIn);
   if (serverEnv.useFixtures) return { ok: true };
-  const res = await sendContactMessage(locationId, contactId, message, type, email);
+  const res = await sendContactMessage(locationId, contactId, message, type, email, attachments);
   return { ok: true, messageId: res.messageId };
 }
 

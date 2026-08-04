@@ -59,8 +59,11 @@ export async function POST(req: Request) {
     const parsed = bodySchema.parse(await req.json());
     const profile = parsed.profile as QuoteProfile;
 
-    // Store the exact household we would send to the CMS (audit / regenerate).
-    const householdJson = await buildSearchRequest(profile).catch(() => ({ profile }));
+    // Store the exact household we would send to the CMS (audit / regenerate),
+    // ALWAYS alongside the raw profile — the CMS shape drops names, relationships
+    // and the contact, which the PDF and the notes need to read back.
+    const cms = await buildSearchRequest(profile).catch(() => ({}));
+    const householdJson = { ...cms, profile };
 
     const quote = await createQuote({
       profile,

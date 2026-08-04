@@ -15,6 +15,7 @@ import {
   ImagePlus,
   Pencil,
   FileImage,
+  FileText,
   Send,
 } from "lucide-react";
 import { api } from "@/lib/client/api";
@@ -331,14 +332,19 @@ export function QuoteBuilder() {
         setDest((d) => ({ ...d, [destField]: value }));
         setSavingDest(false);
       }
-      await cotacaoApi.sendToLead({
+      const res = await cotacaoApi.sendToLead({
         contactId: profile.contactId,
         message: clientMessage,
         channel,
         proposalUrl,
         profile: { contactName: profile.contactName, year: profile.year },
+        // O PDF da proposta vai anexado — é o que a cliente abre no WhatsApp.
+        quoteId: result.id,
+        attachPdf: true,
       });
       setSent(true);
+      // O envio não falha por causa do PDF; se ele não foi junto, avisamos.
+      if (res.pdfError) setError(`Mensagem enviada, mas sem o PDF: ${res.pdfError}`);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -1033,6 +1039,11 @@ export function QuoteBuilder() {
             )}
 
             <div className="mt-3 flex flex-wrap items-center gap-2">
+              <a href={cotacaoApi.pdfUrl(result.id)} target="_blank" rel="noopener noreferrer">
+                <Button variant="outline" size="sm" className="h-9">
+                  <FileText className="h-4 w-4" /> Gerar PDF da proposta
+                </Button>
+              </a>
               <Button variant="outline" size="sm" onClick={copyMessage} className="h-9">
                 {copiedMsg ? <Check className="h-4 w-4" /> : null} {copiedMsg ? "Copiado" : "Copiar mensagem + link"}
               </Button>
