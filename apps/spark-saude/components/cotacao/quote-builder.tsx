@@ -14,7 +14,6 @@ import {
   ArrowLeft,
   ImagePlus,
   Pencil,
-  FileImage,
   FileText,
   Send,
 } from "lucide-react";
@@ -264,9 +263,46 @@ export function QuoteBuilder() {
     });
   };
 
+  /*
+   * O "flow": ao escolher um plano, uma ficha sai do card e viaja até o contador
+   * da barra inferior, que pulsa ao receber. É o que transforma "a borda mudou de
+   * cor" em "o plano entrou na proposta" — a corretora acompanha a montagem sem
+   * precisar procurar o número no rodapé.
+   */
+  const counterRef = React.useRef<HTMLSpanElement>(null);
+  const [flights, setFlights] = React.useState<Flight[]>([]);
+  const [bump, setBump] = React.useState(0);
+  const flightId = React.useRef(0);
+
+  const flyToCounter = (p: PlanQuote, from?: DOMRect) => {
+    const to = counterRef.current?.getBoundingClientRect();
+    const reduced =
+      typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    // Sem origem, sem destino ou com movimento reduzido: só o pulso do contador.
+    if (!from || !to || reduced) {
+      setBump((b) => b + 1);
+      return;
+    }
+    const id = ++flightId.current;
+    setFlights((f) => [...f, { id, plan: p, from, to }]);
+    window.setTimeout(() => {
+      setFlights((f) => f.filter((x) => x.id !== id));
+      setBump((b) => b + 1);
+    }, 640);
+  };
+
   const inDraft = (planId: string) => draft.some((d) => d.planId === planId);
-  const toggle = (p: PlanQuote) =>
+  /** Posição do plano na proposta (1-based) — o mesmo número do card e do PDF. */
+  const draftOrder = (planId: string) => {
+    const i = draft.findIndex((d) => d.planId === planId);
+    return i < 0 ? null : i + 1;
+  };
+
+  const toggle = (p: PlanQuote, from?: DOMRect) => {
+    const adding = !inDraft(p.planId);
     setDraft((d) => (d.some((x) => x.planId === p.planId) ? d.filter((x) => x.planId !== p.planId) : [...d, { ...p }]));
+    if (adding) flyToCounter(p, from);
+  };
   const removeOption = (i: number) => setDraft((d) => d.filter((_, idx) => idx !== i));
   const saveOption = (o: PlanQuote) =>
     setDraft((d) => {
@@ -691,14 +727,15 @@ export function QuoteBuilder() {
             <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Consultando o Marketplace…
           </div>
         ) : plans && plans.length ? (
-          <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+          <div className="stagger mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
             {plans.map((p) => (
               <PlanCard
                 key={p.planId}
                 plan={p}
                 selected={inDraft(p.planId)}
+                order={draftOrder(p.planId)}
                 best={p.planId === bestId}
-                onToggle={() => toggle(p)}
+                onToggle={(rect) => toggle(p, rect)}
               />
             ))}
           </div>
@@ -706,7 +743,19 @@ export function QuoteBuilder() {
           <div className="py-28 text-center text-sm text-muted-foreground">Nenhum plano para esse perfil.</div>
         )}
 
-        <BottomBar count={draft.length} generating={generating} onGenerate={generate} onBack={() => setView("montar")} />
+        <BottomBar
+          count={draft.length}
+          generating={generating}
+          onGenerate={generate}
+          onBack={() => setView("montar")}
+          counterRef={counterRef}
+          bump={bump}
+        />
+
+        {/* As fichas em voo — do card escolhido até o contador */}
+        {flights.map((f) => (
+          <FlyChip key={f.id} flight={f} />
+        ))}
 
         {/* A proposta pode nascer aqui também — mesmas ações da tela de montar. */}
         {resultModal}
@@ -1072,10 +1121,12 @@ export function QuoteBuilder() {
         ) : null}
 
         {draft.length ? (
-          <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+          // A prateleira da proposta: cada opção já numerada na ordem em que o
+          // cliente vai receber, e entrando com a mesma animação da escolha.
+          <div className="stagger mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
             {draft.map((o, i) => (
               <div key={o.planId || i} className="flex flex-col gap-1.5">
-                <PlanCard plan={o} readOnly printUrl={o.printUrl} />
+                <PlanCard plan={o} readOnly order={i + 1} printUrl={o.printUrl} />
                 <div className="flex items-center gap-2 text-xs">
                   <button
                     type="button"
@@ -1087,11 +1138,6 @@ export function QuoteBuilder() {
                   >
                     <Pencil className="h-3.5 w-3.5" /> Revisar
                   </button>
-                  {o.printUrl ? (
-                    <span className="inline-flex items-center gap-1 text-muted-foreground">
-                      <FileImage className="h-3.5 w-3.5" /> print anexado
-                    </span>
-                  ) : null}
                   <button
                     type="button"
                     onClick={() => removeOption(i)}
@@ -1188,31 +1234,88 @@ export function QuoteBuilder() {
   );
 }
 
+/** Uma ficha em voo: de onde saiu, para onde vai, e o plano que ela representa. */
+interface Flight {
+  id: number;
+  plan: PlanQuote;
+  from: DOMRect;
+  to: DOMRect;
+}
+
+/**
+ * A ficha que viaja do card até o contador. Nasce no centro do card e é
+ * transladada por CSS até o destino — dois frames de espera para o navegador
+ * registrar a posição inicial antes da transição, senão ela já aparece chegando.
+ */
+function FlyChip({ flight }: { flight: Flight }) {
+  const [moved, setMoved] = React.useState(false);
+  React.useEffect(() => {
+    const r = requestAnimationFrame(() => requestAnimationFrame(() => setMoved(true)));
+    return () => cancelAnimationFrame(r);
+  }, []);
+
+  const { from, to, plan } = flight;
+  const dx = to.x + to.width / 2 - (from.x + from.width / 2);
+  const dy = to.y + to.height / 2 - (from.y + from.height / 2);
+  const metal = metalStyle(plan.metalLevel);
+
+  return (
+    <span
+      aria-hidden
+      className="leao-fly inline-flex items-center gap-1.5 rounded-full border bg-card px-2.5 py-1 text-xs font-semibold shadow-card-hover"
+      style={{
+        left: from.x + from.width / 2,
+        top: from.y + from.height / 2,
+        color: metal.ink,
+        transform: moved
+          ? `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px)) scale(.45)`
+          : "translate(-50%, -50%) scale(1)",
+        opacity: moved ? 0.1 : 1,
+      }}
+    >
+      <Check className="h-3.5 w-3.5" />
+      {formatMoneyBR(plan.premioMensal)}
+    </span>
+  );
+}
+
 function BottomBar({
   count,
   generating,
   onGenerate,
   onBack,
+  counterRef,
+  bump,
 }: {
   count: number;
   generating: boolean;
   onGenerate: () => void;
   onBack?: () => void;
+  counterRef?: React.Ref<HTMLSpanElement>;
+  /** Muda a cada plano recebido — remonta o selo para o pulso rodar de novo. */
+  bump?: number;
 }) {
   return (
     <div className="fixed inset-x-0 bottom-0 z-20 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
       <div className="flex w-full items-center gap-3 px-5 py-3">
-        <p className="text-sm text-muted-foreground">
-          {count ? (
-            <>
-              <span className="mr-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-xs font-semibold text-primary-foreground">
+        <p className="flex items-center text-sm text-muted-foreground">
+          {/* Âncora permanente: o destino do voo precisa existir ANTES do
+              primeiro plano entrar, senão a primeira ficha não tem para onde ir. */}
+          <span ref={counterRef} className="inline-flex items-center">
+            {count ? (
+              <span
+                key={bump}
+                className="animate-pulse-once mr-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-xs font-semibold text-primary-foreground"
+              >
                 {count}
               </span>
-              {count === 1 ? "plano na proposta" : "planos na proposta"}
-            </>
-          ) : (
-            "Adicione ao menos um plano para gerar a proposta."
-          )}
+            ) : null}
+          </span>
+          {count
+            ? count === 1
+              ? "plano na proposta"
+              : "planos na proposta"
+            : "Adicione ao menos um plano para gerar a proposta."}
         </p>
         {onBack ? (
           <Button variant="ghost" size="sm" onClick={onBack} className="h-9">

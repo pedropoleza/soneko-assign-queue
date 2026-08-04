@@ -141,11 +141,94 @@ body {
 .stagger > *:nth-child(8) { animation-delay: 320ms; }
 .stagger > *:nth-child(9) { animation-delay: 360ms; }
 .stagger > *:nth-child(10) { animation-delay: 400ms; }
+
+/*
+ * Escolher um plano é a ação central da tela do Marketplace, então ela tem um
+ * gesto próprio: uma luz varre o card, o selo numerado salta, e uma ficha voa
+ * do card até o contador da barra inferior — o plano "entra" na proposta em vez
+ * de só mudar de cor. O número que aparece aqui é o mesmo da proposta e do PDF.
+ */
+@keyframes leao-sweep {
+  from {
+    transform: translateX(-120%) skewX(-18deg);
+    opacity: 0;
+  }
+  35% {
+    opacity: 1;
+  }
+  to {
+    transform: translateX(220%) skewX(-18deg);
+    opacity: 0;
+  }
+}
+@keyframes leao-pop {
+  0% {
+    transform: scale(0.4);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.14);
+    opacity: 1;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+@keyframes leao-pulse {
+  0%,
+  to {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.28);
+  }
+}
+@keyframes leao-collapse {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+}
+.animate-sweep {
+  animation: leao-sweep 0.72s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.animate-pop {
+  animation: leao-pop 0.34s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+.animate-pulse-once {
+  animation: leao-pulse 0.42s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.animate-collapse {
+  animation: leao-collapse 0.2s ease-in both;
+}
+
+/* A ficha que voa do card até o contador — posição e destino vêm do JS. */
+.leao-fly {
+  position: fixed;
+  z-index: 60;
+  pointer-events: none;
+  transition:
+    transform 0.62s cubic-bezier(0.32, 0.9, 0.3, 1),
+    opacity 0.62s ease-out;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animate-fade-up,
   .animate-scan,
+  .animate-sweep,
+  .animate-pop,
+  .animate-pulse-once,
+  .animate-collapse,
   .stagger > * {
     animation: none;
+  }
+  .leao-fly {
+    display: none;
   }
 }
 

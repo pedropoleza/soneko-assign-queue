@@ -1,6 +1,10 @@
-import { Check, Star, ZoomIn } from "lucide-react";
+"use client";
+
+import * as React from "react";
+import { Check, Plus, Star } from "lucide-react";
 import type { PlanQuote } from "@/lib/cotacao/types";
 import { metalStyle } from "@/lib/cotacao/metal";
+import { PrintAttachment } from "@/components/cotacao/print-lightbox";
 import { formatMoneyBR, cn } from "@/lib/utils";
 
 /**
@@ -11,10 +15,17 @@ import { formatMoneyBR, cn } from "@/lib/utils";
  * by tier before any word is read. The gross premium and the tax credit sit
  * right under the price — §7 requires an estimate shown as an estimate, never
  * a bare final price. Type floor: 12px.
+ *
+ * Escolher é a ação da tela, então ela tem um gesto próprio: o card inteiro é
+ * clicável, uma luz varre a superfície no instante da escolha e um selo numerado
+ * salta no canto. Esse número não é enfeite — é a posição da opção na proposta e
+ * no PDF, então a corretora vê a ordem que o cliente vai receber enquanto monta.
  */
 export function PlanCard({
   plan,
   selected,
+  /** Posição na proposta (1-based); ausente quando o plano não está nela. */
+  order,
   best,
   onToggle,
   readOnly = false,
@@ -22,32 +33,78 @@ export function PlanCard({
 }: {
   plan: PlanQuote;
   selected?: boolean;
+  order?: number | null;
   best?: boolean;
-  onToggle?: () => void;
+  /** Recebe o retângulo do card — é a origem da ficha que voa até o contador. */
+  onToggle?: (rect?: DOMRect) => void;
   readOnly?: boolean;
   printUrl?: string | null;
 }) {
   const metal = metalStyle(plan.metalLevel);
   const hasCredit = plan.creditoFiscal > 0;
+  const interactive = !readOnly && Boolean(onToggle);
+  const ref = React.useRef<HTMLElement>(null);
+  const fire = () => onToggle?.(ref.current?.getBoundingClientRect());
+
+  // A varredura roda uma vez por escolha — some sozinha para não virar ruído.
+  const [sweeping, setSweeping] = React.useState(false);
+  const first = React.useRef(true);
+  React.useEffect(() => {
+    if (first.current) {
+      first.current = false;
+      return;
+    }
+    if (!selected) return;
+    setSweeping(true);
+    const t = setTimeout(() => setSweeping(false), 760);
+    return () => clearTimeout(t);
+  }, [selected]);
 
   return (
     <article
+      ref={ref}
+      onClick={interactive ? fire : undefined}
       className={cn(
-        "flex h-full flex-col overflow-hidden rounded-lg border bg-card shadow-card transition-shadow",
-        !readOnly && "hover:shadow-card-hover",
-        selected && "border-primary ring-1 ring-primary",
+        "relative flex h-full flex-col overflow-hidden rounded-lg border bg-card shadow-card",
+        "transition-[box-shadow,border-color,transform] duration-200 ease-out",
+        interactive && "cursor-pointer hover:-translate-y-0.5 hover:shadow-card-hover",
+        selected && "border-primary/70 ring-2 ring-primary/25",
       )}
     >
-      {/* O tier antes de qualquer palavra */}
-      <span className="h-1 w-full shrink-0" style={{ background: metal.rail }} aria-hidden />
+      {/* O tier antes de qualquer palavra — engrossa quando o plano é escolhido */}
+      <span
+        className="w-full shrink-0 transition-[height] duration-200 ease-out"
+        style={{ background: metal.rail, height: selected ? 4 : 3 }}
+        aria-hidden
+      />
+
+      {/* A luz que atravessa o card no momento da escolha */}
+      {sweeping ? (
+        <span
+          className="animate-sweep pointer-events-none absolute inset-y-0 left-0 w-1/2"
+          style={{
+            background:
+              "linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,.62) 50%, rgba(255,255,255,0) 100%)",
+          }}
+          aria-hidden
+        />
+      ) : null}
 
       <div className="flex flex-1 flex-col p-4">
         {/* Identidade */}
         <div className="flex items-start justify-between gap-2.5">
           <div className="min-w-0">
-            {/* Two lines before truncating — plan names are long and the tier
-                is what distinguishes them at a glance, not a cut-off word. */}
-            <h3 className="line-clamp-2 text-[15px] font-semibold leading-snug">{plan.nomePlano}</h3>
+            <div className="flex items-center gap-2">
+              {/* O selo só existe dentro da proposta: é a posição da opção. */}
+              {order ? (
+                <span className="animate-pop inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary text-[11px] font-bold text-primary-foreground">
+                  {order}
+                </span>
+              ) : null}
+              {/* Two lines before truncating — plan names are long and the tier
+                  is what distinguishes them at a glance, not a cut-off word. */}
+              <h3 className="line-clamp-2 text-[15px] font-semibold leading-snug">{plan.nomePlano}</h3>
+            </div>
             <p className="mt-0.5 line-clamp-1 text-sm text-muted-foreground">{plan.seguradora}</p>
           </div>
           <span className={cn("shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold", metal.chip)}>
@@ -120,36 +177,33 @@ export function PlanCard({
         </div>
 
         {printUrl ? (
-          <a
-            href={printUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="mt-3 flex items-center gap-2.5 rounded-md border bg-muted/40 p-2 text-xs transition-colors hover:bg-muted"
-            title="Ver print oficial (ampliar)"
-          >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={printUrl} alt="Print do plano" className="h-10 w-10 rounded object-cover ring-1 ring-border" />
-            <span className="flex items-center gap-1 font-medium text-muted-foreground">
-              <ZoomIn className="h-3.5 w-3.5" /> Ver print da seguradora
-            </span>
-          </a>
+          // O clique no anexo não pode escolher/desescolher o plano por tabela.
+          <div className="mt-3" onClick={(e) => e.stopPropagation()}>
+            <PrintAttachment url={printUrl} source={plan.seguradora} />
+          </div>
         ) : null}
 
-        {!readOnly && onToggle ? (
+        {interactive ? (
           // mt-auto pins the CTA to the bottom so a row of cards lines up even
-          // when the cost-sharing text wraps to different heights.
+          // when the cost-sharing text wraps to different heights. O card inteiro
+          // também alterna, mas o botão continua sendo o caminho acessível — é
+          // ele que recebe foco e anuncia o estado.
           <div className="mt-auto pt-4">
             <button
               type="button"
-              onClick={onToggle}
+              aria-pressed={selected}
+              onClick={(e) => {
+                e.stopPropagation();
+                fire();
+              }}
               className={cn(
-                "inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-md text-sm font-medium transition-colors",
+                "inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-md text-sm font-medium transition-colors duration-200",
                 selected
                   ? "bg-primary text-primary-foreground hover:bg-primary-hover"
                   : "border bg-background shadow-card hover:bg-muted",
               )}
             >
-              {selected ? <Check className="h-4 w-4" /> : null}
+              {selected ? <Check className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
               {selected ? "Na proposta" : "Adicionar à proposta"}
             </button>
           </div>
