@@ -12,7 +12,9 @@ const appDir = path.dirname(fileURLToPath(import.meta.url));
  */
 const frameAncestors =
   process.env.ALLOWED_FRAME_ANCESTORS?.trim() ||
-  "'self' https://*.gohighlevel.com https://*.leadconnectorhq.com https://*.msgsndr.com";
+  // GHL default domains + the agency white-label (GHL served from *.sparkleads.pro).
+  // A tenant on another white-label domain overrides this via ALLOWED_FRAME_ANCESTORS.
+  "'self' https://*.gohighlevel.com https://*.leadconnectorhq.com https://*.msgsndr.com https://*.sparkleads.pro";
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
