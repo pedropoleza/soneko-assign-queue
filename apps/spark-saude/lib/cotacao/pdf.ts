@@ -1,8 +1,21 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFImage, type PDFPage, type RGB } from "pdf-lib";
+import { create as createQr } from "qrcode/lib/core/qrcode.js";
+import {
+  PDFArray,
+  PDFDocument,
+  PDFName,
+  PDFString,
+  StandardFonts,
+  rgb,
+  type PDFFont,
+  type PDFImage,
+  type PDFPage,
+  type RGB,
+} from "pdf-lib";
 import { LEAO_BRAND } from "./brand";
 import { dict, type Dict } from "./i18n";
+import { describePeople } from "./message";
 import { metalStyle } from "./metal";
 import type { PlanOptionDraft, QuoteProfile } from "./types";
 
@@ -40,6 +53,28 @@ const M = 48;
 const CONTENT = A4[0] - M * 2;
 const FOOT = 74; // piso: rodapé + respiro
 
+/*
+ * Gramática de layout do template — vale para o comparativo e para as folhas de
+ * detalhe, e é o que impede uma célula de comer a linha da outra.
+ *
+ * A regra é uma só: NADA é desenhado numa linha-base fixa. Cada célula é
+ * quebrada na largura da sua própria coluna, a altura da linha vem da célula
+ * mais alta, e os números são ancorados à DIREITA da coluna — assim um valor
+ * mais longo cresce para dentro do próprio espaço em vez de invadir o vizinho.
+ * Qualquer tabela nova neste documento deve seguir estas medidas.
+ */
+const COL_PAD = 12; // respiro nas bordas da linha
+const COL_GAP = 10; // espaço entre colunas numéricas
+const BADGE_W = 18; // selo numerado
+const W_PRICE = 96; // mensalidade (15pt) + barra + linha do crédito
+const W_DED = 70; // dedutível
+const W_OOP = 78; // máximo do bolso (o rótulo mais longo dos três)
+const ROW_PAD_Y = 10; // respiro vertical dentro da linha
+const LEAD_TITLE = 14; // entrelinha do nome do plano (11.5pt)
+const LEAD_META = 10.5; // entrelinha dos textos de apoio (8pt)
+const CHIP_H = 13; // altura do chip de metal
+
+
 const money = (n: number | null | undefined, loc = "pt-BR") =>
   n == null ? "—" : `US$ ${n.toLocaleString(loc, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const moneyShort = (n: number | null | undefined, loc = "pt-BR") =>
@@ -62,27 +97,6 @@ function hexRgb(hex: string): RGB {
   return rgb(((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255);
 }
 
-/** Quebra por caractere — para URLs assinadas, que não têm espaço nenhum. */
-function wrapChars(text: string, font: PDFFont, size: number, maxWidth: number, maxLines = 2): string[] {
-  const chars = safe(text).split("");
-  const lines: string[] = [];
-  let line = "";
-  for (const c of chars) {
-    if (font.widthOfTextAtSize(line + c, size) > maxWidth) {
-      lines.push(line);
-      line = c;
-      if (lines.length === maxLines) break;
-    } else line += c;
-  }
-  if (lines.length < maxLines && line) lines.push(line);
-  // Estourou o espaço? Sinaliza que continua, em vez de cortar no escuro.
-  if (lines.length === maxLines) {
-    const used = lines.join("").length;
-    if (used < chars.length) lines[maxLines - 1] = lines[maxLines - 1].slice(0, -1) + "…";
-  }
-  return lines;
-}
-
 function wrap(text: string, font: PDFFont, size: number, maxWidth: number): string[] {
   const words = safe(text).split(/\s+/).filter(Boolean);
   const lines: string[] = [];
@@ -99,6 +113,34 @@ function wrap(text: string, font: PDFFont, size: number, maxWidth: number): stri
   return lines;
 }
 
+/**
+ * Quebra com teto de linhas. Cortar no limite sem avisar é o que fazia nomes de
+ * plano sumirem pela metade; aqui o corte é explícito, com reticências.
+ */
+function wrapMax(text: string, font: PDFFont, size: number, maxWidth: number, maxLines: number): string[] {
+  const lines = wrap(text, font, size, maxWidth);
+  if (lines.length <= maxLines) return lines;
+  const cut = lines.slice(0, maxLines);
+  let last = cut[maxLines - 1] ?? "";
+  while (last.length > 1 && font.widthOfTextAtSize(`${last}...`, size) > maxWidth) last = last.slice(0, -1);
+  cut[maxLines - 1] = `${last}...`;
+  return cut;
+}
+
+/** Texto alinhado à direita de um limite — é assim que número fica sob número. */
+function rightText(
+  page: PDFPage,
+  text: string,
+  font: PDFFont,
+  size: number,
+  rightX: number,
+  y: number,
+  color: RGB,
+) {
+  const t = safe(text);
+  page.drawText(t, { x: rightX - font.widthOfTextAtSize(t, size), y, size, font, color });
+}
+
 interface Ctx {
   doc: PDFDocument;
   page: PDFPage;
@@ -111,6 +153,12 @@ interface Ctx {
   /** Rótulo da seção corrente, repetido no topo das páginas internas. */
   section: string;
   d: Dict;
+  /**
+   * Páginas já criadas que o próximo `newPage` deve consumir antes de abrir uma
+   * nova. É o que mantém o comparativo na frente do documento: as páginas dele
+   * são reservadas ANTES das folhas de detalhe, mesmo sendo desenhadas depois.
+   */
+  reserved?: PDFPage[];
 }
 
 async function loadLogo(doc: PDFDocument, file: string): Promise<PDFImage | null> {
@@ -153,13 +201,68 @@ function footer(page: PDFPage, font: PDFFont, bold: PDFFont, index: number, tota
 
 function newPage(ctx: Ctx, section?: string) {
   if (section !== undefined) ctx.section = section;
-  ctx.page = ctx.doc.addPage(A4);
-  ctx.pages.push(ctx.page);
+  const reserved = ctx.reserved?.shift();
+  if (reserved) {
+    ctx.page = reserved; // já está em ctx.pages, na posição certa
+  } else {
+    ctx.page = ctx.doc.addPage(A4);
+    ctx.pages.push(ctx.page);
+  }
   header(ctx);
 }
 
 function ensure(ctx: Ctx, needed: number) {
   if (ctx.y - needed <= FOOT) newPage(ctx);
+}
+
+/**
+ * Área clicável apontando para uma URL.
+ *
+ * O link da proposta era só TEXTO desenhado na página: o cliente tinha que
+ * selecionar 180 caracteres de base64 quebrados em duas linhas e colar no
+ * navegador — e a quebra de linha entrava junto, então o link chegava quebrado.
+ * Agora o PDF carrega uma anotação de link de verdade, que o leitor abre com um
+ * toque.
+ */
+function linkArea(doc: PDFDocument, page: PDFPage, url: string, x: number, y: number, w: number, h: number) {
+  const annot = doc.context.register(
+    doc.context.obj({
+      Type: "Annot",
+      Subtype: "Link",
+      Rect: [x, y, x + w, y + h],
+      // Sem moldura: o desenho embaixo já comunica que é clicável.
+      Border: [0, 0, 0],
+      A: { Type: "Action", S: "URI", URI: PDFString.of(url) },
+    }),
+  );
+  const existing = page.node.get(PDFName.of("Annots"));
+  if (existing instanceof PDFArray) existing.push(annot);
+  else page.node.set(PDFName.of("Annots"), doc.context.obj([annot]));
+}
+
+/**
+ * QR da proposta — para quem abre o PDF no computador e não tem onde tocar.
+ * Desenhado módulo a módulo; a lib só devolve a matriz, sem canvas, o que
+ * mantém a geração rodando dentro de uma função serverless.
+ */
+function drawQr(page: PDFPage, url: string, x: number, y: number, size: number) {
+  const qr = createQr(url, { errorCorrectionLevel: "M" });
+  const n = qr.modules.size;
+  const cell = size / n;
+  page.drawRectangle({ x: x - 4, y: y - 4, width: size + 8, height: size + 8, color: WHITE });
+  for (let r = 0; r < n; r++) {
+    for (let c = 0; c < n; c++) {
+      if (!qr.modules.get(r, c)) continue;
+      page.drawRectangle({
+        x: x + c * cell,
+        // A matriz conta as linhas de cima para baixo; o PDF, de baixo para cima.
+        y: y + (n - 1 - r) * cell,
+        width: cell,
+        height: cell,
+        color: NAVY,
+      });
+    }
+  }
 }
 
 /** Selo numerado — o elo entre o comparativo e a folha de detalhe. */
@@ -194,6 +297,31 @@ function metalChip(page: PDFPage, bold: PDFFont, x: number, y: number, metalLeve
  * One row per option, priced left to right, with a bar that makes the monthly
  * premium comparable at a glance instead of forcing a number-by-number read.
  */
+/* Geometria das colunas do comparativo — uma só definição para quem mede e
+   para quem desenha, senão a reserva de páginas erra por alguns pontos. */
+const X_RIGHT = M + CONTENT - COL_PAD;
+const X_OOP = X_RIGHT - W_OOP;
+const X_DED = X_OOP - COL_GAP - W_DED;
+const X_PRICE = X_DED - COL_GAP - W_PRICE;
+const X_NAME = M + COL_PAD + BADGE_W + 8;
+const W_NAME = X_PRICE - COL_GAP - X_NAME;
+
+/** As células de uma linha, já quebradas — medir e desenhar leem o mesmo objeto. */
+function comparisonRow(plan: PlanOptionDraft, regular: PDFFont, bold: PDFFont, d: Dict) {
+  const nameLines = wrapMax(plan.nomePlano, bold, 11.5, W_NAME, 2);
+  const insurerLines = wrapMax(plan.seguradora, regular, 8, W_NAME, 2);
+  const creditLines =
+    plan.creditoFiscal > 0
+      ? wrapMax(d.pdf.creditIncluded(moneyShort(plan.creditoFiscal, d.locale)), regular, 7, W_PRICE, 2)
+      : [];
+  const leftH = nameLines.length * LEAD_TITLE + 4 + insurerLines.length * LEAD_META + 8 + CHIP_H;
+  const rightH = 17 + 12 + creditLines.length * 9;
+  const height = ROW_PAD_Y * 2 + Math.max(leftH, rightH, 42);
+  return { nameLines, insurerLines, creditLines, height };
+}
+
+const HEAD_H = 22;
+
 function drawComparison(
   ctx: Ctx,
   options: PlanOptionDraft[],
@@ -205,33 +333,50 @@ function drawComparison(
   const L = d.locale;
   const maxPremium = Math.max(...options.map((o) => o.premioMensal), 1);
 
-  // Colunas: o nome fica com o espaço largo; os três números têm largura fixa.
-  const COL_PRICE = M + 222;
-  const COL_DED = M + 340;
-  const COL_OOP = M + 424;
-  const NAME_W = COL_PRICE - (M + 40) - 12;
-
-  // Cabeçalho da tabela
-  ensure(ctx, 34);
+  /*
+   * Grade da tabela — a mesma gramática das folhas de detalhe (ver ROW_LEAD /
+   * ROW_PAD abaixo): as colunas numéricas têm largura própria e são alinhadas
+   * pela DIREITA, e o bloco do nome recebe o que sobra. Nada é desenhado numa
+   * linha-base fixa: cada célula é quebrada na largura da sua coluna e a altura
+   * da linha vem da coluna mais alta. Era isso que faltava — o nome da
+   * seguradora saía sem quebra e atravessava a coluna da mensalidade.
+   */
+  // Cabeçalho: rótulos numéricos alinhados à direita, sob os próprios números.
+  ensure(ctx, HEAD_H + 12);
   const headY = ctx.y;
-  ctx.page.drawRectangle({ x: M, y: headY - 22, width: CONTENT, height: 22, color: NAVY });
-  ([[d.pdf.colOption, M + 12], [d.pdf.colPremium, COL_PRICE], [d.pdf.colDeductible, COL_DED], [d.pdf.colOopMax, COL_OOP]] as Array<
-    [string, number]
-  >).forEach(([label, x]) => {
-    // Rótulos mudam de tamanho com o idioma — encosta no limite da tabela em vez
-    // de vazar por fora dela.
-    const text = safe(label);
-    const right = M + CONTENT - 10;
-    const w = bold.widthOfTextAtSize(text, 8);
-    ctx.page.drawText(text, { x: Math.min(x, right - w), y: headY - 15, size: 8, font: bold, color: WHITE });
+  ctx.page.drawRectangle({ x: M, y: headY - HEAD_H, width: CONTENT, height: HEAD_H, color: NAVY });
+  ctx.page.drawText(safe(d.pdf.colOption), {
+    x: M + COL_PAD, y: headY - 14.5, size: 8, font: bold, color: WHITE,
   });
-  ctx.y = headY - 22;
+  (
+    [
+      [d.pdf.colPremium, X_PRICE + W_PRICE],
+      [d.pdf.colDeductible, X_DED + W_DED],
+      [d.pdf.colOopMax, X_RIGHT],
+    ] as Array<[string, number]>
+  ).forEach(([label, right]) => rightText(ctx.page, label, bold, 8, right, headY - 14.5, WHITE));
+  ctx.y = headY - HEAD_H;
 
   options.forEach((plan, i) => {
     const isRec = plan.planId === recommendedPlanId;
-    const nameLines = wrap(plan.nomePlano, bold, 11.5, NAME_W).slice(0, 2);
-    const rowH = 46 + nameLines.length * 14;
+
+    // 1) Medir tudo antes de desenhar qualquer coisa.
+    const { nameLines, insurerLines, creditLines, height: rowH } = comparisonRow(plan, regular, bold, d);
+    const before = ctx.page;
     ensure(ctx, rowH);
+    if (ctx.page !== before) {
+      // Continuou noutra página: o cabeçalho vai junto, senão a tabela perde os rótulos.
+      ctx.page.drawRectangle({ x: M, y: ctx.y - HEAD_H, width: CONTENT, height: HEAD_H, color: NAVY });
+      ctx.page.drawText(safe(d.pdf.colOption), { x: M + COL_PAD, y: ctx.y - 14.5, size: 8, font: bold, color: WHITE });
+      (
+        [
+          [d.pdf.colPremium, X_PRICE + W_PRICE],
+          [d.pdf.colDeductible, X_DED + W_DED],
+          [d.pdf.colOopMax, X_RIGHT],
+        ] as Array<[string, number]>
+      ).forEach(([label, right]) => rightText(ctx.page, label, bold, 8, right, ctx.y - 14.5, WHITE));
+      ctx.y -= HEAD_H;
+    }
     const top = ctx.y;
     const page = ctx.page;
 
@@ -242,43 +387,48 @@ function drawComparison(
     if (isRec) page.drawRectangle({ x: M, y: top - rowH, width: 3.5, height: rowH, color: GOLD });
     page.drawRectangle({ x: M, y: top - rowH, width: CONTENT, height: 0.6, color: HAIRLINE });
 
-    // Nº + nome + seguradora + tier
-    numberBadge(page, bold, M + 12, top - 32, i + 1, isRec);
-    const nameX = M + 40;
-    let ny = top - 20;
-    nameLines.forEach((line) => {
-      page.drawText(line, { x: nameX, y: ny, size: 11.5, font: bold, color: NAVY });
-      ny -= 14;
-    });
-    page.drawText(safe(plan.seguradora), { x: nameX, y: ny, size: 8.5, font: regular, color: MUTED });
-    ny -= 16;
-    const chipW = metalChip(page, bold, nameX, ny, plan.metalLevel, d);
-    if (isRec) {
-      page.drawText(safe(d.pdf.recommended), { x: nameX + chipW + 8, y: ny + 3, size: 8, font: bold, color: GOLD });
-    }
+    // 2) Coluna da esquerda: selo, nome, seguradora, tier.
+    const startY = top - ROW_PAD_Y;
+    numberBadge(page, bold, M + COL_PAD, startY - 17, i + 1, isRec);
 
-    // Mensalidade + barra comparativa
-    const price = safe(money(plan.premioMensal, L));
-    page.drawText(price, { x: COL_PRICE, y: top - 24, size: 15, font: bold, color: isRec ? hexRgb("#8A6410") : NAVY });
-    const barW = 104;
-    page.drawRectangle({ x: COL_PRICE, y: top - 38, width: barW, height: 5, color: HAIRLINE });
+    let ny = startY - 11;
+    nameLines.forEach((line) => {
+      page.drawText(line, { x: X_NAME, y: ny, size: 11.5, font: bold, color: NAVY });
+      ny -= LEAD_TITLE;
+    });
+    ny -= 4;
+    insurerLines.forEach((line) => {
+      page.drawText(line, { x: X_NAME, y: ny, size: 8, font: regular, color: MUTED });
+      ny -= LEAD_META;
+    });
+    ny -= 6;
+    const chipW = metalChip(page, bold, X_NAME, ny, plan.metalLevel, d);
+    if (isRec) {
+      page.drawText(safe(d.pdf.recommended), { x: X_NAME + chipW + 8, y: ny + 3, size: 8, font: bold, color: GOLD });
+    }
+    // A ponte para a folha de detalhe fecha a linha, na mesma altura do chip.
+    rightText(page, d.pdf.detailOnPage(detailPageOf(plan.planId)), regular, 8, X_RIGHT, ny + 3, MUTED);
+
+    // 3) Colunas numéricas, todas ancoradas à direita.
+    const numY = startY - 15;
+    rightText(page, money(plan.premioMensal, L), bold, 15, X_PRICE + W_PRICE, numY, isRec ? hexRgb("#8A6410") : NAVY);
+    rightText(page, moneyShort(plan.dedutivel, L), bold, 11.5, X_DED + W_DED, numY, INK);
+    rightText(page, moneyShort(plan.maxBolso, L), bold, 11.5, X_RIGHT, numY, INK);
+
+    // Barra comparativa da mensalidade, na largura exata da coluna.
+    const barY = numY - 11;
+    page.drawRectangle({ x: X_PRICE, y: barY, width: W_PRICE, height: 5, color: HAIRLINE });
     page.drawRectangle({
-      x: COL_PRICE, y: top - 38,
-      width: Math.max(4, (plan.premioMensal / maxPremium) * barW), height: 5,
+      x: X_PRICE, y: barY,
+      width: Math.max(4, (plan.premioMensal / maxPremium) * W_PRICE), height: 5,
       color: isRec ? GOLD : NAVY_SOFT,
     });
-    if (plan.creditoFiscal > 0) {
-      page.drawText(safe(d.pdf.creditIncluded(moneyShort(plan.creditoFiscal, L))), {
-        x: COL_PRICE, y: top - 51, size: 7.5, font: regular, color: GREEN,
-      });
-    }
-
-    // Dedutível / máximo do bolso
-    page.drawText(safe(moneyShort(plan.dedutivel, L)), { x: COL_DED, y: top - 24, size: 11.5, font: bold, color: INK });
-    page.drawText(safe(moneyShort(plan.maxBolso, L)), { x: COL_OOP, y: top - 24, size: 11.5, font: bold, color: INK });
-    page.drawText(safe(d.pdf.detailOnPage(detailPageOf(plan.planId))), {
-      x: COL_DED, y: top - 44, size: 8, font: regular, color: MUTED,
+    let cy = barY - 10;
+    creditLines.forEach((line) => {
+      rightText(page, line, regular, 7, X_PRICE + W_PRICE, cy, GREEN);
+      cy -= 9;
     });
+
 
     ctx.y = top - rowH;
   });
@@ -292,6 +442,123 @@ function drawComparison(
     ctx.page.drawText(line, { x: M, y: ctx.y - i * 11, size: 8.5, font: ctx.regular, color: MUTED });
   });
   ctx.y -= legendLines.length * 11 + 10;
+}
+
+// --------------------------------------------------------------- Premissas
+
+/**
+ * As premissas da cotação, com as palavras dela.
+ *
+ * É o texto que a Dani manda junto de toda cotação — inclusive a ressalva de
+ * que o preço tende a cair na inscrição, porque o sistema de cotação não
+ * reconhece as idades das crianças. Sem isso o cliente lê um número e acha que
+ * é o final; a ressalva é parte do trabalho dela, não um rodapé.
+ *
+ * As mesmas frases do WhatsApp e do e-mail (lib/cotacao/message.ts), montadas
+ * aqui como blocos em vez de um parágrafo corrido.
+ */
+function drawPremises(ctx: Ctx, profile: QuoteProfile): number {
+  const { page, regular, bold, d } = ctx;
+  const top = ctx.y;
+  const innerW = CONTENT - 32;
+
+  const introLines = wrap(d.msg.intro(profile.year), regular, 9.5, CONTENT);
+  const bullets = [
+    d.msg.household(profile.people.length, describePeople(profile.people, d)),
+    d.msg.zip(profile.zipcode),
+    d.msg.income(profile.year, `$${Math.round(profile.income).toLocaleString("en-US")}`),
+  ].map((b) => wrap(b.replace(/^•\s*/, ""), regular, 9.5, innerW - 14));
+  const caveatLines = wrap(d.msg.caveat, regular, 8.5, CONTENT);
+
+  const cardH = 14 + bullets.reduce((h, lines) => h + lines.length * 12.5 + 5, 0);
+
+  introLines.forEach((line, i) => {
+    page.drawText(line, { x: M, y: top - 10 - i * 12, size: 9.5, font: regular, color: INK });
+  });
+  let y = top - 10 - introLines.length * 12 - 8;
+
+  page.drawRectangle({ x: M, y: y - cardH, width: CONTENT, height: cardH, color: WASH });
+  page.drawRectangle({ x: M, y: y - cardH, width: 2.5, height: cardH, color: GOLD });
+  let by = y - 16;
+  bullets.forEach((lines) => {
+    page.drawText("-", { x: M + 16, y: by, size: 9.5, font: bold, color: GOLD });
+    lines.forEach((line) => {
+      page.drawText(line, { x: M + 26, y: by, size: 9.5, font: regular, color: INK });
+      by -= 12.5;
+    });
+    by -= 5;
+  });
+  y -= cardH + 10;
+
+  caveatLines.forEach((line, i) => {
+    page.drawText(line, { x: M, y: y - i * 10.5, size: 8.5, font: regular, color: hexRgb("#8A6410") });
+  });
+  y -= caveatLines.length * 10.5 + 6;
+
+  ctx.y = y;
+  return top - y;
+}
+
+// ------------------------------------------------------- Como seguir daqui
+
+const QR_SIZE = 74;
+/** Altura fixa do bloco — usada para decidir se ele cabe na página corrente. */
+const NEXT_STEPS_H = 104;
+
+/**
+ * O convite para responder: os dois passos, um botão clicável e o QR.
+ *
+ * Nada de URL em texto. A URL assinada tem ~180 caracteres de base64: impressa,
+ * quebrava em duas linhas e era truncada com reticências, e quem copiasse levava
+ * um link quebrado — foi assim que a proposta chegou "inválida" ao cliente. O
+ * botão e o QR carregam o link inteiro, sem o cliente precisar transcrever nada.
+ */
+function drawNextSteps(ctx: Ctx, url?: string) {
+  const { page, doc, regular, bold, d } = ctx;
+  const top = ctx.y;
+  const H = NEXT_STEPS_H;
+
+  page.drawRectangle({ x: M, y: top - H, width: CONTENT, height: H, color: WASH });
+  page.drawRectangle({ x: M, y: top - H, width: 2.5, height: H, color: GOLD });
+
+  // O QR mora à direita e define a largura do texto à esquerda.
+  const textW = url ? CONTENT - 28 - QR_SIZE - 24 : CONTENT - 28;
+  if (url) {
+    const qrX = M + CONTENT - 16 - QR_SIZE;
+    const qrY = top - H + (H - QR_SIZE) / 2;
+    drawQr(page, url, qrX, qrY, QR_SIZE);
+    linkArea(doc, page, url, qrX - 4, qrY - 4, QR_SIZE + 8, QR_SIZE + 8);
+  }
+
+  page.drawText(safe(d.pdf.howToProceed), { x: M + 14, y: top - 18, size: 11, font: bold, color: NAVY });
+  let sy = top - 36;
+  [d.pdf.step1, d.pdf.step2].forEach((step, i) => {
+    page.drawText(safe(`${i + 1}.`), { x: M + 14, y: sy, size: 9, font: bold, color: GOLD });
+    wrap(step, regular, 9, textW - 14).forEach((line) => {
+      page.drawText(line, { x: M + 28, y: sy, size: 9, font: regular, color: INK });
+      sy -= 11.5;
+    });
+    sy -= 2;
+  });
+
+  if (url) {
+    // Botão clicável — a área de link cobre exatamente a pílula desenhada.
+    const label = safe(d.pdf.ctaButton);
+    const btnW = Math.min(textW, bold.widthOfTextAtSize(label, 9.5) + 28);
+    const btnH = 22;
+    const btnY = top - H + 12;
+    page.drawRectangle({ x: M + 14, y: btnY, width: btnW, height: btnH, color: NAVY });
+    page.drawText(label, {
+      x: M + 14 + (btnW - bold.widthOfTextAtSize(label, 9.5)) / 2,
+      y: btnY + 7.5, size: 9.5, font: bold, color: WHITE,
+    });
+    linkArea(doc, page, url, M + 14, btnY, btnW, btnH);
+    wrap(d.pdf.scanQr, regular, 7, textW - btnW - 12).forEach((line, i) => {
+      page.drawText(line, { x: M + 14 + btnW + 10, y: btnY + 12 - i * 8.5, size: 7, font: regular, color: MUTED });
+    });
+  }
+
+  ctx.y = top - H;
 }
 
 // ------------------------------------------------------------ Folha de detalhe
@@ -465,15 +732,15 @@ export async function buildProposalPdf(input: ProposalPdfInput): Promise<{ bytes
   // A marca abre o documento centralizada: é o primeiro contato do cliente.
   let y = A4[1] - M;
   if (logoStacked) {
-    const h = 82;
+    const h = 72;
     const w = (logoStacked.width / logoStacked.height) * h;
     first.drawImage(logoStacked, { x: (A4[0] - w) / 2, y: y - h, width: w, height: h });
-    y -= h + 22;
+    y -= h + 18;
   } else {
     y -= 30;
   }
   first.drawRectangle({ x: (A4[0] - 56) / 2, y, width: 56, height: 1.6, color: GOLD });
-  y -= 26;
+  y -= 22;
 
   const title = safe(d.pdf.title);
   first.drawText(title, { x: (A4[0] - bold.widthOfTextAtSize(title, 22)) / 2, y, size: 22, font: bold, color: NAVY });
@@ -488,26 +755,12 @@ export async function buildProposalPdf(input: ProposalPdfInput): Promise<{ bytes
     y -= 24;
   }
 
-  // Faixa do perfil considerado — o que a cotação assumiu, explícito
-  const ages = profile.people.map((p) => `${p.age}`).join(", ");
-  const facts: Array<[string, string]> = [
-    [d.pdf.peopleOnPlan, `${profile.people.length}${ages ? ` (${ages} ${d.yearsOld})` : ""}`],
-    [d.pdf.zipcode, `${profile.zipcode} / ${profile.state}`],
-    [d.pdf.income, money(profile.income, L)],
-  ];
-  const factH = 50;
-  first.drawRectangle({ x: M, y: y - factH, width: CONTENT, height: factH, color: NAVY });
-  const colW = CONTENT / facts.length;
-  facts.forEach(([label, value], i) => {
-    const cx = M + 14 + i * colW;
-    first.drawText(safe(label.toUpperCase()), { x: cx, y: y - 18, size: 7.5, font: regular, color: rgb(0.68, 0.73, 0.82) });
-    first.drawText(safe(value), { x: cx, y: y - 34, size: 12, font: bold, color: WHITE });
-    if (i > 0) first.drawRectangle({ x: M + i * colW, y: y - factH + 10, width: 0.6, height: factH - 20, color: NAVY_SOFT });
-  });
-  y -= factH + 30;
+  // As premissas, com o texto dela — é o que enquadra tudo o que vem depois.
+  ctx.y = y - 6;
+  drawPremises(ctx, profile);
+  ctx.y -= 12;
 
   // Título do comparativo (a tabela em si é desenhada depois — ver abaixo).
-  ctx.y = y;
   const heading = safe(d.pdf.sideBySide(options.length));
   ctx.page.drawText(heading, { x: M, y: ctx.y, size: 13, font: bold, color: NAVY });
   ctx.y -= 8;
@@ -522,6 +775,32 @@ export async function buildProposalPdf(input: ProposalPdfInput): Promise<{ bytes
     if (b.planId === recommendedPlanId) return 1;
     return 0;
   });
+
+  /*
+   * Reserva das páginas do comparativo.
+   *
+   * A tabela é DESENHADA depois das folhas de detalhe (é assim que ela sabe em
+   * que página cada opção caiu), mas precisa APARECER antes delas. Enquanto
+   * coubesse na página 1 isso funcionava sozinho; com muitas opções, a linha que
+   * transbordava era criada no fim do documento, depois dos detalhes. Aqui
+   * medimos a tabela — as mesmas medidas que o desenho vai usar — e criamos as
+   * páginas extras agora, na posição certa.
+   */
+  const extraPages: PDFPage[] = [];
+  {
+    let free = comparisonY - FOOT - HEAD_H - 12;
+    const pageFree = A4[1] - M - 58 - FOOT - HEAD_H;
+    for (const plan of sorted) {
+      const { height } = comparisonRow(plan, regular, bold, d);
+      if (free - height <= 0) {
+        const p = doc.addPage(A4);
+        ctx.pages.push(p);
+        extraPages.push(p);
+        free = pageFree;
+      }
+      free -= height;
+    }
+  }
 
   // ------------------------------------------------------- Detalhes (p.2+)
   // Desenhamos os detalhes ANTES do comparativo para saber em que página cada
@@ -541,35 +820,37 @@ export async function buildProposalPdf(input: ProposalPdfInput): Promise<{ bytes
 
   // ------------------------------------------------ Comparativo, agora na p.1
   // Mesmo contexto, mas apontando para a primeira página e a altura reservada.
-  const compCtx: Ctx = { ...ctx, page: first, y: comparisonY };
+  const compCtx: Ctx = {
+    ...ctx, page: first, y: comparisonY,
+    reserved: [...extraPages],
+    // O rótulo do topo volta a ser o do comparativo: ctx.section já tinha sido
+    // trocado para o das folhas de detalhe quando elas foram desenhadas.
+    section: d.pdf.sideBySide(options.length),
+  };
   drawComparison(compCtx, sorted, recommendedPlanId, (id) => pageOf.get(id) ?? 2);
 
-  // Fecho da página 1: o que fazer agora + link — costura com as páginas de detalhe.
-  compCtx.y -= 6;
-  const urlLines = url ? wrapChars(url, regular, 8.5, CONTENT - 28, 2) : [];
-  const stepsH = url ? 72 + urlLines.length * 11 : 64;
-  if (compCtx.y - stepsH > FOOT) {
-    const top = compCtx.y;
-    first.drawRectangle({ x: M, y: top - stepsH, width: CONTENT, height: stepsH, color: WASH });
-    first.drawRectangle({ x: M, y: top - stepsH, width: 2.5, height: stepsH, color: GOLD });
-    first.drawText(safe(d.pdf.howToProceed), { x: M + 14, y: top - 18, size: 11, font: bold, color: NAVY });
-    const steps = [d.pdf.step1, d.pdf.step2];
-    steps.forEach((step, i) => {
-      first.drawText(safe(`${i + 1}.`), { x: M + 14, y: top - 38 - i * 14, size: 9.5, font: bold, color: GOLD });
-      first.drawText(safe(step), { x: M + 28, y: top - 38 - i * 14, size: 9.5, font: regular, color: INK });
-    });
-    if (url) {
-      first.drawText(safe(d.pdf.seeOnline), { x: M + 14, y: top - 72, size: 9, font: bold, color: NAVY });
-      urlLines.forEach((line, i) => {
-        first.drawText(line, { x: M + 14, y: top - 85 - i * 11, size: 8.5, font: regular, color: hexRgb("#8A6410") });
-      });
-    }
+  /*
+   * O bloco "como seguir": a única chamada à ação do documento.
+   *
+   * Ele cabe embaixo do comparativo quando há poucas opções; com muitas, vai
+   * para o fim do documento. O que ele NÃO faz mais é sumir — antes, quando não
+   * coubesse na página 1, era descartado em silêncio e o cliente ficava sem
+   * saber como responder.
+   */
+  compCtx.y -= 8;
+  if (compCtx.y - NEXT_STEPS_H > FOOT) drawNextSteps(compCtx, url);
+  else {
+    ensure(ctx, NEXT_STEPS_H + 8);
+    ctx.y -= 8;
+    drawNextSteps(ctx, url);
   }
 
   // ------------------------------------------------------------- Fecho: aviso
   if (url && expiresAt) {
+    ctx.y -= 14; // respiro depois do bloco de ação
     ensure(ctx, 20);
-    ctx.page.drawText(safe(`${d.pdf.validUntil(new Date(expiresAt).toLocaleDateString(L))} · ${url}`), {
+    // Só a validade em texto; o link vive no botão e no QR da página 1.
+    ctx.page.drawText(safe(d.pdf.validUntil(new Date(expiresAt).toLocaleDateString(L))), {
       x: M, y: ctx.y, size: 7.5, font: regular, color: MUTED,
     });
     ctx.y -= 18;

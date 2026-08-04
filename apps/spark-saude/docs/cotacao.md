@@ -160,6 +160,22 @@ Campos importantes do household (confirmar todos na doc oficial antes de impleme
    ainda não existir. Mexeu na lista de planos, a cotação salva é descartada e a
    próxima ação emite uma nova — link e PDF nunca apontam para uma lista velha.
 
+### O PDF da proposta (lib/cotacao/pdf.ts)
+
+- **Página 1**: marca → *premissas* (o texto dela, com a ressalva das idades das
+  crianças) → comparativo das opções lado a lado.
+- **Páginas seguintes**: uma folha de detalhe por opção, na mesma ordem e com os
+  mesmos números do comparativo.
+- **Bloco "como seguir"**: botão clicável + QR com o link da proposta. Nunca é
+  descartado: cabe embaixo do comparativo quando há espaço, senão fecha o
+  documento. O link **não** aparece como texto — a URL assinada tem ~180
+  caracteres e, impressa, chegava quebrada ao cliente.
+- **Regra de layout do template**: nada é desenhado numa linha-base fixa. Cada
+  célula é quebrada na largura da sua coluna, a altura da linha vem da célula
+  mais alta, e os números são ancorados à direita da coluna. As páginas do
+  comparativo são reservadas antes das folhas de detalhe, então a tabela nunca
+  cai depois delas por transbordo.
+
 ### Ponta B — o cliente recebe a proposta (link público)
 1. Abre o link com a marca Leao (logo, navy).
 2. Vê as opções de plano **lado a lado** (comparativo limpo), cada uma com os campos

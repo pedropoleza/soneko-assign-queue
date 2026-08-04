@@ -13,8 +13,11 @@ import type { QuoteProfile } from "./types";
 
 const money = (n: number) => `$${Math.round(n).toLocaleString("en-US")}`;
 
-/** "Mas 49 e 17 anos, Fem 57 e 19 anos" — idades por gênero, como ela escreve. */
-function describePeople(people: QuoteProfile["people"], d: Dict): string {
+/**
+ * "Mas 49 e 17 anos, Fem 57 e 19 anos" — idades por gênero, como ela escreve.
+ * Exportada porque o PDF repete as mesmas premissas, com as mesmas palavras.
+ */
+export function describePeople(people: QuoteProfile["people"], d: Dict): string {
   const groups: Array<{ label: string; ages: number[] }> = [
     { label: d.male, ages: people.filter((p) => p.gender === "Male").map((p) => p.age) },
     { label: d.female, ages: people.filter((p) => p.gender === "Female").map((p) => p.age) },

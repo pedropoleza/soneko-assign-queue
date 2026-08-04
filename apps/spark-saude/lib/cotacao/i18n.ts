@@ -61,6 +61,10 @@ export interface Dict {
     step1: string;
     step2: string;
     seeOnline: string;
+    /** Rótulo do botão clicável que leva à proposta online. */
+    ctaButton: string;
+    /** Chamada ao lado do QR code, para quem estiver no computador. */
+    scanQr: string;
     detailSection: string;
     option: (n: number) => string;
     recommendedByBroker: string;
@@ -127,14 +131,16 @@ export const DICTS: Record<Idioma, Dict> = {
       colDeductible: "DEDUTÍVEL",
       colOopMax: "MÁX. DO BOLSO",
       recommended: "RECOMENDADA",
-      creditIncluded: (v) => `inclui crédito de ${v}/mês`,
+      creditIncluded: (v) => `crédito de ${v}/mês`,
       detailOnPage: (p) => `detalhe na pág. ${p}`,
       legend:
         "A mensalidade já considera o crédito fiscal estimado. O dedutível é o valor que você paga antes de o plano começar a dividir os custos; o máximo do bolso é o teto que você gasta no ano.",
       howToProceed: "Como seguir a partir daqui",
-      step1: "Nas próximas páginas, cada opção aparece detalhada com o que você paga em cada atendimento.",
+      step1: "Cada opção tem sua própria página, com o que você paga em cada atendimento.",
       step2: "Escolheu uma? É só responder esta mensagem — eu cuido da inscrição com você.",
       seeOnline: "Ver online e responder:",
+      ctaButton: "Ver minhas opções e responder",
+      scanQr: "Ou aponte a câmera do celular para o código",
       detailSection: "Detalhe de cada opção",
       option: (n) => `OPÇÃO ${n}`,
       recommendedByBroker: "· RECOMENDADA PELA CORRETORA",
@@ -201,14 +207,16 @@ export const DICTS: Record<Idioma, Dict> = {
       colDeductible: "DEDUCIBLE",
       colOopMax: "MÁX. BOLSILLO",
       recommended: "RECOMENDADA",
-      creditIncluded: (v) => `incluye crédito de ${v}/mes`,
+      creditIncluded: (v) => `crédito de ${v}/mes`,
       detailOnPage: (p) => `detalle en pág. ${p}`,
       legend:
         "La prima ya considera el crédito fiscal estimado. El deducible es lo que usted paga antes de que el plan empiece a compartir los costos; el máximo de bolsillo es el tope que usted gasta en el año.",
       howToProceed: "Cómo seguir desde aquí",
-      step1: "En las próximas páginas, cada opción aparece detallada con lo que usted paga en cada atención.",
+      step1: "Cada opción tiene su propia página, con lo que usted paga en cada atención.",
       step2: "¿Eligió una? Solo responda este mensaje — yo me encargo de la inscripción con usted.",
       seeOnline: "Ver en línea y responder:",
+      ctaButton: "Ver mis opciones y responder",
+      scanQr: "O apunte la cámara del celular al código",
       detailSection: "Detalle de cada opción",
       option: (n) => `OPCIÓN ${n}`,
       recommendedByBroker: "· RECOMENDADA POR LA AGENTE",
@@ -275,14 +283,16 @@ export const DICTS: Record<Idioma, Dict> = {
       colDeductible: "DEDUCTIBLE",
       colOopMax: "MAX. YOU PAY",
       recommended: "RECOMMENDED",
-      creditIncluded: (v) => `includes ${v}/mo tax credit`,
+      creditIncluded: (v) => `${v}/mo credit`,
       detailOnPage: (p) => `details on p. ${p}`,
       legend:
         "The premium already includes the estimated tax credit. The deductible is what you pay before the plan starts sharing costs; the out-of-pocket maximum is the most you can spend in a year.",
       howToProceed: "What happens next",
-      step1: "The next pages break down each option, including what you pay for every kind of visit.",
+      step1: "Each option has its own page, with what you pay for every kind of visit.",
       step2: "Found the one? Just reply to this message — I'll handle the enrollment with you.",
       seeOnline: "View online and reply:",
+      ctaButton: "See my options and reply",
+      scanQr: "Or point your phone camera at the code",
       detailSection: "Each option in detail",
       option: (n) => `OPTION ${n}`,
       recommendedByBroker: "· RECOMMENDED BY YOUR AGENT",
