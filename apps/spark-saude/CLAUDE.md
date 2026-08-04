@@ -139,6 +139,32 @@ Campos-chave: `pessoas_na_casa`, `pessoas_no_seguro`, `renda_casa`, `idioma`,
 > **Divergência na conta real:** o prêmio mensal está no CONTATO como
 > `monthly_premium` (NUMERICAL), não na Opportunity. Ver Apêndice A.
 
+#### Espelho do telefone (`opportunity.phone`)
+
+A oportunidade guarda o `contactId`, mas o telefone mora só no contato — e o GHL
+**não tem workflow nativo** que copie um campo do contato para um campo da
+oportunidade. Sem o espelho, nada que trabalhe no nível da oportunidade (filtro,
+exportação, coluna de board, automação por oportunidade) enxerga o telefone.
+
+O dashboard resolve isso com uma sincronização própria:
+
+- `lib/ghl/opportunity-phone.ts` — varre as oportunidades e copia
+  `contact.phone` para o custom field da oportunidade.
+- `GET|POST /api/opportunities/sync-phone` — `?dryRun=1` simula; a escrita exige
+  `CRON_SECRET` (header `Authorization: Bearer` ou `?secret=`).
+- `vercel.json` → cron de hora em hora.
+
+Regras: **idempotente** (só escreve quando o valor muda), **o contato é a fonte
+da verdade** (edição manual no campo da oportunidade é sobrescrita), e **contato
+sem telefone não apaga** o que já estiver lá. O campo é resolvido pela chave
+(`GHL_OPP_PHONE_FIELD_KEY`, padrão `opportunity.phone`), nunca por id.
+
+> Ao listar campos, `GET /locations/{id}/customFields` devolve **só os do
+> contato**. Os da oportunidade exigem `?model=opportunity` — são listas
+> separadas. E o valor de um custom field volta com nome diferente conforme o
+> endpoint: `fieldValue` no GET de uma oportunidade, `fieldValueString` na busca,
+> `field_value` na escrita.
+
 ---
 
 ## 5. Mapa de dados: tags (GHL)

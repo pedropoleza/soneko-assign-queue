@@ -42,6 +42,39 @@ export async function getCustomFieldDefs(locationId: string): Promise<CustomFiel
   return defs;
 }
 
+/**
+ * Campos da OPPORTUNITY.
+ *
+ * Sem `?model=opportunity` o endpoint devolve só os campos de contato — foi o
+ * que fez o campo da oportunidade "não existir" numa primeira leitura. São
+ * listas separadas, então o cache também é.
+ */
+export async function getOpportunityFieldDefs(locationId: string): Promise<CustomFieldDef[]> {
+  const key = `${locationId}:opportunity`;
+  const c = cache.get(key);
+  if (c && Date.now() - c.at < TTL_MS) return c.defs;
+  const data = await ghlFetch<{ customFields?: RawCustomField[] }>(
+    `/locations/${locationId}/customFields`,
+    { locationId, query: { model: "opportunity" } },
+  );
+  const defs = (data.customFields ?? []).map(normalizeDef);
+  cache.set(key, { defs, at: Date.now() });
+  return defs;
+}
+
+/**
+ * Acha um campo de oportunidade pela chave, tolerando o jeito do GHL de mexer
+ * nos acentos e no prefixo ("Telefone" → `opportunity.telefone`).
+ */
+export async function findOpportunityField(
+  locationId: string,
+  fieldKey: string,
+): Promise<CustomFieldDef | undefined> {
+  const defs = await getOpportunityFieldDefs(locationId);
+  const wanted = norm(fieldKey);
+  return defs.find((d) => d.fieldKey === fieldKey) ?? defs.find((d) => norm(d.fieldKey || d.name) === wanted);
+}
+
 export function clearFieldCache(locationId?: string) {
   if (locationId) cache.delete(locationId);
   else cache.clear();

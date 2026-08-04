@@ -44,6 +44,14 @@ export const serverEnv = {
   // "WhatsApp". Never hardcoded (revenda, CLAUDE.md §1).
   whatsappTransport: (process.env.GHL_WHATSAPP_TRANSPORT || "SMS") as "SMS" | "WhatsApp",
 
+  // --- Espelho do telefone na Opportunity ---
+  // O GHL não copia o telefone do contato para a oportunidade, e não dá para
+  // fazer isso num workflow nativo. Este é o custom field da OPPORTUNITY que
+  // recebe a cópia — resolvido pela chave, nunca por id (CLAUDE.md §8).
+  oppPhoneFieldKey: process.env.GHL_OPP_PHONE_FIELD_KEY || "opportunity.phone",
+  // Segredo do cron da Vercel: sem ele, a rota de sincronização não roda.
+  cronSecret: process.env.CRON_SECRET || "",
+
   useFixtures: (process.env.GHL_USE_FIXTURES || "false").toLowerCase() === "true",
 };
 
