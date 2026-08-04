@@ -34,6 +34,7 @@ import { OptionEditor } from "@/components/cotacao/option-editor";
 import { PlanCard } from "@/components/cotacao/plan-card";
 import { metalStyle } from "@/lib/cotacao/metal";
 import { EligibilityBanner } from "@/components/cotacao/eligibility-banner";
+import { ExpandButton } from "@/components/cotacao/expand-button";
 import { ErrorState } from "@/components/ui/data-state";
 import { cn, formatMoneyBR } from "@/lib/utils";
 
@@ -372,7 +373,7 @@ export function QuoteBuilder() {
   // ------------------------------------------------- Buscar no Marketplace --
   if (view === "buscar") {
     return (
-      <div key="buscar" className="pb-24">
+      <div key="buscar" className="pb-20">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
           <button
             type="button"
@@ -392,6 +393,9 @@ export function QuoteBuilder() {
               Dados de exemplo · sem chave do CMS
             </span>
           ) : null}
+          <div className="ml-auto">
+            <ExpandButton />
+          </div>
         </div>
 
         {error ? (
@@ -480,7 +484,7 @@ export function QuoteBuilder() {
   const busy = extracting !== null;
 
   return (
-    <div key="montar" className="pb-24">
+    <div key="montar" className="pb-20">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Nova cotação</h1>
@@ -488,10 +492,13 @@ export function QuoteBuilder() {
             Escolha o cliente, solte os prints dos planos e gere a proposta.
           </p>
         </div>
-        <Button variant="outline" onClick={() => search()} disabled={searching} className="h-10">
-          {searching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
-          Buscar no Marketplace
-        </Button>
+        <div className="flex items-center gap-2">
+          <ExpandButton />
+          <Button variant="outline" onClick={() => search()} disabled={searching} className="h-10">
+            {searching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+            Buscar no Marketplace
+          </Button>
+        </div>
       </div>
 
       {error ? (

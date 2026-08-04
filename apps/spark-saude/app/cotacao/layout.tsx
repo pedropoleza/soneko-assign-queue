@@ -1,26 +1,22 @@
 /**
  * Cotação — standalone app embedded in GHL via its own Custom Menu Link.
  *
- * The shell follows the same logic as every app we ship inside GoHighLevel
- * (CLAUDE.md §6): GHL already provides the product chrome around the iframe,
- * so repeating a brand bar here is noise. A slim plain-text bar names the
- * screen and nothing else; the brokerage brand appears only on the material
- * the CLIENT receives (/proposta).
+ * The frame's height is decided by GHL and can't be resized from inside
+ * (cross-origin), so every pixel of chrome we add is working area taken from
+ * the broker. GHL already labels the page around the iframe and the screen
+ * carries its own H1, so there is NO app bar here: the content starts at the
+ * top edge. The brokerage brand appears only on what the CLIENT receives
+ * (/proposta).
  *
- * Full-bleed, pinned to the viewport so the embedded frame never
- * double-scrolls: scrolling happens inside <main>.
+ * Full-bleed and pinned to the frame so it never double-scrolls: scrolling
+ * happens inside <main>. `--shell-chrome` (main's vertical padding) is what a
+ * page must subtract to size itself against the visible frame.
  */
 export default function CotacaoLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex h-[100dvh] flex-col overflow-hidden bg-page" style={{ ["--shell-chrome" as string]: "5.5rem" }}>
-      <header className="shrink-0 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
-        <div className="flex h-12 w-full items-center gap-2 px-5">
-          <span className="text-sm font-semibold tracking-tight">Cotação</span>
-          <span className="text-sm text-muted-foreground">· Marketplace</span>
-        </div>
-      </header>
+    <div className="flex h-[100dvh] flex-col overflow-hidden bg-page" style={{ ["--shell-chrome" as string]: "2rem" }}>
       <main className="min-h-0 flex-1 overflow-y-auto">
-        <div className="w-full px-5 py-5">{children}</div>
+        <div className="w-full px-5 py-4">{children}</div>
       </main>
     </div>
   );
