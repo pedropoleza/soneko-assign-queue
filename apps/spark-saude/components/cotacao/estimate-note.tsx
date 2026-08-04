@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils";
 export function EstimateNote({ text, variant = "block" }: { text: string; variant?: "block" | "inline" }) {
   if (variant === "inline") {
     return (
-      <p className="flex items-start gap-1.5 text-[11px] leading-relaxed text-muted-foreground">
+      <p className="flex items-start gap-1.5 text-xs leading-relaxed text-muted-foreground">
         <AlertCircle className="mt-px h-3.5 w-3.5 shrink-0 text-[#B54708]" />
         <span>{text}</span>
       </p>

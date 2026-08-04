@@ -83,11 +83,11 @@ export function ProposalView({ token }: { token: string }) {
             <p className="font-display text-[15px] font-semibold tracking-tight" style={{ color: "#1B2A4A" }}>
               {brand?.name ?? "Leao Insurances"}
             </p>
-            <p className="text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+            <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
               {brand?.tagline ?? "Your future. Our protection."}
             </p>
           </div>
-          <span className="ml-auto rounded-full bg-primary/10 px-3 py-1 text-[11px] font-semibold tracking-wide text-primary">
+          <span className="ml-auto rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold tracking-wide text-primary">
             Proposta
           </span>
         </div>
@@ -141,7 +141,7 @@ export function ProposalView({ token }: { token: string }) {
                 return (
                   <div key={opt.id} className="relative flex flex-col gap-2.5">
                     {recommended ? (
-                      <span className="absolute -top-3 left-1/2 z-10 inline-flex -translate-x-1/2 items-center gap-1 whitespace-nowrap rounded-full bg-accent px-3 py-1 text-[11px] font-semibold text-white shadow-raise">
+                      <span className="absolute -top-3 left-1/2 z-10 inline-flex -translate-x-1/2 items-center gap-1 whitespace-nowrap rounded-full bg-accent px-3 py-1 text-xs font-semibold text-white shadow-raise">
                         <Star className="h-3 w-3 fill-current" /> Recomendada pela corretora
                       </span>
                     ) : null}

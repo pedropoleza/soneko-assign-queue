@@ -143,7 +143,7 @@ export function OptionEditor({
 function F({ label, children, className }: { label: string; children: React.ReactNode; className?: string }) {
   return (
     <label className={className}>
-      <span className="mb-1 block text-[11px] font-medium text-muted-foreground">{label}</span>
+      <span className="mb-1 block text-xs font-medium text-muted-foreground">{label}</span>
       {children}
     </label>
   );

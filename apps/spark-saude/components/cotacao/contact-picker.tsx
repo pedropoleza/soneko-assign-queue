@@ -40,13 +40,13 @@ export function ContactPicker({ value, onSelect }: { value: PickedContact; onSel
 
   if (value.id) {
     return (
-      <div className="flex items-center justify-between gap-2 rounded-lg border bg-muted/30 px-3 py-2">
-        <div className="flex min-w-0 items-center gap-2.5">
+      <div className="flex h-10 items-center justify-between gap-2 rounded-md border bg-muted/30 px-2.5">
+        <div className="flex min-w-0 items-center gap-2">
           <Avatar name={value.name} />
-          <div className="min-w-0">
-            <p className="truncate text-sm font-medium">{value.name || "Contato"}</p>
-            <p className="text-xs text-muted-foreground">Vinculado ao GHL</p>
-          </div>
+          <p className="truncate text-sm font-medium">{value.name || "Contato"}</p>
+          <span className="hidden shrink-0 rounded-full bg-status-green-bg px-2 py-0.5 text-xs font-medium text-status-green-fg sm:inline">
+            Vinculado
+          </span>
         </div>
         <button
           type="button"
@@ -70,7 +70,7 @@ export function ContactPicker({ value, onSelect }: { value: PickedContact; onSel
           onChange={(e) => setQ(e.target.value)}
           onFocus={() => setOpen(true)}
           placeholder="Buscar contato pelo nome ou e-mail…"
-          className="flex h-9 w-full rounded-md border border-input bg-background pl-9 pr-3 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="flex h-10 w-full rounded-md border border-input bg-background pl-9 pr-3 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
         />
         {search.isFetching ? <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground" /> : null}
       </div>

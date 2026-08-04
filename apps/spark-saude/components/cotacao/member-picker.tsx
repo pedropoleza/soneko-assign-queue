@@ -92,7 +92,7 @@ export function MemberPicker({
   // Vinculado — chip com o nome e a opção de desvincular.
   if (value.id) {
     return (
-      <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 py-1 pl-2.5 pr-1.5 text-xs font-medium text-primary">
+      <span className="inline-flex h-9 items-center gap-1.5 rounded-md bg-primary/10 pl-2.5 pr-1.5 text-xs font-medium text-primary">
         <Link2 className="h-3 w-3" />
         <span className="max-w-[160px] truncate">{value.name || "Contato"}</span>
         <button
@@ -112,7 +112,7 @@ export function MemberPicker({
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary"
+        className="inline-flex h-9 items-center gap-1.5 rounded-md border border-dashed border-input px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:border-primary/50 hover:bg-primary/5 hover:text-primary"
       >
         <UserRound className="h-3.5 w-3.5" /> Vincular contato
       </button>
@@ -168,12 +168,12 @@ export function MemberPicker({
                         >
                           <span className="min-w-0">
                             <span className="block truncate text-sm font-medium">{c.name}</span>
-                            <span className="block truncate text-[11px] text-muted-foreground">
+                            <span className="block truncate text-xs text-muted-foreground">
                               {c.email || c.phone || "sem contato"}
                             </span>
                           </span>
                           {c.dateOfBirth ? (
-                            <span className="ml-auto shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                            <span className="ml-auto shrink-0 rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
                               nasc. ok
                             </span>
                           ) : null}
@@ -190,7 +190,7 @@ export function MemberPicker({
                   </div>
                 ) : null
               ) : (
-                <p className="mt-2 text-[11px] text-muted-foreground">Digite ao menos 2 letras para buscar.</p>
+                <p className="mt-2 text-xs text-muted-foreground">Digite ao menos 2 letras para buscar.</p>
               )}
             </>
           ) : (
@@ -232,7 +232,7 @@ export function MemberPicker({
                 {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
                 Criar e vincular
               </button>
-              <p className="flex items-start gap-1 text-[10px] leading-snug text-muted-foreground">
+              <p className="flex items-start gap-1 text-xs leading-snug text-muted-foreground">
                 <Check className="mt-px h-3 w-3 shrink-0" />
                 Ao gerar a proposta, vinculamos este contato ao titular no GHL (associação familiar).
               </p>

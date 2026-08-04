@@ -32,6 +32,7 @@ import { ContactPicker } from "@/components/cotacao/contact-picker";
 import { MemberPicker } from "@/components/cotacao/member-picker";
 import { OptionEditor } from "@/components/cotacao/option-editor";
 import { PlanCard } from "@/components/cotacao/plan-card";
+import { metalStyle } from "@/lib/cotacao/metal";
 import { EligibilityBanner } from "@/components/cotacao/eligibility-banner";
 import { ErrorState } from "@/components/ui/data-state";
 import { cn, formatMoneyBR } from "@/lib/utils";
@@ -61,6 +62,13 @@ const SORTS: Array<{ value: NonNullable<SearchOptions["sort"]>; label: string }>
   { value: "oopc", label: "Menor custo anual" },
   { value: "quality_rating", label: "Melhor avaliação" },
 ];
+
+/* Type/anatomy do formulário — um só lugar, para a UI sair uniforme:
+   colunas do household, cabeçalho de tabela e o estilo base de select/input. */
+const PEOPLE_GRID = "grid-cols-[150px_130px_160px_84px_80px_minmax(200px,1fr)_44px]";
+const TH = "text-xs font-semibold uppercase tracking-wide text-muted-foreground";
+const SELECT =
+  "h-10 w-full rounded-md border border-input bg-background px-2.5 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1";
 
 /**
  * Ponta A — a corretora monta a cotação.
@@ -409,28 +417,29 @@ export function QuoteBuilder() {
             ) : null}
           </div>
           <div className="flex flex-wrap items-center gap-1.5">
+            {/* O filtro de tier carrega a cor do próprio metal quando ativo —
+                a cor É a informação, não um enfeite. */}
             {METALS.map((m) => {
               const on = metals.includes(m);
+              const style = metalStyle(m);
               return (
                 <button
                   key={m}
                   type="button"
                   onClick={() => rerun({ metals: on ? metals.filter((x) => x !== m) : [...metals, m] })}
                   className={cn(
-                    "rounded-full px-3 py-1 text-sm font-medium transition-colors",
-                    on
-                      ? "bg-primary text-primary-foreground"
-                      : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                    "rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors",
+                    on ? style.chip : "text-muted-foreground ring-1 ring-inset ring-border hover:bg-muted hover:text-foreground",
                   )}
                 >
-                  {m}
+                  {style.label}
                 </button>
               );
             })}
             <select
               value={sort}
               onChange={(e) => rerun({ sort: e.target.value as NonNullable<SearchOptions["sort"]> })}
-              className="ml-1 h-9 rounded-md border border-input bg-background px-2 text-sm"
+              className="ml-1 h-10 rounded-md border border-input bg-background px-2.5 text-sm shadow-sm"
               aria-label="Ordenar"
             >
               {SORTS.map((s) => (
@@ -472,14 +481,14 @@ export function QuoteBuilder() {
 
   return (
     <div key="montar" className="pb-24">
-      <div className="flex flex-wrap items-start justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-lg font-semibold tracking-tight">Nova cotação</h1>
-          <p className="mt-0.5 text-sm text-muted-foreground">
+          <h1 className="text-xl font-semibold tracking-tight">Nova cotação</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
             Escolha o cliente, solte os prints dos planos e gere a proposta.
           </p>
         </div>
-        <Button variant="outline" size="sm" onClick={() => search()} disabled={searching} className="h-9">
+        <Button variant="outline" onClick={() => search()} disabled={searching} className="h-10">
           {searching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
           Buscar no Marketplace
         </Button>
@@ -491,17 +500,54 @@ export function QuoteBuilder() {
         </div>
       ) : null}
 
-      {/* Cliente + dados da mensagem, lado a lado, ocupando a largura */}
-      <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-[minmax(300px,380px)_minmax(0,1fr)]">
-        <section className="rounded-lg border bg-card p-4 shadow-card">
-          <SectionTitle>Cliente</SectionTitle>
-          <ContactPicker value={{ id: profile.contactId, name: profile.contactName }} onSelect={onPickContact} />
+      {/* Um único card de dados — cliente, perfil e household juntos. As larguras
+          das colunas vêm do conteúdo (cliente largo, CEP/UF curtos), para a UI
+          guiar o preenchimento em vez de espalhar campos soltos. */}
+      <section className="mt-5 rounded-lg border bg-card shadow-card">
+        <div className="border-b px-5 py-4">
+          <div className="grid grid-cols-2 gap-x-4 gap-y-4 md:grid-cols-4 xl:grid-cols-[minmax(300px,1.6fr)_minmax(130px,1fr)_minmax(90px,0.7fr)_minmax(150px,1fr)_minmax(120px,0.9fr)]">
+            <div className="col-span-2 md:col-span-4 xl:col-span-1">
+              <FieldLabel>Cliente</FieldLabel>
+              <ContactPicker value={{ id: profile.contactId, name: profile.contactName }} onSelect={onPickContact} />
+            </div>
+            <Field label="CEP">
+              <Input
+                className="h-10"
+                value={profile.zipcode}
+                onChange={(e) => patch({ zipcode: e.target.value })}
+                inputMode="numeric"
+              />
+            </Field>
+            <Field label="Estado">
+              <Input
+                className="h-10"
+                value={profile.state}
+                onChange={(e) => patch({ state: e.target.value.toUpperCase().slice(0, 2) })}
+              />
+            </Field>
+            <Field label="Renda anual (USD)">
+              <Input
+                className="h-10"
+                type="number"
+                value={profile.income}
+                onChange={(e) => patch({ income: Number(e.target.value) })}
+              />
+            </Field>
+            <Field label="Ano do plano">
+              <Input
+                className="h-10"
+                type="number"
+                value={profile.year}
+                onChange={(e) => patch({ year: Number(e.target.value) })}
+              />
+            </Field>
+          </div>
           {prefilling ? (
-            <p className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
-              <Loader2 className="h-3 w-3 animate-spin" /> Puxando dados do CRM…
+            <p className="mt-3 flex items-center gap-1.5 text-sm text-muted-foreground">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" /> Puxando dados do CRM…
             </p>
           ) : prefill ? (
-            <div className="mt-2.5 space-y-1 rounded-md bg-status-blue-bg px-3 py-2.5">
+            <div className="mt-3 space-y-1 rounded-md bg-status-blue-bg px-3 py-2.5">
               {prefill.filled.length ? (
                 <p className="flex items-start gap-1.5 text-xs text-status-blue-fg">
                   <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0" />
@@ -516,145 +562,143 @@ export function QuoteBuilder() {
               ))}
             </div>
           ) : null}
-        </section>
+        </div>
 
-        <section className="rounded-lg border bg-card p-4 shadow-card">
-          <div className="flex items-baseline justify-between">
-            <SectionTitle className="mb-0">Dados da cotação</SectionTitle>
-            <span className="text-xs text-muted-foreground">Usados na mensagem enviada ao cliente</span>
-          </div>
-          <div className="mt-3 grid grid-cols-2 gap-2.5 sm:grid-cols-4">
-            <Field label="CEP">
-              <Input value={profile.zipcode} onChange={(e) => patch({ zipcode: e.target.value })} inputMode="numeric" />
-            </Field>
-            <Field label="Estado">
-              <Input value={profile.state} onChange={(e) => patch({ state: e.target.value.toUpperCase().slice(0, 2) })} />
-            </Field>
-            <Field label="Renda anual">
-              <Input type="number" value={profile.income} onChange={(e) => patch({ income: Number(e.target.value) })} />
-            </Field>
-            <Field label="Ano do plano">
-              <Input type="number" value={profile.year} onChange={(e) => patch({ year: Number(e.target.value) })} />
-            </Field>
-          </div>
-
-          <div className="mt-4 flex items-baseline justify-between">
-            <p className="text-sm font-medium">Quem entra no plano</p>
+        <div className="px-5 py-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold tracking-tight">Quem entra no plano</h2>
             <button
               type="button"
               onClick={addPerson}
-              className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
+              className="inline-flex h-9 items-center gap-1.5 rounded-md border bg-background px-3 text-sm font-medium shadow-card transition-colors hover:bg-muted"
             >
               <Plus className="h-4 w-4" /> Adicionar pessoa
             </button>
           </div>
-          <div className="mt-2 divide-y rounded-lg border">
-            {profile.people.map((pers, i) => (
-              <div key={i} className="flex flex-wrap items-end gap-2.5 p-2.5">
-                <label className="w-[118px]">
-                  <FieldLabel>Relação</FieldLabel>
-                  <select
-                    value={pers.relationship}
-                    onChange={(e) => patchPerson(i, { relationship: e.target.value as QuotePerson["relationship"] })}
-                    className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
-                  >
-                    {(Object.keys(RELATIONSHIP_LABEL) as Array<QuotePerson["relationship"]>).map((r) => (
-                      <option key={r} value={r}>
-                        {RELATIONSHIP_LABEL[r]}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="w-[92px]">
-                  <FieldLabel>Gênero</FieldLabel>
-                  {/* Gênero sincroniza na criação do contato — o PUT do GHL não aceita o campo. */}
-                  <select
-                    value={pers.gender}
-                    onChange={(e) => patchPerson(i, { gender: e.target.value as QuotePerson["gender"] })}
-                    className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
-                  >
-                    <option value="Male">Masc.</option>
-                    <option value="Female">Fem.</option>
-                  </select>
-                </label>
-                <label className="w-[148px]">
-                  <FieldLabel>Nascimento</FieldLabel>
-                  <input
-                    type="date"
-                    value={pers.dob ?? ""}
-                    onChange={(e) => {
-                      const dob = e.target.value || null;
-                      patchPerson(i, { dob, age: dob ? ageFrom(dob) ?? pers.age : pers.age });
-                      if (pers.contactId && dob) queueBasicsSync(pers.contactId, { dateOfBirth: dob });
-                    }}
-                    className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
-                  />
-                </label>
-                <label className="w-[72px]">
-                  <FieldLabel>Idade</FieldLabel>
-                  <input
-                    type="number"
-                    value={pers.age}
-                    disabled={Boolean(pers.dob)}
-                    onChange={(e) => patchPerson(i, { age: Number(e.target.value) })}
-                    className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm disabled:bg-muted disabled:text-muted-foreground"
-                  />
-                </label>
-                <label className="flex h-9 items-center gap-1.5 text-sm text-muted-foreground">
-                  <input
-                    type="checkbox"
-                    checked={pers.usesTobacco}
-                    onChange={(e) => patchPerson(i, { usesTobacco: e.target.checked })}
-                  />
-                  Fuma
-                </label>
-                <div className="flex h-9 items-center">
-                  <MemberPicker
-                    value={{ id: pers.contactId, name: pers.contactName }}
-                    defaults={{ dateOfBirth: pers.dob, gender: ghlGender(pers.gender) }}
-                    onSelect={(m) => {
-                      if (!m) {
-                        patchPerson(i, { contactId: null, contactName: null });
-                        return;
-                      }
-                      // O CRM manda a data de nascimento? Preenche — preço exato.
-                      const raw = m.dateOfBirth;
-                      const dob = raw && /^\d{4}-\d{2}-\d{2}/.test(raw) ? raw.slice(0, 10) : pers.dob;
-                      patchPerson(i, {
-                        contactId: m.id,
-                        contactName: m.name,
-                        dob: dob ?? null,
-                        age: dob ? ageFrom(dob) ?? pers.age : pers.age,
-                      });
-                      // A linha tem a data que o CRM não tem? Upsert — o contato
-                      // converge para o que a corretora acabou de preencher.
-                      if (!raw && pers.dob) {
-                        queueBasicsSync(m.id, { dateOfBirth: pers.dob, gender: ghlGender(pers.gender) });
-                      }
-                    }}
-                  />
-                </div>
-                {profile.people.length > 1 ? (
-                  <button
-                    type="button"
-                    onClick={() => removePerson(i)}
-                    aria-label="Remover pessoa"
-                    className="ml-auto inline-flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                ) : null}
+
+          {/* Tabela do household: cabeçalho único no lugar de labels repetidos
+              por linha — cada coluna com a largura do seu conteúdo. */}
+          <div className="mt-3 overflow-x-auto">
+            <div className="min-w-[880px] overflow-hidden rounded-lg border">
+              <div className={cn("grid items-center gap-x-3 border-b bg-muted/50 px-3 py-2", PEOPLE_GRID)}>
+                <span className={TH}>Relação</span>
+                <span className={TH}>Gênero</span>
+                <span className={TH}>Nascimento</span>
+                <span className={TH}>Idade</span>
+                <span className={cn(TH, "text-center")}>Fumante</span>
+                <span className={TH}>Contato no CRM</span>
+                <span aria-hidden />
               </div>
-            ))}
+              <div className="divide-y">
+                {profile.people.map((pers, i) => (
+                  <div key={i} className={cn("grid items-center gap-x-3 px-3 py-2.5", PEOPLE_GRID)}>
+                    <select
+                      value={pers.relationship}
+                      aria-label="Relação"
+                      onChange={(e) => patchPerson(i, { relationship: e.target.value as QuotePerson["relationship"] })}
+                      className={SELECT}
+                    >
+                      {(Object.keys(RELATIONSHIP_LABEL) as Array<QuotePerson["relationship"]>).map((r) => (
+                        <option key={r} value={r}>
+                          {RELATIONSHIP_LABEL[r]}
+                        </option>
+                      ))}
+                    </select>
+                    {/* Gênero sincroniza na criação do contato — o PUT do GHL não aceita o campo. */}
+                    <select
+                      value={pers.gender}
+                      aria-label="Gênero"
+                      onChange={(e) => patchPerson(i, { gender: e.target.value as QuotePerson["gender"] })}
+                      className={SELECT}
+                    >
+                      <option value="Male">Masculino</option>
+                      <option value="Female">Feminino</option>
+                    </select>
+                    <input
+                      type="date"
+                      aria-label="Nascimento"
+                      value={pers.dob ?? ""}
+                      onChange={(e) => {
+                        const dob = e.target.value || null;
+                        patchPerson(i, { dob, age: dob ? ageFrom(dob) ?? pers.age : pers.age });
+                        if (pers.contactId && dob) queueBasicsSync(pers.contactId, { dateOfBirth: dob });
+                      }}
+                      className={SELECT}
+                    />
+                    <input
+                      type="number"
+                      aria-label="Idade"
+                      value={pers.age}
+                      disabled={Boolean(pers.dob)}
+                      title={pers.dob ? "Calculada pelo nascimento" : undefined}
+                      onChange={(e) => patchPerson(i, { age: Number(e.target.value) })}
+                      className={cn(SELECT, "disabled:bg-muted disabled:text-muted-foreground")}
+                    />
+                    <label className="flex h-10 items-center justify-center">
+                      <input
+                        type="checkbox"
+                        checked={pers.usesTobacco}
+                        aria-label="Fumante"
+                        onChange={(e) => patchPerson(i, { usesTobacco: e.target.checked })}
+                        className="h-4 w-4 accent-[hsl(var(--primary))]"
+                      />
+                    </label>
+                    <div className="flex h-10 min-w-0 items-center">
+                      <MemberPicker
+                        value={{ id: pers.contactId, name: pers.contactName }}
+                        defaults={{ dateOfBirth: pers.dob, gender: ghlGender(pers.gender) }}
+                        onSelect={(m) => {
+                          if (!m) {
+                            patchPerson(i, { contactId: null, contactName: null });
+                            return;
+                          }
+                          // O CRM manda a data de nascimento? Preenche — preço exato.
+                          const raw = m.dateOfBirth;
+                          const dob = raw && /^\d{4}-\d{2}-\d{2}/.test(raw) ? raw.slice(0, 10) : pers.dob;
+                          patchPerson(i, {
+                            contactId: m.id,
+                            contactName: m.name,
+                            dob: dob ?? null,
+                            age: dob ? ageFrom(dob) ?? pers.age : pers.age,
+                          });
+                          // A linha tem a data que o CRM não tem? Upsert — o contato
+                          // converge para o que a corretora acabou de preencher.
+                          if (!raw && pers.dob) {
+                            queueBasicsSync(m.id, { dateOfBirth: pers.dob, gender: ghlGender(pers.gender) });
+                          }
+                        }}
+                      />
+                    </div>
+                    {profile.people.length > 1 ? (
+                      <button
+                        type="button"
+                        onClick={() => removePerson(i)}
+                        aria-label="Remover pessoa"
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-status-red-bg hover:text-status-red-fg"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    ) : (
+                      <span aria-hidden />
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
-        </section>
-      </div>
+        </div>
+      </section>
 
       {/* Planos da proposta — o coração da tela */}
-      <section className="mt-6">
-        <div className="flex flex-wrap items-baseline justify-between gap-2 border-b pb-2.5">
-          <h2 className="text-base font-semibold tracking-tight">
-            Planos da proposta{draft.length ? ` · ${draft.length}` : ""}
+      <section className="mt-4 rounded-lg border bg-card shadow-card">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b px-5 py-3">
+          <h2 className="text-sm font-semibold tracking-tight">
+            Planos da proposta
+            {draft.length ? (
+              <span className="ml-2 rounded-full bg-status-blue-bg px-2 py-0.5 text-xs font-semibold text-status-blue-fg">
+                {draft.length}
+              </span>
+            ) : null}
           </h2>
           <button
             type="button"
@@ -662,11 +706,12 @@ export function QuoteBuilder() {
               setEditIndex(null);
               setEditorOpen(true);
             }}
-            className="text-sm font-medium text-primary hover:underline"
+            className="inline-flex h-9 items-center gap-1.5 rounded-md border bg-background px-3 text-sm font-medium shadow-card transition-colors hover:bg-muted"
           >
-            Adicionar manualmente
+            <Pencil className="h-4 w-4" /> Adicionar manualmente
           </button>
         </div>
+        <div className="px-5 py-4">
 
         {/* Dropzone dos prints — arrastar, clicar ou colar (Ctrl+V) */}
         <label
@@ -681,8 +726,11 @@ export function QuoteBuilder() {
             void addFromPrints(Array.from(e.dataTransfer.files));
           }}
           className={cn(
-            "group/drop relative mt-4 flex cursor-pointer flex-col items-center justify-center overflow-hidden rounded-lg border-2 border-dashed px-6 py-8 text-center transition-colors",
-            dragging ? "border-primary bg-status-blue-bg" : "border-input bg-card hover:border-primary/50",
+            "group/drop relative flex cursor-pointer overflow-hidden rounded-lg border-2 border-dashed transition-colors",
+            busy
+              ? "flex-col items-center justify-center px-6 py-8 text-center"
+              : "items-center gap-4 px-5 py-5",
+            dragging ? "border-primary bg-status-blue-bg" : "border-input bg-muted/30 hover:border-primary/50 hover:bg-muted/50",
             busy && "pointer-events-none opacity-80",
           )}
         >
@@ -734,25 +782,27 @@ export function QuoteBuilder() {
             <>
               <span
                 className={cn(
-                  "flex h-10 w-10 items-center justify-center rounded-full transition-colors",
+                  "flex h-12 w-12 shrink-0 items-center justify-center rounded-lg transition-colors",
                   dragging ? "bg-primary/15 text-primary" : "bg-primary/10 text-primary",
                 )}
               >
-                <ImagePlus className="h-5 w-5" />
+                <ImagePlus className="h-6 w-6" />
               </span>
-              <p className="mt-2.5 text-sm font-semibold">
-                {dragging ? "Solte para adicionar" : "Arraste os prints dos planos aqui"}
-              </p>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                Lemos o print e preenchemos os campos — você só confere.
-              </p>
-              <p className="mt-2.5 flex flex-wrap items-center justify-center gap-1.5 text-[11px] text-muted-foreground">
-                <span className="rounded-md bg-muted px-2 py-0.5 font-medium">clique para escolher</span>
-                <span>ou cole com</span>
-                <kbd className="rounded-md bg-muted px-1.5 py-0.5 font-sans font-semibold text-foreground">Ctrl</kbd>
-                <span>+</span>
-                <kbd className="rounded-md bg-muted px-1.5 py-0.5 font-sans font-semibold text-foreground">V</kbd>
-              </p>
+              <span className="min-w-0 flex-1">
+                <span className="block text-[15px] font-semibold">
+                  {dragging ? "Solte para adicionar" : "Adicione os prints dos planos"}
+                </span>
+                <span className="mt-0.5 block text-sm text-muted-foreground">
+                  Arraste as imagens, cole com{" "}
+                  <kbd className="rounded bg-muted px-1.5 py-0.5 font-sans text-xs font-semibold text-foreground">
+                    Ctrl+V
+                  </kbd>{" "}
+                  ou escolha os arquivos — lemos o print e preenchemos os campos.
+                </span>
+              </span>
+              <span className="hidden h-10 shrink-0 items-center rounded-md border bg-background px-4 text-sm font-medium shadow-card transition-colors group-hover/drop:bg-muted sm:inline-flex">
+                Escolher arquivos
+              </span>
             </>
           )}
         </label>
@@ -833,7 +883,7 @@ export function QuoteBuilder() {
                       <span>{recommendation.alerta}</span>
                     </p>
                   ) : null}
-                  <p className="mt-3 text-[11px] text-muted-foreground">
+                  <p className="mt-3 text-xs text-muted-foreground">
                     Sugestão gerada por IA a partir das opções escolhidas — confira antes de apresentar.
                   </p>
                 </div>
@@ -856,8 +906,9 @@ export function QuoteBuilder() {
           </div>
         ) : null}
 
-        <div className="mt-5">
-          <EstimateNote text={LEAO_BRAND.disclaimer} variant="inline" />
+          <div className="mt-4 border-t pt-3">
+            <EstimateNote text={LEAO_BRAND.disclaimer} variant="inline" />
+          </div>
         </div>
       </section>
 
@@ -935,13 +986,13 @@ export function QuoteBuilder() {
                           placeholder={channel === "Email" ? "email@cliente.com" : "+1 305 555 0100"}
                           className="h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm"
                         />
-                        <p className="mt-1 flex items-start gap-1 text-[10px] leading-snug text-muted-foreground">
+                        <p className="mt-1 flex items-start gap-1 text-xs leading-snug text-muted-foreground">
                           <Info className="mt-px h-3 w-3 shrink-0" />
                           O contato não tem {channel === "Email" ? "e-mail" : "telefone"}. Salvamos no CRM ao enviar.
                         </p>
                       </div>
                     ) : destValue ? (
-                      <p className="mt-1.5 text-[11px] text-muted-foreground">
+                      <p className="mt-1.5 text-xs text-muted-foreground">
                         {channel === "Email" ? "Para" : "WhatsApp para"}{" "}
                         <span className="font-medium text-foreground">{destValue}</span>
                       </p>
@@ -1053,7 +1104,12 @@ function SectionTitle({ children, className }: { children: React.ReactNode; clas
 }
 
 function FieldLabel({ children }: { children: React.ReactNode }) {
-  return <span className="mb-1 block text-xs font-medium text-muted-foreground">{children}</span>;
+  // Micro-label em caps — diferencia o título do campo do valor digitado.
+  return (
+    <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+      {children}
+    </span>
+  );
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
