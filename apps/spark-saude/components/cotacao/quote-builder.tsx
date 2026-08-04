@@ -364,7 +364,7 @@ export function QuoteBuilder() {
   // ------------------------------------------------- Buscar no Marketplace --
   if (view === "buscar") {
     return (
-      <div key="buscar" className="animate-fade-up pb-24">
+      <div key="buscar" className="pb-24">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
           <button
             type="button"
@@ -397,9 +397,9 @@ export function QuoteBuilder() {
           </div>
         ) : null}
 
-        <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-b pb-3">
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-b pb-2.5">
           <div className="flex items-baseline gap-2">
-            <h2 className="text-lg font-semibold tracking-tight">
+            <h2 className="text-base font-semibold tracking-tight">
               {plans?.length ?? 0} {plans?.length === 1 ? "plano" : "planos"}
             </h2>
             {plans?.length ? (
@@ -417,8 +417,10 @@ export function QuoteBuilder() {
                   type="button"
                   onClick={() => rerun({ metals: on ? metals.filter((x) => x !== m) : [...metals, m] })}
                   className={cn(
-                    "rounded-full px-3 py-1.5 text-sm font-medium transition-colors",
-                    on ? "bg-foreground text-background" : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                    "rounded-full px-3 py-1 text-sm font-medium transition-colors",
+                    on
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:bg-muted hover:text-foreground",
                   )}
                 >
                   {m}
@@ -445,7 +447,7 @@ export function QuoteBuilder() {
             <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Consultando o Marketplace…
           </div>
         ) : plans && plans.length ? (
-          <div className="stagger mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+          <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
             {plans.map((p) => (
               <PlanCard
                 key={p.planId}
@@ -469,15 +471,15 @@ export function QuoteBuilder() {
   const busy = extracting !== null;
 
   return (
-    <div key="montar" className="animate-fade-up pb-24">
-      <div className="flex flex-wrap items-end justify-between gap-4">
+    <div key="montar" className="pb-24">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="font-display text-[28px] font-semibold leading-tight tracking-tight">Nova cotação</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <h1 className="text-lg font-semibold tracking-tight">Nova cotação</h1>
+          <p className="mt-0.5 text-sm text-muted-foreground">
             Escolha o cliente, solte os prints dos planos e gere a proposta.
           </p>
         </div>
-        <Button variant="outline" onClick={() => search()} disabled={searching} className="h-10">
+        <Button variant="outline" size="sm" onClick={() => search()} disabled={searching} className="h-9">
           {searching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
           Buscar no Marketplace
         </Button>
@@ -490,8 +492,8 @@ export function QuoteBuilder() {
       ) : null}
 
       {/* Cliente + dados da mensagem, lado a lado, ocupando a largura */}
-      <div className="mt-6 grid grid-cols-1 gap-5 lg:grid-cols-[minmax(320px,400px)_minmax(0,1fr)]">
-        <section className="rounded-[var(--radius)] bg-card p-5 shadow-raise ring-1 ring-border">
+      <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-[minmax(300px,380px)_minmax(0,1fr)]">
+        <section className="rounded-lg border bg-card p-4 shadow-card">
           <SectionTitle>Cliente</SectionTitle>
           <ContactPicker value={{ id: profile.contactId, name: profile.contactName }} onSelect={onPickContact} />
           {prefilling ? (
@@ -499,9 +501,9 @@ export function QuoteBuilder() {
               <Loader2 className="h-3 w-3 animate-spin" /> Puxando dados do CRM…
             </p>
           ) : prefill ? (
-            <div className="mt-2.5 space-y-1 rounded-lg bg-[rgba(21,94,239,0.06)] px-3 py-2.5">
+            <div className="mt-2.5 space-y-1 rounded-md bg-status-blue-bg px-3 py-2.5">
               {prefill.filled.length ? (
-                <p className="flex items-start gap-1.5 text-xs text-primary">
+                <p className="flex items-start gap-1.5 text-xs text-status-blue-fg">
                   <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                   <span>Preenchemos do CRM: {prefill.filled.join(" · ")}</span>
                 </p>
@@ -516,12 +518,12 @@ export function QuoteBuilder() {
           ) : null}
         </section>
 
-        <section className="rounded-[var(--radius)] bg-card p-5 shadow-raise ring-1 ring-border">
+        <section className="rounded-lg border bg-card p-4 shadow-card">
           <div className="flex items-baseline justify-between">
             <SectionTitle className="mb-0">Dados da cotação</SectionTitle>
             <span className="text-xs text-muted-foreground">Usados na mensagem enviada ao cliente</span>
           </div>
-          <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="mt-3 grid grid-cols-2 gap-2.5 sm:grid-cols-4">
             <Field label="CEP">
               <Input value={profile.zipcode} onChange={(e) => patch({ zipcode: e.target.value })} inputMode="numeric" />
             </Field>
@@ -546,9 +548,9 @@ export function QuoteBuilder() {
               <Plus className="h-4 w-4" /> Adicionar pessoa
             </button>
           </div>
-          <div className="mt-2 divide-y rounded-xl border">
+          <div className="mt-2 divide-y rounded-lg border">
             {profile.people.map((pers, i) => (
-              <div key={i} className="flex flex-wrap items-end gap-3 p-3">
+              <div key={i} className="flex flex-wrap items-end gap-2.5 p-2.5">
                 <label className="w-[118px]">
                   <FieldLabel>Relação</FieldLabel>
                   <select
@@ -649,9 +651,9 @@ export function QuoteBuilder() {
       </div>
 
       {/* Planos da proposta — o coração da tela */}
-      <section className="mt-8">
-        <div className="flex flex-wrap items-baseline justify-between gap-2 border-b pb-3">
-          <h2 className="text-lg font-semibold tracking-tight">
+      <section className="mt-6">
+        <div className="flex flex-wrap items-baseline justify-between gap-2 border-b pb-2.5">
+          <h2 className="text-base font-semibold tracking-tight">
             Planos da proposta{draft.length ? ` · ${draft.length}` : ""}
           </h2>
           <button
@@ -679,10 +681,8 @@ export function QuoteBuilder() {
             void addFromPrints(Array.from(e.dataTransfer.files));
           }}
           className={cn(
-            "group/drop relative mt-4 flex cursor-pointer flex-col items-center justify-center overflow-hidden rounded-[var(--radius)] border-2 border-dashed px-6 py-10 text-center transition-all duration-200",
-            dragging
-              ? "scale-[1.005] border-accent bg-accent-soft shadow-raise"
-              : "border-input bg-card/60 hover:border-primary/40 hover:bg-card hover:shadow-raise",
+            "group/drop relative mt-4 flex cursor-pointer flex-col items-center justify-center overflow-hidden rounded-lg border-2 border-dashed px-6 py-8 text-center transition-colors",
+            dragging ? "border-primary bg-status-blue-bg" : "border-input bg-card hover:border-primary/50",
             busy && "pointer-events-none opacity-80",
           )}
         >
@@ -717,7 +717,7 @@ export function QuoteBuilder() {
                 />
                 <span className="absolute inset-0 ring-2 ring-inset ring-primary/20" aria-hidden />
               </div>
-              <p className="mt-4 flex items-center gap-2 font-display text-base font-semibold tracking-tight">
+              <p className="mt-4 flex items-center gap-2 text-sm font-semibold">
                 <Loader2 className="h-4 w-4 animate-spin text-primary" />
                 Lendo as informações do print… {extracting!.done + 1 > extracting!.total ? extracting!.total : extracting!.done + 1}/
                 {extracting!.total}
@@ -734,26 +734,24 @@ export function QuoteBuilder() {
             <>
               <span
                 className={cn(
-                  "flex h-12 w-12 items-center justify-center rounded-full transition-all duration-200",
-                  dragging
-                    ? "scale-110 bg-accent/15 text-accent"
-                    : "bg-primary/8 text-primary group-hover/drop:scale-105 group-hover/drop:bg-primary/12",
+                  "flex h-10 w-10 items-center justify-center rounded-full transition-colors",
+                  dragging ? "bg-primary/15 text-primary" : "bg-primary/10 text-primary",
                 )}
               >
-                <ImagePlus className="h-6 w-6" />
+                <ImagePlus className="h-5 w-5" />
               </span>
-              <p className="mt-3 font-display text-base font-semibold tracking-tight">
+              <p className="mt-2.5 text-sm font-semibold">
                 {dragging ? "Solte para adicionar" : "Arraste os prints dos planos aqui"}
               </p>
-              <p className="mt-1 text-[13px] text-muted-foreground">
+              <p className="mt-0.5 text-xs text-muted-foreground">
                 Lemos o print e preenchemos os campos — você só confere.
               </p>
-              <p className="mt-3 flex flex-wrap items-center justify-center gap-1.5 text-[11px] text-muted-foreground">
-                <span className="rounded-md bg-muted px-2 py-1 font-medium">clique para escolher</span>
+              <p className="mt-2.5 flex flex-wrap items-center justify-center gap-1.5 text-[11px] text-muted-foreground">
+                <span className="rounded-md bg-muted px-2 py-0.5 font-medium">clique para escolher</span>
                 <span>ou cole com</span>
-                <kbd className="rounded-md bg-muted px-1.5 py-1 font-sans font-semibold text-foreground">Ctrl</kbd>
+                <kbd className="rounded-md bg-muted px-1.5 py-0.5 font-sans font-semibold text-foreground">Ctrl</kbd>
                 <span>+</span>
-                <kbd className="rounded-md bg-muted px-1.5 py-1 font-sans font-semibold text-foreground">V</kbd>
+                <kbd className="rounded-md bg-muted px-1.5 py-0.5 font-sans font-semibold text-foreground">V</kbd>
               </p>
             </>
           )}
@@ -766,13 +764,11 @@ export function QuoteBuilder() {
         ) : null}
 
         {draft.length ? (
-          <div className="stagger mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+          <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
             {draft.map((o, i) => (
-              <div key={o.planId || i} className="group/opt flex flex-col gap-2">
-                <div className="transition-transform duration-200 group-hover/opt:-translate-y-1">
-                  <PlanCard plan={o} readOnly printUrl={o.printUrl} />
-                </div>
-                <div className="flex items-center gap-2 text-xs opacity-70 transition-opacity duration-200 group-hover/opt:opacity-100">
+              <div key={o.planId || i} className="flex flex-col gap-1.5">
+                <PlanCard plan={o} readOnly printUrl={o.printUrl} />
+                <div className="flex items-center gap-2 text-xs">
                   <button
                     type="button"
                     onClick={() => {
@@ -803,12 +799,12 @@ export function QuoteBuilder() {
 
         {/* Sugestão da IA — a corretora decide se usa */}
         {draft.length >= 1 ? (
-          <div className="mt-5">
+          <div className="mt-4">
             {recommendation ? (
-              <div className="overflow-hidden rounded-[var(--radius)] bg-card shadow-raise ring-1 ring-primary/25">
-                <div className="flex items-center gap-2 bg-primary/[0.06] px-5 py-2.5">
+              <div className="overflow-hidden rounded-lg border bg-card shadow-card">
+                <div className="flex items-center gap-2 border-b bg-muted/40 px-4 py-2.5">
                   <Sparkles className="h-4 w-4 text-primary" />
-                  <p className="text-xs font-semibold uppercase tracking-wide text-primary">Sugestão para apresentar</p>
+                  <p className="text-xs font-semibold">Sugestão para apresentar</p>
                   <button
                     type="button"
                     onClick={() => setRecommendation(null)}
@@ -817,8 +813,8 @@ export function QuoteBuilder() {
                     Descartar
                   </button>
                 </div>
-                <div className="p-5">
-                  <p className="font-display text-lg font-semibold tracking-tight">{recommendation.titulo}</p>
+                <div className="p-4">
+                  <p className="text-base font-semibold tracking-tight">{recommendation.titulo}</p>
                   <p className="mt-0.5 text-sm text-muted-foreground">
                     {draft.find((d) => d.planId === recommendation.planId)?.nomePlano ?? "—"}
                   </p>
@@ -826,7 +822,7 @@ export function QuoteBuilder() {
                   <ul className="mt-3 grid gap-1.5 sm:grid-cols-2">
                     {recommendation.pontos.map((p) => (
                       <li key={p} className="flex items-start gap-2 text-sm text-muted-foreground">
-                        <Check className="mt-0.5 h-4 w-4 shrink-0 text-[#0E9F6E]" />
+                        <Check className="mt-0.5 h-4 w-4 shrink-0 text-status-green-fg" />
                         <span>{p}</span>
                       </li>
                     ))}
@@ -847,12 +843,12 @@ export function QuoteBuilder() {
                 type="button"
                 onClick={askRecommendation}
                 disabled={recommending}
-                className="group/ai inline-flex items-center gap-2 rounded-lg bg-card px-4 py-2.5 text-sm font-medium shadow-raise ring-1 ring-border transition-all hover:-translate-y-0.5 hover:shadow-raise-lg disabled:translate-y-0 disabled:opacity-70"
+                className="inline-flex items-center gap-2 rounded-md border bg-card px-3.5 py-2 text-sm font-medium shadow-card transition-colors hover:bg-muted disabled:opacity-70"
               >
                 {recommending ? (
                   <Loader2 className="h-4 w-4 animate-spin text-primary" />
                 ) : (
-                  <Sparkles className="h-4 w-4 text-primary transition-transform group-hover/ai:scale-110" />
+                  <Sparkles className="h-4 w-4 text-primary" />
                 )}
                 {recommending ? "Analisando as opções…" : "Sugerir a melhor opção para este cliente"}
               </button>
@@ -868,8 +864,8 @@ export function QuoteBuilder() {
       <BottomBar count={draft.length} generating={generating} onGenerate={generate} />
 
       {result ? (
-        <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/20 p-4 sm:items-center">
-          <div className="max-h-full w-full max-w-xl overflow-y-auto rounded-xl border bg-background p-5 shadow-card-hover">
+        <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/25 p-4 sm:items-center">
+          <div className="max-h-full w-full max-w-xl overflow-y-auto rounded-lg border bg-background p-5 shadow-card-hover">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="flex items-center gap-1.5 text-sm font-semibold text-primary">
@@ -899,9 +895,9 @@ export function QuoteBuilder() {
 
             {/* Enviar direto ao lead pelo GHL */}
             {profile.contactId ? (
-              <div className="mt-3 rounded-lg bg-primary/[0.05] p-3 ring-1 ring-primary/15">
+              <div className="mt-3 rounded-lg border p-3">
                 {sent ? (
-                  <p className="flex items-center gap-1.5 text-sm font-medium text-[#0E9F6E]">
+                  <p className="flex items-center gap-1.5 text-sm font-medium text-status-green-fg">
                     <Check className="h-4 w-4" /> Enviada para {profile.contactName} por{" "}
                     {channel === "Email" ? "e-mail" : "WhatsApp"}
                   </p>
@@ -1015,12 +1011,12 @@ function BottomBar({
   onBack?: () => void;
 }) {
   return (
-    <div className="fixed inset-x-0 bottom-0 z-20 border-t border-border/70 bg-background/85 shadow-[0_-8px_24px_-16px_rgb(20_32_58/0.35)] backdrop-blur-md">
-      <div className="flex w-full items-center gap-3 px-6 py-3.5">
+    <div className="fixed inset-x-0 bottom-0 z-20 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+      <div className="flex w-full items-center gap-3 px-5 py-3">
         <p className="text-sm text-muted-foreground">
           {count ? (
             <>
-              <span className="mr-2 inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-primary px-2 text-xs font-semibold text-primary-foreground">
+              <span className="mr-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-xs font-semibold text-primary-foreground">
                 {count}
               </span>
               {count === 1 ? "plano na proposta" : "planos na proposta"}
@@ -1030,15 +1026,11 @@ function BottomBar({
           )}
         </p>
         {onBack ? (
-          <Button variant="ghost" size="sm" onClick={onBack} className="h-10">
+          <Button variant="ghost" size="sm" onClick={onBack} className="h-9">
             Voltar à proposta
           </Button>
         ) : null}
-        <Button
-          onClick={onGenerate}
-          disabled={!count || generating}
-          className="ml-auto h-11 px-5 text-[15px] shadow-raise transition-all hover:-translate-y-0.5 hover:shadow-raise-lg disabled:translate-y-0 disabled:shadow-none"
-        >
+        <Button onClick={onGenerate} disabled={!count || generating} className="ml-auto h-9 px-4">
           {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Link2 className="h-4 w-4" />}
           Gerar proposta
         </Button>
@@ -1057,7 +1049,7 @@ function defaultPlanYear(today = new Date()): number {
 }
 
 function SectionTitle({ children, className }: { children: React.ReactNode; className?: string }) {
-  return <h2 className={cn("mb-3 text-base font-semibold tracking-tight", className)}>{children}</h2>;
+  return <h2 className={cn("mb-2.5 text-sm font-semibold tracking-tight", className)}>{children}</h2>;
 }
 
 function FieldLabel({ children }: { children: React.ReactNode }) {

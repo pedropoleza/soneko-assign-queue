@@ -38,6 +38,11 @@
   --status-gray-bg: 214 15% 94%;
   --status-gray-fg: 215 16% 40%;
 
+  /* Accent fallback (soft amber) — the Cotação builder runs on the default GHL
+     tokens; without this, accent classes only resolve inside `.leao`. */
+  --accent: 32 75% 33%;
+  --accent-soft: 44 96% 93%;
+
   --radius: 0.625rem;
 }
 

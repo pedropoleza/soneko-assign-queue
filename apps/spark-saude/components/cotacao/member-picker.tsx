@@ -118,7 +118,7 @@ export function MemberPicker({
       </button>
 
       {open ? (
-        <div className="animate-fade-up absolute left-0 top-full z-30 mt-1.5 w-[300px] rounded-xl bg-card p-3 shadow-raise-lg ring-1 ring-border">
+        <div className="absolute left-0 top-full z-30 mt-1.5 w-[300px] rounded-lg border bg-card p-3 shadow-card-hover">
           <div className="flex gap-1 rounded-lg bg-muted p-0.5 text-xs font-medium">
             {(["buscar", "criar"] as const).map((m) => (
               <button

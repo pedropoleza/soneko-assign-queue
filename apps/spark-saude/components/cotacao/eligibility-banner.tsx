@@ -36,16 +36,16 @@ export function EligibilityBanner({ eligibility }: { eligibility: EligibilitySum
     <div className="flex flex-wrap items-center gap-x-5 gap-y-2 rounded-lg border border-[#12B76A]/30 bg-[rgba(18,183,106,0.07)] px-3.5 py-2.5 text-sm">
       {hasAptc ? (
         <span className="inline-flex items-center gap-1.5">
-          <BadgePercent className="h-4 w-4 text-[#0E9F6E]" />
+          <BadgePercent className="h-4 w-4 text-status-green-fg" />
           <span className="text-muted-foreground">Crédito fiscal estimado</span>
-          <strong className="tabular-nums text-[#0E9F6E]">{formatMoneyBR(eligibility.aptc)}/mês</strong>
+          <strong className="tabular-nums text-status-green-fg">{formatMoneyBR(eligibility.aptc)}/mês</strong>
         </span>
       ) : null}
       {eligibility.csr ? (
         <span className="inline-flex items-center gap-1.5">
-          <ShieldCheck className="h-4 w-4 text-[#0E9F6E]" />
+          <ShieldCheck className="h-4 w-4 text-status-green-fg" />
           <span className="text-muted-foreground">Redução de custos (CSR)</span>
-          <strong className="text-[#0E9F6E]">{eligibility.csr}</strong>
+          <strong className="text-status-green-fg">{eligibility.csr}</strong>
           <span className="text-xs text-muted-foreground">— vale nos planos Silver</span>
         </span>
       ) : null}
