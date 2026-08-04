@@ -34,7 +34,6 @@ import { OptionEditor } from "@/components/cotacao/option-editor";
 import { PlanCard } from "@/components/cotacao/plan-card";
 import { metalStyle } from "@/lib/cotacao/metal";
 import { EligibilityBanner } from "@/components/cotacao/eligibility-banner";
-import { ExpandButton } from "@/components/cotacao/expand-button";
 import { ErrorState } from "@/components/ui/data-state";
 import { cn, formatMoneyBR } from "@/lib/utils";
 
@@ -393,9 +392,6 @@ export function QuoteBuilder() {
               Dados de exemplo · sem chave do CMS
             </span>
           ) : null}
-          <div className="ml-auto">
-            <ExpandButton />
-          </div>
         </div>
 
         {error ? (
@@ -484,7 +480,9 @@ export function QuoteBuilder() {
   const busy = extracting !== null;
 
   return (
-    <div key="montar" className="pb-20">
+    // A tela ocupa a altura visível do frame (o GHL define quanto é): o card dos
+    // planos estica para o fim, em vez de deixar um vazio embaixo.
+    <div key="montar" className="flex min-h-[calc(100dvh-var(--shell-chrome))] flex-col pb-20">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Nova cotação</h1>
@@ -492,13 +490,10 @@ export function QuoteBuilder() {
             Escolha o cliente, solte os prints dos planos e gere a proposta.
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <ExpandButton />
-          <Button variant="outline" onClick={() => search()} disabled={searching} className="h-10">
-            {searching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
-            Buscar no Marketplace
-          </Button>
-        </div>
+        <Button variant="outline" onClick={() => search()} disabled={searching} className="h-10">
+          {searching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+          Buscar no Marketplace
+        </Button>
       </div>
 
       {error ? (
@@ -697,7 +692,7 @@ export function QuoteBuilder() {
       </section>
 
       {/* Planos da proposta — o coração da tela */}
-      <section className="mt-4 rounded-lg border bg-card shadow-card">
+      <section className="mt-4 flex flex-1 flex-col rounded-lg border bg-card shadow-card">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b px-5 py-3">
           <h2 className="text-sm font-semibold tracking-tight">
             Planos da proposta
@@ -718,7 +713,7 @@ export function QuoteBuilder() {
             <Pencil className="h-4 w-4" /> Adicionar manualmente
           </button>
         </div>
-        <div className="px-5 py-4">
+        <div className="flex flex-1 flex-col px-5 py-4">
 
         {/* Dropzone dos prints — arrastar, clicar ou colar (Ctrl+V) */}
         <label
@@ -737,6 +732,9 @@ export function QuoteBuilder() {
             busy
               ? "flex-col items-center justify-center px-6 py-8 text-center"
               : "items-center gap-4 px-5 py-5",
+            // Sem planos ainda, a área de soltar ocupa o espaço livre do card —
+            // alvo grande em vez de uma faixa fina com vazio embaixo.
+            !draft.length && !busy && "min-h-[120px] flex-1",
             dragging ? "border-primary bg-status-blue-bg" : "border-input bg-muted/30 hover:border-primary/50 hover:bg-muted/50",
             busy && "pointer-events-none opacity-80",
           )}
@@ -913,8 +911,12 @@ export function QuoteBuilder() {
           </div>
         ) : null}
 
-          <div className="mt-4 border-t pt-3">
-            <EstimateNote text={LEAO_BRAND.disclaimer} variant="inline" />
+          {/* mt-auto absorve a sobra (a nota fica no rodapé do card, que agora vai
+              até o fim da tela); o mt-4 interno garante o respiro mínimo. */}
+          <div className="mt-auto">
+            <div className="mt-4 border-t pt-3">
+              <EstimateNote text={LEAO_BRAND.disclaimer} variant="inline" />
+            </div>
           </div>
         </div>
       </section>
