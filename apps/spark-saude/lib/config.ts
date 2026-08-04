@@ -29,6 +29,13 @@ export const serverEnv = {
   proposalTokenSecret: process.env.PROPOSAL_TOKEN_SECRET || "",
   // Reads the plan screenshots the broker already takes (lib/cotacao/extract.ts).
   anthropicApiKey: process.env.ANTHROPIC_API_KEY || "",
+  // Reading fields off a print is transcription, not reasoning — Haiku 4.5 is
+  // the cheapest vision model ($1/$5 per MTok vs $5/$25 on Opus) and supports
+  // the JSON-schema structured output the extractor relies on.
+  anthropicExtractModel: process.env.ANTHROPIC_EXTRACT_MODEL || "claude-haiku-4-5",
+  // Choosing the best plan for a family IS a judgement call, so it sits a tier
+  // up — still well below Opus. Configurable like everything else (revenda).
+  anthropicRecommendModel: process.env.ANTHROPIC_RECOMMEND_MODEL || "claude-sonnet-5",
   // Contact↔contact association used to link household members (lib/ghl/associations.ts).
   ghlAssociationKey: process.env.GHL_ASSOCIATION_KEY || "familiar",
   // How the "WhatsApp" button actually delivers. The pilot uses an UNOFFICIAL

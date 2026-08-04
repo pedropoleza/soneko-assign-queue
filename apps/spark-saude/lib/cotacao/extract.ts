@@ -125,8 +125,8 @@ export async function extractPlanFromPrint(
   const client = new Anthropic({ apiKey: serverEnv.anthropicApiKey });
 
   const response = await client.messages.create({
-    model: "claude-opus-5",
-    max_tokens: 16000,
+    model: serverEnv.anthropicExtractModel,
+    max_tokens: 8000,
     system: SYSTEM,
     output_config: { format: { type: "json_schema", schema: EXTRACTION_SCHEMA } },
     messages: [

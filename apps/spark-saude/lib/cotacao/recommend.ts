@@ -99,8 +99,8 @@ export async function recommendPlan(profile: QuoteProfile, options: PlanOptionDr
   const client = new Anthropic({ apiKey: serverEnv.anthropicApiKey });
 
   const response = await client.messages.create({
-    model: "claude-opus-5",
-    max_tokens: 16000,
+    model: serverEnv.anthropicRecommendModel,
+    max_tokens: 4000,
     system: SYSTEM,
     output_config: { format: { type: "json_schema", schema: SCHEMA } },
     messages: [
