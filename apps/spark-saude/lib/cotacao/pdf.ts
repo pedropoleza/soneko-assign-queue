@@ -200,24 +200,27 @@ function drawComparison(
   const { regular, bold } = ctx;
   const maxPremium = Math.max(...options.map((o) => o.premioMensal), 1);
 
+  // Colunas: o nome fica com o espaço largo; os três números têm largura fixa.
+  const COL_PRICE = M + 222;
+  const COL_DED = M + 340;
+  const COL_OOP = M + 424;
+  const NAME_W = COL_PRICE - (M + 40) - 12;
+
   // Cabeçalho da tabela
-  ensure(ctx, 30);
+  ensure(ctx, 34);
   const headY = ctx.y;
-  ctx.page.drawRectangle({ x: M, y: headY - 18, width: CONTENT, height: 18, color: NAVY });
-  const cols: Array<[string, number]> = [
-    ["OPÇÃO", M + 10],
-    ["MENSALIDADE", M + 232],
-    ["DEDUTÍVEL", M + 350],
-    ["MÁX. DO BOLSO", M + 430],
-  ];
-  cols.forEach(([label, x]) => {
-    ctx.page.drawText(safe(label), { x, y: headY - 12.5, size: 7, font: bold, color: WHITE });
+  ctx.page.drawRectangle({ x: M, y: headY - 22, width: CONTENT, height: 22, color: NAVY });
+  ([["OPÇÃO", M + 12], ["MENSALIDADE", COL_PRICE], ["DEDUTÍVEL", COL_DED], ["MÁX. DO BOLSO", COL_OOP]] as Array<
+    [string, number]
+  >).forEach(([label, x]) => {
+    ctx.page.drawText(safe(label), { x, y: headY - 15, size: 8, font: bold, color: WHITE });
   });
-  ctx.y = headY - 18;
+  ctx.y = headY - 22;
 
   options.forEach((plan, i) => {
     const isRec = plan.planId === recommendedPlanId;
-    const rowH = 52;
+    const nameLines = wrap(plan.nomePlano, bold, 11.5, NAME_W).slice(0, 2);
+    const rowH = 46 + nameLines.length * 14;
     ensure(ctx, rowH);
     const top = ctx.y;
     const page = ctx.page;
@@ -226,46 +229,45 @@ function drawComparison(
       x: M, y: top - rowH, width: CONTENT, height: rowH,
       color: isRec ? GOLD_WASH : i % 2 ? WASH : WHITE,
     });
-    if (isRec) page.drawRectangle({ x: M, y: top - rowH, width: 3, height: rowH, color: GOLD });
+    if (isRec) page.drawRectangle({ x: M, y: top - rowH, width: 3.5, height: rowH, color: GOLD });
     page.drawRectangle({ x: M, y: top - rowH, width: CONTENT, height: 0.6, color: HAIRLINE });
 
     // Nº + nome + seguradora + tier
-    numberBadge(page, bold, M + 10, top - 30, i + 1, isRec);
-    const nameX = M + 36;
-    const nameLines = wrap(plan.nomePlano, bold, 10, 172).slice(0, 2);
-    nameLines.forEach((line, li) => {
-      page.drawText(line, { x: nameX, y: top - 17 - li * 11, size: 10, font: bold, color: NAVY });
+    numberBadge(page, bold, M + 12, top - 32, i + 1, isRec);
+    const nameX = M + 40;
+    let ny = top - 20;
+    nameLines.forEach((line) => {
+      page.drawText(line, { x: nameX, y: ny, size: 11.5, font: bold, color: NAVY });
+      ny -= 14;
     });
-    const belowName = top - 17 - nameLines.length * 11 - 1;
-    page.drawText(safe(plan.seguradora).slice(0, 34), {
-      x: nameX, y: belowName, size: 7.5, font: regular, color: MUTED,
-    });
-    metalChip(page, bold, nameX, belowName - 15, plan.metalLevel);
+    page.drawText(safe(plan.seguradora), { x: nameX, y: ny, size: 8.5, font: regular, color: MUTED });
+    ny -= 16;
+    const chipW = metalChip(page, bold, nameX, ny, plan.metalLevel);
     if (isRec) {
-      page.drawText(safe("RECOMENDADA"), { x: nameX + 52, y: belowName - 11, size: 6.5, font: bold, color: GOLD });
+      page.drawText(safe("RECOMENDADA"), { x: nameX + chipW + 8, y: ny + 3, size: 8, font: bold, color: GOLD });
     }
 
     // Mensalidade + barra comparativa
     const price = safe(money(plan.premioMensal));
-    page.drawText(price, { x: M + 232, y: top - 22, size: 13, font: bold, color: isRec ? hexRgb("#8A6410") : NAVY });
-    const barW = 96;
-    page.drawRectangle({ x: M + 232, y: top - 34, width: barW, height: 4, color: HAIRLINE });
+    page.drawText(price, { x: COL_PRICE, y: top - 24, size: 15, font: bold, color: isRec ? hexRgb("#8A6410") : NAVY });
+    const barW = 104;
+    page.drawRectangle({ x: COL_PRICE, y: top - 38, width: barW, height: 5, color: HAIRLINE });
     page.drawRectangle({
-      x: M + 232, y: top - 34,
-      width: Math.max(3, (plan.premioMensal / maxPremium) * barW), height: 4,
+      x: COL_PRICE, y: top - 38,
+      width: Math.max(4, (plan.premioMensal / maxPremium) * barW), height: 5,
       color: isRec ? GOLD : NAVY_SOFT,
     });
     if (plan.creditoFiscal > 0) {
-      page.drawText(safe(`crédito de ${moneyShort(plan.creditoFiscal)}/mês já aplicado`), {
-        x: M + 232, y: top - 45, size: 6.5, font: regular, color: GREEN,
+      page.drawText(safe(`inclui crédito de ${moneyShort(plan.creditoFiscal)}/mês`), {
+        x: COL_PRICE, y: top - 51, size: 7.5, font: regular, color: GREEN,
       });
     }
 
     // Dedutível / máximo do bolso
-    page.drawText(safe(moneyShort(plan.dedutivel)), { x: M + 350, y: top - 22, size: 10, font: bold, color: INK });
-    page.drawText(safe(moneyShort(plan.maxBolso)), { x: M + 430, y: top - 22, size: 10, font: bold, color: INK });
+    page.drawText(safe(moneyShort(plan.dedutivel)), { x: COL_DED, y: top - 24, size: 11.5, font: bold, color: INK });
+    page.drawText(safe(moneyShort(plan.maxBolso)), { x: COL_OOP, y: top - 24, size: 11.5, font: bold, color: INK });
     page.drawText(safe(`detalhe na pág. ${detailPageOf(plan.planId)}`), {
-      x: M + 350, y: top - 40, size: 6.5, font: regular, color: MUTED,
+      x: COL_DED, y: top - 44, size: 8, font: regular, color: MUTED,
     });
 
     ctx.y = top - rowH;
@@ -276,13 +278,26 @@ function drawComparison(
   ensure(ctx, 24);
   const legend =
     "A mensalidade já considera o crédito fiscal estimado. O dedutível é o valor que você paga antes de o plano começar a dividir os custos; o máximo do bolso é o teto que você gasta no ano.";
-  wrap(legend, ctx.regular, 7.5, CONTENT).forEach((line, i) => {
-    ctx.page.drawText(line, { x: M, y: ctx.y - i * 9.5, size: 7.5, font: ctx.regular, color: MUTED });
+  const legendLines = wrap(legend, ctx.regular, 8.5, CONTENT);
+  legendLines.forEach((line, i) => {
+    ctx.page.drawText(line, { x: M, y: ctx.y - i * 11, size: 8.5, font: ctx.regular, color: MUTED });
   });
-  ctx.y -= wrap(legend, ctx.regular, 7.5, CONTENT).length * 9.5 + 8;
+  ctx.y -= legendLines.length * 11 + 10;
 }
 
 // ------------------------------------------------------------ Folha de detalhe
+
+/*
+ * Escala tipográfica da folha de detalhe. O cliente lê isto no celular, muitas
+ * vezes com o dedo — nada abaixo de 9pt, e a linha da tabela é uma GRADE de
+ * duas colunas (rótulo à esquerda, valor à direita), cada uma com a própria
+ * quebra. Antes o valor era desenhado na mesma linha-base do rótulo e textos
+ * longos ("25% coaseguro después del deducible") invadiam a linha de cima.
+ */
+const PAD = 22; // respiro interno do card
+const ROW_LABEL_W = 190; // coluna do rótulo
+const ROW_LEAD = 13.5; // entrelinha das células
+const ROW_PAD = 9; // ar acima/abaixo de cada linha
 
 function drawDetail(ctx: Ctx, plan: PlanOptionDraft, index: number, isRec: boolean, comparisonPage: number) {
   const { regular, bold } = ctx;
@@ -294,93 +309,114 @@ function drawDetail(ctx: Ctx, plan: PlanOptionDraft, index: number, isRec: boole
     ["Saúde mental", plan.saudeMental],
     ["Medicamento genérico", plan.medicamentoGenerico],
   ];
-  const rowLines = rows.map(([, v]) => wrap(v || "—", regular, 8.5, 250));
-  const rowsH = rowLines.reduce((a, l) => a + Math.max(15, l.length * 11), 0);
-  const cardH = 148 + rowsH;
 
-  ensure(ctx, cardH + 14);
+  const valueW = CONTENT - PAD * 2 - ROW_LABEL_W - 18;
+  const cells = rows.map(([label, value]) => ({
+    label: wrap(label, regular, 10, ROW_LABEL_W),
+    value: wrap(value || "—", bold, 10, valueW),
+  }));
+  const rowHeights = cells.map((c) => Math.max(c.label.length, c.value.length) * ROW_LEAD + ROW_PAD * 2);
+  const rowsH = rowHeights.reduce((a, h) => a + h, 0);
+
+  // Cabeçalho do card medido de verdade (o nome do plano pode ir a 2 linhas).
+  const nameLines = wrap(plan.nomePlano, bold, 16, CONTENT - PAD * 2 - 210).slice(0, 2);
+  const headH = 34 + nameLines.length * 19 + 34;
+  const figuresH = 46;
+  const cardH = headH + figuresH + 30 + rowsH + 26;
+
+  ensure(ctx, cardH + 16);
   const top = ctx.y;
   const page = ctx.page;
+  const left = M + PAD;
+  const right = A4[0] - M - PAD;
 
   page.drawRectangle({
     x: M, y: top - cardH, width: CONTENT, height: cardH,
     color: WHITE, borderColor: isRec ? GOLD : HAIRLINE, borderWidth: isRec ? 1.4 : 0.8,
   });
-  // Faixa superior: dourada na recomendada, navy nas demais
-  page.drawRectangle({ x: M, y: top - 3, width: CONTENT, height: 3, color: isRec ? GOLD : NAVY });
+  page.drawRectangle({ x: M, y: top - 4, width: CONTENT, height: 4, color: isRec ? GOLD : NAVY });
 
-  // Identidade
-  numberBadge(page, bold, M + 16, top - 36, index, isRec);
-  let y = top - 24;
-  const titleX = M + 42;
-  page.drawText(safe(`OPÇÃO ${index}`), { x: titleX, y, size: 7.5, font: bold, color: isRec ? GOLD : MUTED });
-  if (isRec) page.drawText(safe("· RECOMENDADA PELA CORRETORA"), { x: titleX + 42, y, size: 7.5, font: bold, color: GOLD });
-  y -= 15;
-  wrap(plan.nomePlano, bold, 14, CONTENT - 220).slice(0, 2).forEach((line) => {
-    page.drawText(line, { x: titleX, y, size: 14, font: bold, color: NAVY });
-    y -= 16;
+  // --- Identidade
+  let y = top - 26;
+  numberBadge(page, bold, left, y - 12, index, isRec);
+  const titleX = left + 30;
+  page.drawText(safe(`OPÇÃO ${index}`), { x: titleX, y, size: 9, font: bold, color: isRec ? GOLD : MUTED });
+  if (isRec) {
+    page.drawText(safe("· RECOMENDADA PELA CORRETORA"), {
+      x: titleX + bold.widthOfTextAtSize(safe(`OPÇÃO ${index}`), 9) + 6, y, size: 9, font: bold, color: GOLD,
+    });
+  }
+  y -= 20;
+  nameLines.forEach((line) => {
+    page.drawText(line, { x: titleX, y, size: 16, font: bold, color: NAVY });
+    y -= 19;
   });
-  page.drawText(safe(plan.seguradora), { x: titleX, y, size: 9, font: regular, color: MUTED });
-  y -= 6;
-  metalChip(page, bold, titleX, y - 12, plan.metalLevel);
+  page.drawText(safe(plan.seguradora), { x: titleX, y, size: 10, font: regular, color: MUTED });
+  y -= 18;
+  const chipW = metalChip(page, bold, titleX, y, plan.metalLevel);
   if (plan.tipoPlano) {
-    page.drawText(safe(plan.tipoPlano), { x: titleX + 62, y: y - 8, size: 7.5, font: regular, color: MUTED });
+    page.drawText(safe(plan.tipoPlano), { x: titleX + chipW + 8, y: y + 3, size: 9, font: regular, color: MUTED });
   }
 
-  // Bloco de preço, alinhado à direita
+  // --- Preço (alinhado à direita, sem colidir com o nome)
   const priceStr = safe(money(plan.premioMensal));
   const per = safe(" /mês");
-  const priceW = bold.widthOfTextAtSize(priceStr, 24);
-  const perW = regular.widthOfTextAtSize(per, 9);
-  const right = A4[0] - M - 16;
-  page.drawText(priceStr, { x: right - perW - priceW, y: top - 44, size: 24, font: bold, color: NAVY });
-  page.drawText(per, { x: right - perW, y: top - 44, size: 9, font: regular, color: MUTED });
+  const priceW = bold.widthOfTextAtSize(priceStr, 26);
+  const perW = regular.widthOfTextAtSize(per, 10);
+  page.drawText(priceStr, { x: right - perW - priceW, y: top - 46, size: 26, font: bold, color: NAVY });
+  page.drawText(per, { x: right - perW, y: top - 46, size: 10, font: regular, color: MUTED });
   if (plan.creditoFiscal > 0) {
     const l1 = safe(`Sem o crédito: ${money(plan.premioSemCredito)}`);
     const l2 = safe(`Crédito fiscal estimado: −${money(plan.creditoFiscal)}/mês`);
-    page.drawText(l1, { x: A4[0] - M - 16 - regular.widthOfTextAtSize(l1, 8), y: top - 58, size: 8, font: regular, color: MUTED });
-    page.drawText(l2, { x: A4[0] - M - 16 - bold.widthOfTextAtSize(l2, 8), y: top - 69, size: 8, font: bold, color: GREEN });
+    page.drawText(l1, { x: right - regular.widthOfTextAtSize(l1, 9), y: top - 62, size: 9, font: regular, color: MUTED });
+    page.drawText(l2, { x: right - bold.widthOfTextAtSize(l2, 9), y: top - 75, size: 9, font: bold, color: GREEN });
   }
 
-  // Números que decidem
-  y = top - 92;
-  const boxW = (CONTENT - 32 - 12) / 2;
+  // --- Números que decidem
+  y = top - headH;
+  const boxW = (CONTENT - PAD * 2 - 14) / 2;
   ([["Dedutível", money(plan.dedutivel)], ["Máximo do bolso", money(plan.maxBolso)]] as Array<[string, string]>).forEach(
     ([label, value], i) => {
-      const x = M + 16 + i * (boxW + 12);
-      page.drawRectangle({ x, y: y - 34, width: boxW, height: 34, color: WASH });
-      page.drawRectangle({ x, y: y - 34, width: 2, height: 34, color: isRec ? GOLD : NAVY_SOFT });
-      page.drawText(safe(label), { x: x + 10, y: y - 13, size: 7.5, font: regular, color: MUTED });
-      page.drawText(safe(value), { x: x + 10, y: y - 27, size: 12, font: bold, color: INK });
+      const x = left + i * (boxW + 14);
+      page.drawRectangle({ x, y: y - figuresH + 6, width: boxW, height: figuresH - 6, color: WASH });
+      page.drawRectangle({ x, y: y - figuresH + 6, width: 2.5, height: figuresH - 6, color: isRec ? GOLD : NAVY_SOFT });
+      page.drawText(safe(label), { x: x + 12, y: y - 12, size: 9, font: regular, color: MUTED });
+      page.drawText(safe(value), { x: x + 12, y: y - 30, size: 14, font: bold, color: INK });
     },
   );
-  y -= 48;
+  y -= figuresH + 14;
 
-  // Tabela "Você paga"
-  page.drawText(safe("O QUE VOCÊ PAGA EM CADA ATENDIMENTO"), { x: M + 16, y, size: 7.5, font: bold, color: NAVY });
-  y -= 6;
-  page.drawRectangle({ x: M + 16, y: y - 2, width: CONTENT - 32, height: 0.6, color: HAIRLINE });
-  y -= 14;
-  rows.forEach(([label], i) => {
-    const lines = rowLines[i];
-    page.drawText(safe(label), { x: M + 16, y, size: 8.5, font: regular, color: MUTED });
-    lines.forEach((line, li) => {
+  // --- Tabela "o que você paga": grade de duas colunas, cada célula quebrando
+  page.drawText(safe("O QUE VOCÊ PAGA EM CADA ATENDIMENTO"), { x: left, y, size: 9, font: bold, color: NAVY });
+  y -= 8;
+  page.drawRectangle({ x: left, y, width: CONTENT - PAD * 2, height: 0.8, color: NAVY_SOFT });
+  y -= 4;
+
+  cells.forEach((cell, i) => {
+    const h = rowHeights[i];
+    // Zebra discreta para o olho não pular de linha na leitura horizontal.
+    if (i % 2 === 0) {
+      page.drawRectangle({ x: left, y: y - h, width: CONTENT - PAD * 2, height: h, color: WASH });
+    }
+    const textTop = y - ROW_PAD - 8;
+    cell.label.forEach((line, li) => {
+      page.drawText(line, { x: left + 8, y: textTop - li * ROW_LEAD, size: 10, font: regular, color: MUTED });
+    });
+    cell.value.forEach((line, li) => {
       page.drawText(line, {
-        x: A4[0] - M - 16 - regular.widthOfTextAtSize(line, 8.5),
-        y: y - li * 11, size: 8.5, font: li === 0 ? bold : regular, color: INK,
+        x: right - 8 - bold.widthOfTextAtSize(line, 10),
+        y: textTop - li * ROW_LEAD, size: 10, font: bold, color: INK,
       });
     });
-    const h = Math.max(15, lines.length * 11);
     y -= h;
-    if (i < rows.length - 1) page.drawRectangle({ x: M + 16, y: y + 4, width: CONTENT - 32, height: 0.4, color: HAIRLINE });
   });
 
   // Elo de volta ao comparativo
   page.drawText(safe(`Compare com as outras opções na pág. ${comparisonPage}`), {
-    x: M + 16, y: top - cardH + 10, size: 7, font: regular, color: MUTED,
+    x: left, y: top - cardH + 12, size: 8.5, font: regular, color: MUTED,
   });
 
-  ctx.y = top - cardH - 14;
+  ctx.y = top - cardH - 16;
 }
 
 export interface ProposalPdfInput {
@@ -445,13 +481,13 @@ export async function buildProposalPdf(input: ProposalPdfInput): Promise<{ bytes
     ["Zipcode", `${profile.zipcode} / ${profile.state}`],
     ["Renda anual declarada", money(profile.income)],
   ];
-  const factH = 46;
+  const factH = 50;
   first.drawRectangle({ x: M, y: y - factH, width: CONTENT, height: factH, color: NAVY });
   const colW = CONTENT / facts.length;
   facts.forEach(([label, value], i) => {
     const cx = M + 14 + i * colW;
-    first.drawText(safe(label.toUpperCase()), { x: cx, y: y - 18, size: 6.5, font: regular, color: rgb(0.65, 0.7, 0.8) });
-    first.drawText(safe(value), { x: cx, y: y - 33, size: 11, font: bold, color: WHITE });
+    first.drawText(safe(label.toUpperCase()), { x: cx, y: y - 18, size: 7.5, font: regular, color: rgb(0.68, 0.73, 0.82) });
+    first.drawText(safe(value), { x: cx, y: y - 34, size: 12, font: bold, color: WHITE });
     if (i > 0) first.drawRectangle({ x: M + i * colW, y: y - factH + 10, width: 0.6, height: factH - 20, color: NAVY_SOFT });
   });
   y -= factH + 30;
@@ -496,25 +532,25 @@ export async function buildProposalPdf(input: ProposalPdfInput): Promise<{ bytes
 
   // Fecho da página 1: o que fazer agora + link — costura com as páginas de detalhe.
   compCtx.y -= 6;
-  const urlLines = url ? wrapChars(url, regular, 7.5, CONTENT - 28, 2) : [];
-  const stepsH = url ? 62 + urlLines.length * 10 : 56;
+  const urlLines = url ? wrapChars(url, regular, 8.5, CONTENT - 28, 2) : [];
+  const stepsH = url ? 72 + urlLines.length * 11 : 64;
   if (compCtx.y - stepsH > FOOT) {
     const top = compCtx.y;
     first.drawRectangle({ x: M, y: top - stepsH, width: CONTENT, height: stepsH, color: WASH });
     first.drawRectangle({ x: M, y: top - stepsH, width: 2.5, height: stepsH, color: GOLD });
-    first.drawText(safe("Como seguir a partir daqui"), { x: M + 14, y: top - 18, size: 9.5, font: bold, color: NAVY });
+    first.drawText(safe("Como seguir a partir daqui"), { x: M + 14, y: top - 18, size: 11, font: bold, color: NAVY });
     const steps = [
       `Nas próximas páginas, cada opção aparece detalhada com o que você paga em cada atendimento.`,
       `Escolheu uma? É só responder esta mensagem — eu cuido da inscrição com você.`,
     ];
     steps.forEach((step, i) => {
-      first.drawText(safe(`${i + 1}.`), { x: M + 14, y: top - 34 - i * 12, size: 8, font: bold, color: GOLD });
-      first.drawText(safe(step), { x: M + 26, y: top - 34 - i * 12, size: 8, font: regular, color: INK });
+      first.drawText(safe(`${i + 1}.`), { x: M + 14, y: top - 38 - i * 14, size: 9.5, font: bold, color: GOLD });
+      first.drawText(safe(step), { x: M + 28, y: top - 38 - i * 14, size: 9.5, font: regular, color: INK });
     });
     if (url) {
-      first.drawText(safe("Ver online e responder:"), { x: M + 14, y: top - 62, size: 8, font: bold, color: NAVY });
+      first.drawText(safe("Ver online e responder:"), { x: M + 14, y: top - 72, size: 9, font: bold, color: NAVY });
       urlLines.forEach((line, i) => {
-        first.drawText(line, { x: M + 14, y: top - 73 - i * 10, size: 7.5, font: regular, color: hexRgb("#8A6410") });
+        first.drawText(line, { x: M + 14, y: top - 85 - i * 11, size: 8.5, font: regular, color: hexRgb("#8A6410") });
       });
     }
   }
@@ -528,8 +564,8 @@ export async function buildProposalPdf(input: ProposalPdfInput): Promise<{ bytes
     ctx.y -= 18;
   }
 
-  const disclaimer = wrap(LEAO_BRAND.disclaimer, regular, 8, CONTENT - 26);
-  const noteH = disclaimer.length * 10.5 + 22;
+  const disclaimer = wrap(LEAO_BRAND.disclaimer, regular, 9, CONTENT - 28);
+  const noteH = disclaimer.length * 12 + 24;
   ensure(ctx, noteH);
   ctx.page.drawRectangle({
     x: M, y: ctx.y - noteH, width: CONTENT, height: noteH,
@@ -537,7 +573,7 @@ export async function buildProposalPdf(input: ProposalPdfInput): Promise<{ bytes
   });
   disclaimer.forEach((line, i) => {
     ctx.page.drawText(line, {
-      x: M + 13, y: ctx.y - 16 - i * 10.5, size: 8, font: regular, color: hexRgb("#6B4E12"),
+      x: M + 14, y: ctx.y - 18 - i * 12, size: 9, font: regular, color: hexRgb("#6B4E12"),
     });
   });
 
