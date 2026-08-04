@@ -121,8 +121,13 @@ export function QuoteBuilder() {
   const [emailInput, setEmailInput] = React.useState("");
   const [savingDest, setSavingDest] = React.useState(false);
   const [generating, setGenerating] = React.useState(false);
+  const [pdfBusy, setPdfBusy] = React.useState(false);
+  const [pdfDone, setPdfDone] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [result, setResult] = React.useState<CreateQuoteResult | null>(null);
+  /** O painel de entrega está aberto? Separado de `result` porque gerar o PDF
+   *  também cria a cotação, e não deve abrir o painel por tabela. */
+  const [panelOpen, setPanelOpen] = React.useState(false);
   const [copied, setCopied] = React.useState(false);
   const [copiedMsg, setCopiedMsg] = React.useState(false);
   const [prefill, setPrefill] = React.useState<{ filled: string[]; notes: string[] } | null>(null);
@@ -326,20 +331,93 @@ export function QuoteBuilder() {
     }
   };
 
-  const generate = async () => {
-    if (!draft.length) return;
+  /**
+   * A cotação persistida — criada sob demanda.
+   *
+   * Gerar o PDF e enviar ao cliente precisam de uma cotação salva (é dela que
+   * saem o link, o token e o PDF). Antes isso obrigava a corretora a clicar
+   * "Gerar proposta" primeiro; agora qualquer uma das duas ações cria a cotação
+   * se ainda não existir, e reaproveita a que existe se já existir.
+   */
+  const ensureQuote = async (): Promise<CreateQuoteResult | null> => {
+    if (result) return result;
+    if (!draft.length) {
+      setError("Adicione ao menos um plano à proposta.");
+      return null;
+    }
+    const created = await cotacaoApi.create(profile, draft, recommendation?.planId ?? null);
+    setResult(created);
+    setSent(null);
+    return created;
+  };
+
+  /** Nome do arquivo que o servidor escolheu (varia com o idioma). */
+  const filenameFrom = (res: Response, fallback: string) => {
+    const m = /filename="([^"]+)"/.exec(res.headers.get("content-disposition") || "");
+    return m?.[1] || fallback;
+  };
+
+  /**
+   * Gera e baixa o PDF da proposta — dados do cliente, opções e idioma.
+   *
+   * Baixamos via blob em vez de abrir a URL numa aba: o app roda dentro de um
+   * iframe do GHL, onde abrir aba nova é bloqueado com frequência e a corretora
+   * ficaria olhando um botão que não faz nada.
+   */
+  const generatePdf = async () => {
+    setPdfBusy(true);
+    setError(null);
+    try {
+      const quote = await ensureQuote();
+      if (!quote) return;
+      const res = await fetch(cotacaoApi.pdfUrl(quote.id, profile.idioma));
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(body.error || "Não foi possível gerar o PDF.");
+      }
+      const blob = await res.blob();
+      const href = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = href;
+      a.download = filenameFrom(res, `proposta-${profile.year}.pdf`);
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setPdfDone(true);
+      setTimeout(() => URL.revokeObjectURL(href), 5000);
+      setTimeout(() => setPdfDone(false), 2500);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setPdfBusy(false);
+    }
+  };
+
+  /** Abre o painel de entrega — criando a cotação antes, se preciso. */
+  const openSend = async () => {
     setGenerating(true);
     setError(null);
-    // Proposta nova, entrega nova — senão o painel abre dizendo "enviada".
-    setSent(null);
     try {
-      setResult(await cotacaoApi.create(profile, draft, recommendation?.planId ?? null));
+      if (await ensureQuote()) setPanelOpen(true);
     } catch (e) {
       setError((e as Error).message);
     } finally {
       setGenerating(false);
     }
   };
+
+  const generate = openSend;
+
+  /*
+   * Mexeu nos planos, a cotação salva não vale mais: o link e o PDF apontariam
+   * para uma lista que não é a da tela. Descartamos o resultado para que a
+   * próxima ação emita uma cotação nova, com os planos atuais.
+   */
+  React.useEffect(() => {
+    setResult(null);
+    setPanelOpen(false);
+    setSent(null);
+  }, [draft]);
 
   // Read where the proposal will land (phone for WhatsApp, e-mail for e-mail).
   React.useEffect(() => {
@@ -451,12 +529,70 @@ export function QuoteBuilder() {
   };
 
   /**
+   * As duas ações de saída, no canto direito das duas telas: gerar o PDF e
+   * enviar ao cliente. O idioma anda junto porque é ele que decide a língua das
+   * três peças que saem daqui — a mensagem, o e-mail e o próprio PDF.
+   *
+   * Nenhuma delas exige "Gerar proposta" antes: a cotação é criada por baixo se
+   * ainda não existir (ver ensureQuote).
+   */
+  const empty = draft.length === 0;
+  const deliveryActions = (
+    <div className="flex flex-wrap items-center gap-2">
+      <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+        Idioma
+        <select
+          value={profile.idioma ?? "pt"}
+          aria-label="Idioma do material do cliente"
+          onChange={(e) => patch({ idioma: e.target.value as Idioma })}
+          className="h-10 rounded-md border border-input bg-background px-2.5 text-sm font-medium text-foreground shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          {IDIOMAS.map((i) => (
+            <option key={i.value} value={i.value}>
+              {i.label}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <span className="hidden h-6 w-px bg-border sm:block" aria-hidden />
+
+      <Button
+        variant="outline"
+        onClick={generatePdf}
+        disabled={empty || pdfBusy}
+        title={empty ? "Adicione ao menos um plano à proposta." : "Baixar o PDF da proposta"}
+        className="h-10 border-primary/45 text-primary hover:bg-primary/10 hover:text-primary"
+      >
+        {pdfBusy ? (
+          <Loader2 className="h-4 w-4 animate-spin" />
+        ) : pdfDone ? (
+          <Check className="h-4 w-4" />
+        ) : (
+          <FileText className="h-4 w-4" />
+        )}
+        {pdfBusy ? "Gerando…" : pdfDone ? "PDF baixado" : "Gerar PDF"}
+      </Button>
+
+      <Button
+        onClick={openSend}
+        disabled={empty || generating}
+        title={empty ? "Adicione ao menos um plano à proposta." : "Enviar a proposta ao cliente"}
+        className="h-10"
+      >
+        {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+        Enviar ao cliente
+      </Button>
+    </div>
+  );
+
+  /**
    * O painel de entrega da proposta. Vive fora dos dois `return` porque a
    * cotação pode ser gerada tanto na tela de montar quanto na do Marketplace —
    * e nos dois casos ela precisa das mesmas ações: enviar (WhatsApp e/ou
    * e-mail) e gerar o PDF.
    */
-  const resultModal = result ? (
+  const resultModal = result && panelOpen ? (
     <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/25 p-4 sm:items-center">
       <div className="max-h-full w-full max-w-xl overflow-y-auto rounded-lg border bg-background p-5 shadow-card-hover">
         <div className="flex items-start justify-between gap-3">
@@ -471,7 +607,7 @@ export function QuoteBuilder() {
           </div>
           <button
             type="button"
-            onClick={() => setResult(null)}
+            onClick={() => setPanelOpen(false)}
             className="text-sm text-muted-foreground hover:text-foreground"
           >
             Fechar
@@ -616,11 +752,16 @@ export function QuoteBuilder() {
         )}
 
         <div className="mt-3 flex flex-wrap items-center gap-2">
-          <a href={cotacaoApi.pdfUrl(result.id, profile.idioma)} target="_blank" rel="noopener noreferrer">
-            <Button variant="outline" size="sm" className="h-9">
-              <FileText className="h-4 w-4" /> Gerar PDF da proposta
-            </Button>
-          </a>
+          <Button variant="outline" size="sm" onClick={generatePdf} disabled={pdfBusy} className="h-9">
+            {pdfBusy ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : pdfDone ? (
+              <Check className="h-4 w-4" />
+            ) : (
+              <FileText className="h-4 w-4" />
+            )}
+            {pdfBusy ? "Gerando…" : pdfDone ? "PDF baixado" : "Gerar PDF da proposta"}
+          </Button>
           <Button variant="outline" size="sm" onClick={copyMessage} className="h-9">
             {copiedMsg ? <Check className="h-4 w-4" /> : null} {copiedMsg ? "Copiado" : "Copiar mensagem + link"}
           </Button>
@@ -663,6 +804,8 @@ export function QuoteBuilder() {
               Dados de exemplo · sem chave do CMS
             </span>
           ) : null}
+          {/* As mesmas saídas da tela de montar, no canto direito também aqui. */}
+          <div className="ml-auto">{deliveryActions}</div>
         </div>
 
         {error ? (
@@ -777,10 +920,13 @@ export function QuoteBuilder() {
             Escolha o cliente, solte os prints dos planos e gere a proposta.
           </p>
         </div>
-        <Button variant="outline" onClick={() => search()} disabled={searching} className="h-10">
-          {searching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
-          Buscar no Marketplace
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="outline" onClick={() => search()} disabled={searching} className="h-10">
+            {searching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+            Buscar no Marketplace
+          </Button>
+          {deliveryActions}
+        </div>
       </div>
 
       {error ? (
@@ -794,7 +940,7 @@ export function QuoteBuilder() {
           guiar o preenchimento em vez de espalhar campos soltos. */}
       <section className="mt-5 rounded-lg border bg-card shadow-card">
         <div className="border-b px-5 py-4">
-          <div className="grid grid-cols-2 gap-x-4 gap-y-4 md:grid-cols-4 xl:grid-cols-[minmax(260px,1.5fr)_minmax(120px,0.9fr)_minmax(84px,0.6fr)_minmax(140px,1fr)_minmax(110px,0.8fr)_minmax(150px,1fr)]">
+          <div className="grid grid-cols-2 gap-x-4 gap-y-4 md:grid-cols-4 xl:grid-cols-[minmax(300px,1.6fr)_minmax(130px,1fr)_minmax(90px,0.7fr)_minmax(150px,1fr)_minmax(120px,0.9fr)]">
             <div className="col-span-2 md:col-span-4 xl:col-span-1">
               <FieldLabel>Cliente</FieldLabel>
               <ContactPicker value={{ id: profile.contactId, name: profile.contactName }} onSelect={onPickContact} />
@@ -829,21 +975,6 @@ export function QuoteBuilder() {
                 value={profile.year}
                 onChange={(e) => patch({ year: Number(e.target.value) })}
               />
-            </Field>
-            {/* Idioma do material que vai para o cliente — mensagem, e-mail e
-                PDF. A tela da corretora continua em português. */}
-            <Field label="Idioma do cliente">
-              <select
-                value={profile.idioma ?? "pt"}
-                onChange={(e) => patch({ idioma: e.target.value as Idioma })}
-                className={SELECT}
-              >
-                {IDIOMAS.map((i) => (
-                  <option key={i.value} value={i.value}>
-                    {i.label}
-                  </option>
-                ))}
-              </select>
             </Field>
           </div>
           {prefilling ? (

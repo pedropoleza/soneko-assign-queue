@@ -152,10 +152,13 @@ Campos importantes do household (confirmar todos na doc oficial antes de impleme
    O idioma vale para o que o cliente recebe — mensagem, e-mail e PDF. A tela da
    corretora segue sempre em português.
 6. Gera a proposta → link único pro cliente.
-7. **Entrega**: envia por WhatsApp, por e-mail, ou **pelos dois de uma vez** (cada
-   canal responde separado — a falha de um não derruba o outro), e/ou gera o PDF da
-   proposta sem enviar. As mesmas ações existem na tela de montar e na do
-   Marketplace.
+7. **Entrega** — no canto direito das duas telas (montar e Marketplace), sempre
+   visível: **Gerar PDF** (baixa a proposta com os dados do cliente, as opções e o
+   idioma escolhido) e **Enviar ao cliente** (WhatsApp, e-mail ou **os dois de uma
+   vez** — cada canal responde separado, a falha de um não derruba o outro).
+   Nenhuma das duas exige "Gerar proposta" antes: a cotação é criada por baixo se
+   ainda não existir. Mexeu na lista de planos, a cotação salva é descartada e a
+   próxima ação emite uma nova — link e PDF nunca apontam para uma lista velha.
 
 ### Ponta B — o cliente recebe a proposta (link público)
 1. Abre o link com a marca Leao (logo, navy).
