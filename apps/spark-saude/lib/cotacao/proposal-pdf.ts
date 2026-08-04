@@ -1,3 +1,4 @@
+import { isIdioma, type Idioma } from "./i18n";
 import { buildProposalPdf } from "./pdf";
 import { getQuote, proposalUrl } from "./quotes";
 import { uploadProposalPdf } from "./storage";
@@ -8,8 +9,14 @@ import type { PlanOptionDraft, QuoteProfile } from "./types";
  *
  * Both the download route and the WhatsApp send path go through here, so the
  * file the broker previews is byte-for-byte the one the client receives.
+ *
+ * `idioma` overrides the language stored with the quote — the broker can change
+ * the dropdown and regenerate without rewriting the saved quote.
  */
-export async function renderProposalPdf(id: string): Promise<{ bytes: Uint8Array; filename: string }> {
+export async function renderProposalPdf(
+  id: string,
+  idioma?: Idioma | null,
+): Promise<{ bytes: Uint8Array; filename: string }> {
   const quote = await getQuote(id);
   if (!quote) throw new Error("Cotação não encontrada.");
 
@@ -19,6 +26,7 @@ export async function renderProposalPdf(id: string): Promise<{ bytes: Uint8Array
   const profile: QuoteProfile = {
     contactId: quote.ghlContactId ?? undefined,
     contactName: stored.profile?.contactName,
+    idioma: isIdioma(idioma) ? idioma : stored.profile?.idioma,
     zipcode: quote.zipcode,
     state: quote.state,
     countyfips: quote.countyfips ?? undefined,
@@ -37,8 +45,8 @@ export async function renderProposalPdf(id: string): Promise<{ bytes: Uint8Array
 }
 
 /** Render + store, returning the signed URL GHL fetches to attach the file. */
-export async function renderProposalPdfUrl(id: string): Promise<string> {
-  const { bytes, filename } = await renderProposalPdf(id);
+export async function renderProposalPdfUrl(id: string, idioma?: Idioma | null): Promise<string> {
+  const { bytes, filename } = await renderProposalPdf(id, idioma);
   const { url } = await uploadProposalPdf(bytes, filename);
   return url;
 }

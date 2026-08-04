@@ -44,6 +44,8 @@ export interface QuotePerson {
 export interface QuoteProfile {
   contactId?: string;
   contactName?: string;
+  /** Idioma do material entregue ao cliente (mensagem, e-mail e PDF). */
+  idioma?: import("./i18n").Idioma;
   zipcode: string;
   state: string;
   /** County FIPS — resolved from the zipcode when omitted (lib/cms/counties). */

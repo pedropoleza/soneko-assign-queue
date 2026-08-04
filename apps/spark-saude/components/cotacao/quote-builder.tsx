@@ -19,8 +19,9 @@ import {
   Send,
 } from "lucide-react";
 import { api } from "@/lib/client/api";
-import { cotacaoApi, type CreateQuoteResult, type SearchOptions } from "@/lib/client/cotacao";
+import { cotacaoApi, type CreateQuoteResult, type SearchOptions, type SendChannelResult } from "@/lib/client/cotacao";
 import { LEAO_BRAND } from "@/lib/cotacao/brand";
+import { IDIOMAS, type Idioma } from "@/lib/cotacao/i18n";
 import { ageFrom } from "@/lib/cotacao/prefill";
 import { buildClientMessage } from "@/lib/cotacao/message";
 import type { EligibilitySummary } from "@/lib/cms";
@@ -87,6 +88,7 @@ export function QuoteBuilder() {
     state: "FL",
     income: 33000,
     year: defaultPlanYear(),
+    idioma: "pt",
     people: [emptyPerson("Self")],
   }));
   const [plans, setPlans] = React.useState<PlanQuote[] | null>(null);
@@ -108,12 +110,16 @@ export function QuoteBuilder() {
   const [recommendation, setRecommendation] = React.useState<Recommendation | null>(null);
   const [recommending, setRecommending] = React.useState(false);
   const [sending, setSending] = React.useState(false);
-  const [sent, setSent] = React.useState(false);
-  const [channel, setChannel] = React.useState<"WhatsApp" | "Email">("WhatsApp");
+  /** Per-channel outcome of the dispatch — null enquanto não enviou. */
+  const [sent, setSent] = React.useState<SendChannelResult[] | null>(null);
+  // Ela escolhe um canal ou os dois: quem responde no WhatsApp responde no
+  // WhatsApp, mas o e-mail é o que fica guardado — mandar nos dois é comum.
+  const [channels, setChannels] = React.useState<Array<"WhatsApp" | "Email">>(["WhatsApp"]);
   // The lead's real phone/e-mail, read when the proposal is ready — so the
   // dispatch shows where it will land and can fill a missing field on the spot.
   const [dest, setDest] = React.useState<{ phone?: string | null; email?: string | null } | null>(null);
-  const [destInput, setDestInput] = React.useState("");
+  const [phoneInput, setPhoneInput] = React.useState("");
+  const [emailInput, setEmailInput] = React.useState("");
   const [savingDest, setSavingDest] = React.useState(false);
   const [generating, setGenerating] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -288,6 +294,8 @@ export function QuoteBuilder() {
     if (!draft.length) return;
     setGenerating(true);
     setError(null);
+    // Proposta nova, entrega nova — senão o painel abre dizendo "enviada".
+    setSent(null);
     try {
       setResult(await cotacaoApi.create(profile, draft, recommendation?.planId ?? null));
     } catch (e) {
@@ -301,50 +309,78 @@ export function QuoteBuilder() {
   React.useEffect(() => {
     if (!result || !profile.contactId) return;
     setDest(null);
-    setDestInput("");
+    setPhoneInput("");
+    setEmailInput("");
     api
       .contact(profile.contactId)
       .then((c) => setDest({ phone: c.phone, email: c.email }))
       .catch(() => setDest({}));
   }, [result, profile.contactId]);
 
-  const destField = channel === "Email" ? "email" : "phone";
-  const destValue = channel === "Email" ? dest?.email : dest?.phone;
-  const destMissing = dest !== null && !destValue;
+  const wantsWhats = channels.includes("WhatsApp");
+  const wantsEmail = channels.includes("Email");
+  const missingPhone = dest !== null && wantsWhats && !dest.phone;
+  const missingEmail = dest !== null && wantsEmail && !dest.email;
+  const toggleChannel = (c: "WhatsApp" | "Email") =>
+    // Nunca deixa ficar sem canal nenhum: o último selecionado não desmarca.
+    setChannels((s) => (s.includes(c) ? (s.length === 1 ? s : s.filter((x) => x !== c)) : [...s, c]));
 
-  /** Send the proposal to the lead on the CRM's own channel. */
+  const channelLabel = (list: Array<"WhatsApp" | "Email">) =>
+    list.map((c) => (c === "Email" ? "e-mail" : "WhatsApp")).join(" e ");
+
+  /** Send the proposal to the lead on the CRM's own channels (um ou os dois). */
   const sendToLead = async () => {
     if (!result || !profile.contactId) return;
     setSending(true);
     setError(null);
     try {
-      // Missing the field the channel needs? Save it to the contact first
+      // Missing the field a channel needs? Save it to the contact first
       // (upsert), so next time it's already there — then send.
-      if (destMissing) {
-        const value = destInput.trim();
-        if (!value) {
-          setError(channel === "Email" ? "Informe o e-mail do contato." : "Informe o telefone do contato.");
+      const basics: { phone?: string; email?: string } = {};
+      if (missingPhone) {
+        const v = phoneInput.trim();
+        if (!v) {
+          setError("Informe o telefone do contato.");
           setSending(false);
           return;
         }
+        basics.phone = v;
+      }
+      if (missingEmail) {
+        const v = emailInput.trim();
+        if (!v) {
+          setError("Informe o e-mail do contato.");
+          setSending(false);
+          return;
+        }
+        basics.email = v;
+      }
+      if (basics.phone || basics.email) {
         setSavingDest(true);
-        await api.updateContactBasics(profile.contactId, { [destField]: value });
-        setDest((d) => ({ ...d, [destField]: value }));
+        await api.updateContactBasics(profile.contactId, basics);
+        setDest((d) => ({ ...d, ...basics }));
         setSavingDest(false);
       }
+
       const res = await cotacaoApi.sendToLead({
         contactId: profile.contactId,
         message: clientMessage,
-        channel,
+        channels,
+        idioma: profile.idioma,
         proposalUrl,
         profile: { contactName: profile.contactName, year: profile.year },
         // O PDF da proposta vai anexado — é o que a cliente abre no WhatsApp.
         quoteId: result.id,
         attachPdf: true,
       });
-      setSent(true);
-      // O envio não falha por causa do PDF; se ele não foi junto, avisamos.
-      if (res.pdfError) setError(`Mensagem enviada, mas sem o PDF: ${res.pdfError}`);
+      setSent(res.results);
+      // Um canal pode falhar sem derrubar o outro — e o PDF nunca derruba o envio.
+      const failed = res.results.filter((r) => !r.ok);
+      if (failed.length) {
+        setError(failed.map((r) => `Falhou no ${channelLabel([r.channel])}: ${r.error}`).join(" · "));
+      } else if (res.pdfError) {
+        setError(`Mensagem enviada, mas sem o PDF: ${res.pdfError}`);
+      }
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -353,8 +389,14 @@ export function QuoteBuilder() {
     }
   };
 
+  // O servidor só monta a URL absoluta quando NEXT_PUBLIC_APP_URL existe; sem
+  // ela vem um caminho relativo, que não serve nem para o e-mail nem para o
+  // WhatsApp. Aqui completamos com a origem real do navegador.
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
   const proposalUrl = result
-    ? result.url || `${typeof location !== "undefined" ? location.origin : ""}/proposta/${result.token}`
+    ? /^https?:\/\//.test(result.url || "")
+      ? result.url
+      : `${origin}/proposta/${result.token}`
     : "";
   const clientMessage = React.useMemo(
     () => (result ? `${buildClientMessage(profile)}\n\n${proposalUrl}` : ""),
@@ -371,6 +413,193 @@ export function QuoteBuilder() {
     setCopiedMsg(true);
     setTimeout(() => setCopiedMsg(false), 1500);
   };
+
+  /**
+   * O painel de entrega da proposta. Vive fora dos dois `return` porque a
+   * cotação pode ser gerada tanto na tela de montar quanto na do Marketplace —
+   * e nos dois casos ela precisa das mesmas ações: enviar (WhatsApp e/ou
+   * e-mail) e gerar o PDF.
+   */
+  const resultModal = result ? (
+    <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/25 p-4 sm:items-center">
+      <div className="max-h-full w-full max-w-xl overflow-y-auto rounded-lg border bg-background p-5 shadow-card-hover">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="flex items-center gap-1.5 text-sm font-semibold text-primary">
+              <Check className="h-4 w-4" /> Proposta pronta
+            </p>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Válida até {new Date(result.expiresAt).toLocaleDateString("pt-BR")}
+              {profile.contactId ? " · contato marcado com cotacao_enviada" : ""}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setResult(null)}
+            className="text-sm text-muted-foreground hover:text-foreground"
+          >
+            Fechar
+          </button>
+        </div>
+
+        <div className="mt-4 flex items-center justify-between gap-3">
+          <p className="text-xs font-medium text-muted-foreground">Mensagem para o cliente</p>
+          {/* O idioma vale para a mensagem, o e-mail e o PDF — só o material do
+              cliente muda; a tela da corretora segue em português. */}
+          <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            Idioma
+            <select
+              value={profile.idioma ?? "pt"}
+              aria-label="Idioma do material do cliente"
+              onChange={(e) => patch({ idioma: e.target.value as Idioma })}
+              className="h-8 rounded-md border border-input bg-background px-2 text-xs font-medium text-foreground"
+            >
+              {IDIOMAS.map((i) => (
+                <option key={i.value} value={i.value}>
+                  {i.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <textarea
+          readOnly
+          value={clientMessage}
+          rows={9}
+          className="mt-1.5 w-full resize-none rounded-lg border bg-muted/30 p-3 text-xs leading-relaxed"
+        />
+
+        {/* Enviar direto ao lead pelo GHL */}
+        {profile.contactId ? (
+          <div className="mt-3 rounded-lg border p-3">
+            {sent?.some((r) => r.ok) ? (
+              <p className="flex items-center gap-1.5 text-sm font-medium text-status-green-fg">
+                <Check className="h-4 w-4" /> Enviada para {profile.contactName} por{" "}
+                {channelLabel(sent.filter((r) => r.ok).map((r) => r.channel))}
+              </p>
+            ) : (
+              <>
+                <p className="text-xs font-medium">
+                  Enviar direto para <strong>{profile.contactName}</strong> pelo GHL
+                </p>
+                <div className="mt-2 grid grid-cols-2 gap-2">
+                  {(["WhatsApp", "Email"] as const).map((c) => {
+                    const on = channels.includes(c);
+                    return (
+                      <button
+                        key={c}
+                        type="button"
+                        aria-pressed={on}
+                        onClick={() => toggleChannel(c)}
+                        className={cn(
+                          "flex items-center justify-center gap-1.5 rounded-md border px-2 py-2 text-xs font-medium transition-colors",
+                          on
+                            ? "border-primary bg-primary/10 text-primary"
+                            : "border-input text-muted-foreground hover:bg-muted",
+                        )}
+                      >
+                        <span
+                          className={cn(
+                            "flex h-4 w-4 items-center justify-center rounded border",
+                            on ? "border-primary bg-primary text-primary-foreground" : "border-input",
+                          )}
+                        >
+                          {on ? <Check className="h-3 w-3" /> : null}
+                        </span>
+                        {c === "Email" ? "E-mail" : "WhatsApp"}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Onde vai cair — e, se faltar o dado, preenche na hora (upsert). */}
+                <div className="mt-2 space-y-2">
+                  {wantsWhats ? (
+                    missingPhone ? (
+                      <div>
+                        <input
+                          value={phoneInput}
+                          onChange={(e) => setPhoneInput(e.target.value)}
+                          type="tel"
+                          placeholder="+1 305 555 0100"
+                          className="h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm"
+                        />
+                        <p className="mt-1 flex items-start gap-1 text-xs leading-snug text-muted-foreground">
+                          <Info className="mt-px h-3 w-3 shrink-0" />
+                          O contato não tem telefone. Salvamos no CRM ao enviar.
+                        </p>
+                      </div>
+                    ) : dest?.phone ? (
+                      <p className="text-xs text-muted-foreground">
+                        WhatsApp para <span className="font-medium text-foreground">{dest.phone}</span>
+                      </p>
+                    ) : null
+                  ) : null}
+
+                  {wantsEmail ? (
+                    missingEmail ? (
+                      <div>
+                        <input
+                          value={emailInput}
+                          onChange={(e) => setEmailInput(e.target.value)}
+                          type="email"
+                          placeholder="email@cliente.com"
+                          className="h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm"
+                        />
+                        <p className="mt-1 flex items-start gap-1 text-xs leading-snug text-muted-foreground">
+                          <Info className="mt-px h-3 w-3 shrink-0" />
+                          O contato não tem e-mail. Salvamos no CRM ao enviar.
+                        </p>
+                      </div>
+                    ) : dest?.email ? (
+                      <p className="text-xs text-muted-foreground">
+                        E-mail para <span className="font-medium text-foreground">{dest.email}</span>
+                      </p>
+                    ) : null
+                  ) : null}
+                </div>
+
+                <Button size="sm" onClick={sendToLead} disabled={sending || dest === null} className="mt-2 h-9 w-full">
+                  {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                  {savingDest
+                    ? "Salvando contato…"
+                    : sending
+                      ? "Enviando…"
+                      : missingPhone || missingEmail
+                        ? `Salvar e enviar por ${channelLabel(channels)}`
+                        : `Enviar por ${channelLabel(channels)}`}
+                </Button>
+              </>
+            )}
+          </div>
+        ) : (
+          <p className="mt-3 flex items-start gap-1.5 rounded-lg bg-muted/60 px-3 py-2 text-xs text-muted-foreground">
+            <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            Vincule um contato para enviar direto pelo GHL e registrar a cotação nas notas do lead.
+          </p>
+        )}
+
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <a href={cotacaoApi.pdfUrl(result.id, profile.idioma)} target="_blank" rel="noopener noreferrer">
+            <Button variant="outline" size="sm" className="h-9">
+              <FileText className="h-4 w-4" /> Gerar PDF da proposta
+            </Button>
+          </a>
+          <Button variant="outline" size="sm" onClick={copyMessage} className="h-9">
+            {copiedMsg ? <Check className="h-4 w-4" /> : null} {copiedMsg ? "Copiado" : "Copiar mensagem + link"}
+          </Button>
+          <Button variant="outline" size="sm" onClick={copy} className="h-9">
+            {copied ? <Check className="h-4 w-4" /> : <Link2 className="h-4 w-4" />} {copied ? "Copiado" : "Só o link"}
+          </Button>
+          <a href={`/proposta/${result.token}`} target="_blank" rel="noopener noreferrer">
+            <Button variant="ghost" size="sm" className="h-9">
+              <ExternalLink className="h-4 w-4" /> Ver proposta
+            </Button>
+          </a>
+        </div>
+      </div>
+    </div>
+  ) : null;
 
   const minPremio = plans?.length ? Math.min(...plans.map((p) => p.premioMensal)) : 0;
   const bestId = plans?.find((p) => p.premioMensal === minPremio)?.planId;
@@ -478,6 +707,9 @@ export function QuoteBuilder() {
         )}
 
         <BottomBar count={draft.length} generating={generating} onGenerate={generate} onBack={() => setView("montar")} />
+
+        {/* A proposta pode nascer aqui também — mesmas ações da tela de montar. */}
+        {resultModal}
       </div>
     );
   }
@@ -513,7 +745,7 @@ export function QuoteBuilder() {
           guiar o preenchimento em vez de espalhar campos soltos. */}
       <section className="mt-5 rounded-lg border bg-card shadow-card">
         <div className="border-b px-5 py-4">
-          <div className="grid grid-cols-2 gap-x-4 gap-y-4 md:grid-cols-4 xl:grid-cols-[minmax(300px,1.6fr)_minmax(130px,1fr)_minmax(90px,0.7fr)_minmax(150px,1fr)_minmax(120px,0.9fr)]">
+          <div className="grid grid-cols-2 gap-x-4 gap-y-4 md:grid-cols-4 xl:grid-cols-[minmax(260px,1.5fr)_minmax(120px,0.9fr)_minmax(84px,0.6fr)_minmax(140px,1fr)_minmax(110px,0.8fr)_minmax(150px,1fr)]">
             <div className="col-span-2 md:col-span-4 xl:col-span-1">
               <FieldLabel>Cliente</FieldLabel>
               <ContactPicker value={{ id: profile.contactId, name: profile.contactName }} onSelect={onPickContact} />
@@ -548,6 +780,21 @@ export function QuoteBuilder() {
                 value={profile.year}
                 onChange={(e) => patch({ year: Number(e.target.value) })}
               />
+            </Field>
+            {/* Idioma do material que vai para o cliente — mensagem, e-mail e
+                PDF. A tela da corretora continua em português. */}
+            <Field label="Idioma do cliente">
+              <select
+                value={profile.idioma ?? "pt"}
+                onChange={(e) => patch({ idioma: e.target.value as Idioma })}
+                className={SELECT}
+              >
+                {IDIOMAS.map((i) => (
+                  <option key={i.value} value={i.value}>
+                    {i.label}
+                  </option>
+                ))}
+              </select>
             </Field>
           </div>
           {prefilling ? (
@@ -929,136 +1176,7 @@ export function QuoteBuilder() {
 
       <BottomBar count={draft.length} generating={generating} onGenerate={generate} />
 
-      {result ? (
-        <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/25 p-4 sm:items-center">
-          <div className="max-h-full w-full max-w-xl overflow-y-auto rounded-lg border bg-background p-5 shadow-card-hover">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="flex items-center gap-1.5 text-sm font-semibold text-primary">
-                  <Check className="h-4 w-4" /> Proposta pronta
-                </p>
-                <p className="mt-0.5 text-xs text-muted-foreground">
-                  Válida até {new Date(result.expiresAt).toLocaleDateString("pt-BR")}
-                  {profile.contactId ? " · contato marcado com cotacao_enviada" : ""}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setResult(null)}
-                className="text-sm text-muted-foreground hover:text-foreground"
-              >
-                Fechar
-              </button>
-            </div>
-
-            <p className="mt-4 text-xs font-medium text-muted-foreground">Mensagem para o cliente</p>
-            <textarea
-              readOnly
-              value={clientMessage}
-              rows={9}
-              className="mt-1.5 w-full resize-none rounded-lg border bg-muted/30 p-3 text-xs leading-relaxed"
-            />
-
-            {/* Enviar direto ao lead pelo GHL */}
-            {profile.contactId ? (
-              <div className="mt-3 rounded-lg border p-3">
-                {sent ? (
-                  <p className="flex items-center gap-1.5 text-sm font-medium text-status-green-fg">
-                    <Check className="h-4 w-4" /> Enviada para {profile.contactName} por{" "}
-                    {channel === "Email" ? "e-mail" : "WhatsApp"}
-                  </p>
-                ) : (
-                  <>
-                    <p className="text-xs font-medium">
-                      Enviar direto para <strong>{profile.contactName}</strong> pelo GHL
-                    </p>
-                    <div className="mt-2 flex gap-1 rounded-lg bg-muted p-0.5 text-xs font-medium">
-                      {(["WhatsApp", "Email"] as const).map((c) => (
-                        <button
-                          key={c}
-                          type="button"
-                          onClick={() => {
-                            setChannel(c);
-                            setDestInput("");
-                          }}
-                          className={cn(
-                            "flex-1 rounded-md px-2 py-1.5 transition-colors",
-                            channel === c ? "bg-card shadow-card" : "text-muted-foreground hover:text-foreground",
-                          )}
-                        >
-                          {c === "Email" ? "E-mail" : "WhatsApp"}
-                        </button>
-                      ))}
-                    </div>
-
-                    {/* Onde vai cair — e, se faltar o dado, preenche na hora (upsert). */}
-                    {destMissing ? (
-                      <div className="mt-2">
-                        <input
-                          value={destInput}
-                          onChange={(e) => setDestInput(e.target.value)}
-                          type={channel === "Email" ? "email" : "tel"}
-                          placeholder={channel === "Email" ? "email@cliente.com" : "+1 305 555 0100"}
-                          className="h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm"
-                        />
-                        <p className="mt-1 flex items-start gap-1 text-xs leading-snug text-muted-foreground">
-                          <Info className="mt-px h-3 w-3 shrink-0" />
-                          O contato não tem {channel === "Email" ? "e-mail" : "telefone"}. Salvamos no CRM ao enviar.
-                        </p>
-                      </div>
-                    ) : destValue ? (
-                      <p className="mt-1.5 text-xs text-muted-foreground">
-                        {channel === "Email" ? "Para" : "WhatsApp para"}{" "}
-                        <span className="font-medium text-foreground">{destValue}</span>
-                      </p>
-                    ) : null}
-
-                    <Button
-                      size="sm"
-                      onClick={sendToLead}
-                      disabled={sending || dest === null}
-                      className="mt-2 h-9 w-full"
-                    >
-                      {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                      {savingDest
-                        ? "Salvando contato…"
-                        : sending
-                          ? "Enviando…"
-                          : destMissing
-                            ? `Salvar e enviar por ${channel === "Email" ? "e-mail" : "WhatsApp"}`
-                            : `Enviar por ${channel === "Email" ? "e-mail" : "WhatsApp"}`}
-                    </Button>
-                  </>
-                )}
-              </div>
-            ) : (
-              <p className="mt-3 flex items-start gap-1.5 rounded-lg bg-muted/60 px-3 py-2 text-xs text-muted-foreground">
-                <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                Vincule um contato para enviar direto pelo GHL e registrar a cotação nas notas do lead.
-              </p>
-            )}
-
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              <a href={cotacaoApi.pdfUrl(result.id)} target="_blank" rel="noopener noreferrer">
-                <Button variant="outline" size="sm" className="h-9">
-                  <FileText className="h-4 w-4" /> Gerar PDF da proposta
-                </Button>
-              </a>
-              <Button variant="outline" size="sm" onClick={copyMessage} className="h-9">
-                {copiedMsg ? <Check className="h-4 w-4" /> : null} {copiedMsg ? "Copiado" : "Copiar mensagem + link"}
-              </Button>
-              <Button variant="outline" size="sm" onClick={copy} className="h-9">
-                {copied ? <Check className="h-4 w-4" /> : <Link2 className="h-4 w-4" />} {copied ? "Copiado" : "Só o link"}
-              </Button>
-              <a href={`/proposta/${result.token}`} target="_blank" rel="noopener noreferrer">
-                <Button variant="ghost" size="sm" className="h-9">
-                  <ExternalLink className="h-4 w-4" /> Ver proposta
-                </Button>
-              </a>
-            </div>
-          </div>
-        </div>
-      ) : null}
+      {resultModal}
 
       <OptionEditor
         open={editorOpen}

@@ -1,7 +1,23 @@
 import type { PlanOptionDraft, PlanQuote, PublicProposal, Quote, QuoteProfile } from "@/lib/cotacao/types";
 import type { QuoteSearchResult } from "@/lib/cms";
 import type { PrefillResult } from "@/lib/cotacao/prefill";
+import type { Idioma } from "@/lib/cotacao/i18n";
 import type { Recommendation } from "@/lib/cotacao/recommend";
+
+/** Per-channel outcome of a dispatch — one entry per channel the broker picked. */
+export interface SendChannelResult {
+  channel: "WhatsApp" | "Email";
+  ok: boolean;
+  messageId?: string;
+  error?: string;
+}
+
+export interface SendResult {
+  ok: true;
+  results: SendChannelResult[];
+  pdfAttached?: boolean;
+  pdfError?: string;
+}
 
 export interface SearchOptions {
   sort?: "premium" | "deductible" | "oopc" | "total_costs" | "quality_rating";
@@ -75,23 +91,25 @@ export const cotacaoApi = {
   recommend: (profile: QuoteProfile, options: PlanOptionDraft[]) =>
     request<Recommendation>("/api/quotes/recommend", { method: "POST", body: JSON.stringify({ profile, options }) }),
 
-  /** Deliver the proposal to the lead through GHL Conversations (PDF attached). */
+  /**
+   * Deliver the proposal to the lead through GHL Conversations (PDF attached).
+   * `channels` accepts one or both — each comes back with its own result.
+   */
   sendToLead: (args: {
     contactId: string;
     message: string;
-    channel: "WhatsApp" | "Email";
+    channels: Array<"WhatsApp" | "Email">;
+    idioma?: Idioma;
     proposalUrl?: string;
     profile?: { contactName?: string; year?: number };
     quoteId?: string;
     attachPdf?: boolean;
   }) =>
-    request<{ ok: true; messageId?: string; pdfAttached?: boolean; pdfError?: string }>("/api/quotes/send", {
-      method: "POST",
-      body: JSON.stringify(args),
-    }),
+    request<SendResult>("/api/quotes/send", { method: "POST", body: JSON.stringify(args) }),
 
   /** Where the broker can open/download the branded PDF for a quote. */
-  pdfUrl: (quoteId: string) => `/api/quotes/${quoteId}/pdf`,
+  pdfUrl: (quoteId: string, idioma?: Idioma) =>
+    `/api/quotes/${quoteId}/pdf${idioma ? `?idioma=${idioma}` : ""}`,
 
   get: (id: string) => request<Quote>(`/api/quotes/${id}`),
 

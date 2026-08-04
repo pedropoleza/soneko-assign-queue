@@ -39,6 +39,9 @@ const bodySchema = z.object({
   profile: z.object({
     contactId: z.string().optional(),
     contactName: z.string().optional(),
+    /** Idioma do material do cliente — precisa sobreviver ao zod (ele descarta
+     *  chaves desconhecidas) para o PDF ser regerado no idioma certo depois. */
+    idioma: z.enum(["pt", "es", "en"]).optional(),
     zipcode: z.string(),
     state: z.string().default("FL"),
     countyfips: z.string().optional(),

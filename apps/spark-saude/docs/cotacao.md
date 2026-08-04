@@ -148,7 +148,14 @@ Campos importantes do household (confirmar todos na doc oficial antes de impleme
 4. A Dani **escolhe as opções** que quer propor (ex.: 2 ou 3 planos), podendo:
    - Editar/ajustar campos principais (modelo híbrido — ver §5).
    - **Anexar o print** daquele plano como respaldo visual.
-5. Gera a proposta → link único pro cliente.
+5. Escolhe o **idioma do cliente** (padrão Português BR; também Español e English).
+   O idioma vale para o que o cliente recebe — mensagem, e-mail e PDF. A tela da
+   corretora segue sempre em português.
+6. Gera a proposta → link único pro cliente.
+7. **Entrega**: envia por WhatsApp, por e-mail, ou **pelos dois de uma vez** (cada
+   canal responde separado — a falha de um não derruba o outro), e/ou gera o PDF da
+   proposta sem enviar. As mesmas ações existem na tela de montar e na do
+   Marketplace.
 
 ### Ponta B — o cliente recebe a proposta (link público)
 1. Abre o link com a marca Leao (logo, navy).

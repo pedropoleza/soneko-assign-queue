@@ -1,3 +1,4 @@
+import { dict } from "./i18n";
 import type { BrandConfig, QuoteProfile } from "./types";
 
 /**
@@ -23,8 +24,9 @@ export function buildClientEmail(args: {
 }): { subject: string; html: string } {
   const { profile, message, proposalUrl, brand, disclaimer } = args;
 
+  const d = dict(profile.idioma);
   const first = (profile.contactName || "").trim().split(/\s+/)[0] || "";
-  const subject = `Sua cotação de seguro saúde ${profile.year}${brand.name ? ` — ${brand.name}` : ""}`;
+  const subject = d.email.subject(profile.year, brand.name);
 
   // The message text may already end with the URL (WhatsApp format). Strip a
   // trailing bare URL so the e-mail doesn't show the link twice — once as text
@@ -33,7 +35,7 @@ export function buildClientEmail(args: {
   const paragraphs = esc(bodyText).replace(/\n/g, "<br/>");
 
   const html = `<!doctype html>
-<html lang="pt-BR"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/></head>
+<html lang="${d.locale}"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/></head>
 <body style="margin:0;background:#f3f4f6;padding:24px 12px;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#1f2937;">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:14px;overflow:hidden;box-shadow:0 1px 3px rgba(16,24,40,.08);">
     <tr><td style="background:${esc(brand.primary)};padding:20px 28px;">
@@ -41,14 +43,16 @@ export function buildClientEmail(args: {
       <div style="color:rgba(255,255,255,.72);font-size:12px;margin-top:2px;">${esc(brand.tagline)}</div>
     </td></tr>
     <tr><td style="padding:28px 28px 8px;">
-      ${first ? `<p style="margin:0 0 14px;font-size:15px;">Olá, ${esc(first)} 👋</p>` : ""}
+      ${first ? `<p style="margin:0 0 14px;font-size:15px;">${esc(d.email.hello(first))}</p>` : ""}
       <div style="font-size:14px;line-height:1.6;color:#374151;">${paragraphs}</div>
     </td></tr>
     <tr><td style="padding:20px 28px 28px;">
       <a href="${esc(proposalUrl)}" style="display:inline-block;background:${esc(
         brand.primary,
-      )};color:#ffffff;text-decoration:none;font-size:15px;font-weight:600;padding:13px 26px;border-radius:10px;">Ver minha cotação</a>
-      <p style="margin:14px 0 0;font-size:12px;color:#6b7280;">Ou copie este link: <br/><span style="color:#374151;word-break:break-all;">${esc(
+      )};color:#ffffff;text-decoration:none;font-size:15px;font-weight:600;padding:13px 26px;border-radius:10px;">${esc(
+        d.email.cta,
+      )}</a>
+      <p style="margin:14px 0 0;font-size:12px;color:#6b7280;">${esc(d.email.orCopy)} <br/><span style="color:#374151;word-break:break-all;">${esc(
         proposalUrl,
       )}</span></p>
     </td></tr>
