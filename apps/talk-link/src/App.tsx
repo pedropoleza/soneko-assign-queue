@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api, ApiError } from '@/lib/api';
-import { clearSecret, getLocationId, getSecret, requestSsoSecret, saveSecret } from '@/lib/config';
+import { clearSecret, getLocationId, getSecret, requestSsoSecret, saveSecret, type SsoResult } from '@/lib/config';
 import type { AppState, Link } from '@/types';
 import { Topbar, type TabId } from '@/components/Topbar';
 import { CreatePage } from '@/components/CreatePage';
@@ -9,6 +9,20 @@ import { ResultsPage } from '@/components/ResultsPage';
 import { LinkDetailDrawer } from '@/components/LinkDetailDrawer';
 import { PartnerDrawer } from '@/components/PartnerDrawer';
 import { Button, Input, Skeleton } from '@/components/ui';
+
+/** O que dizer quando o SSO não entregou a chave. Cada motivo tem uma saída. */
+const SSO_HINT: Record<string, string> = {
+  sem_iframe:
+    'Esta página foi aberta fora do CRM. Abra pelo menu do GoHighLevel, ou cole a chave de acesso abaixo.',
+  sem_resposta:
+    'O CRM não respondeu ao pedido de identificação. Isso acontece em Custom Menu Link comum — a entrada automática só funciona na Custom Page do app. Use o link com a chave, ou configure a Custom Page.',
+  chave_errada:
+    'Não consegui decifrar os dados do usuário: a chave de SSO cadastrada não confere com a do app. Cole a chave de acesso abaixo enquanto isso é corrigido.',
+  nao_instalado:
+    'O app ainda não está instalado nesta sub-conta. Instale por ela e abra de novo.',
+  sso_desligado: 'O SSO ainda não foi configurado no servidor.',
+  erro: 'Não consegui identificar a sub-conta automaticamente. Cole a chave de acesso abaixo.',
+};
 
 export default function App() {
   const [state, setState] = useState<AppState | null>(null);
@@ -21,6 +35,7 @@ export default function App() {
   const [partnerId, setPartnerId] = useState<string | null>(null);
   const [manualSecret, setManualSecret] = useState('');
   const [days, setDays] = useState(30);
+  const [sso, setSso] = useState<SsoResult | null>(null);
 
   const load = useCallback(async (window = days) => {
     setRefreshing(true);
@@ -36,7 +51,7 @@ export default function App() {
 
   useEffect(() => {
     (async () => {
-      if (!getSecret()) await requestSsoSecret();
+      if (!getSecret()) setSso(await requestSsoSecret());
       if (getSecret()) {
         const data = await api.state(30).catch(() => null);
 
@@ -45,7 +60,9 @@ export default function App() {
         const wanted = getLocationId();
         if (data && wanted && data.account.ghl_location_id !== wanted) {
           clearSecret();
-          if (await requestSsoSecret()) await load();
+          const again = await requestSsoSecret();
+          setSso(again);
+          if ('secret' in again) await load();
         } else if (data) {
           setState(data);
           setError(null);
@@ -76,13 +93,19 @@ export default function App() {
   }
 
   if (!state) {
+    const reason = sso && 'reason' in sso ? sso.reason : 'erro';
+    const locationId = getLocationId();
     return (
       <div className="grid min-h-screen place-items-center bg-paper px-4">
         <div className="card w-full max-w-sm p-7">
           <h1 className="text-lg font-semibold tracking-tight text-ink">Entrar</h1>
-          <p className="mt-1.5 text-sm leading-relaxed text-ink-2">
-            Abra pelo menu do seu CRM para entrar direto. Se você recebeu uma chave de acesso, cole aqui.
-          </p>
+          <p className="mt-1.5 text-sm leading-relaxed text-ink-2">{SSO_HINT[reason]}</p>
+
+          {locationId && (
+            <p className="mt-3 rounded-lg bg-surface-2 px-3 py-2 font-mono text-[11px] text-ink-3">
+              sub-conta {locationId}
+            </p>
+          )}
 
           <Input
             className="mt-5"

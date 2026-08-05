@@ -62,12 +62,27 @@ export function clearSecret() {
  * payload cifrado pelo app_secret da location. Assim ninguém precisa colar
  * segredo em URL nenhuma.
  */
-export function requestSsoSecret(timeoutMs = 4000): Promise<string | null> {
+export type SsoResult =
+  | { secret: string }
+  | { reason: 'sem_iframe' | 'sem_resposta' | 'chave_errada' | 'nao_instalado' | 'sso_desligado' | 'erro' };
+
+/**
+ * SSO do GoHighLevel: pedimos os dados do usuário ao app pai e trocamos o
+ * payload cifrado pelo app_secret da sub-conta.
+ *
+ * Só funciona na Custom Page de um app do Marketplace — é lá que o GHL
+ * responde ao `REQUEST_USER_DATA`. Num Custom Menu Link comum o pai ignora a
+ * mensagem, e é por isso que devolvemos o motivo: sem ele a tela de entrada
+ * some sem explicar nada.
+ */
+export function requestSsoSecret(timeoutMs = 4000): Promise<SsoResult> {
   return new Promise((resolve) => {
-    if (typeof window === 'undefined' || window.parent === window) return resolve(null);
+    if (typeof window === 'undefined' || window.parent === window) {
+      return resolve({ reason: 'sem_iframe' });
+    }
 
     let settled = false;
-    const finish = (value: string | null) => {
+    const finish = (value: SsoResult) => {
       if (settled) return;
       settled = true;
       window.removeEventListener('message', onMessage);
@@ -86,20 +101,25 @@ export function requestSsoSecret(timeoutMs = 4000): Promise<string | null> {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ encrypted }),
         });
-        if (!res.ok) return finish(null);
-        const data = (await res.json()) as { secret?: string };
+        const data = (await res.json().catch(() => ({}))) as { secret?: string; error?: string };
+
         if (data.secret) {
           saveSecret(data.secret);
-          return finish(data.secret);
+          return finish({ secret: data.secret });
         }
-        finish(null);
+        const map: Record<string, SsoResult> = {
+          sso_decrypt_failed: { reason: 'chave_errada' },
+          not_installed: { reason: 'nao_instalado' },
+          sso_not_configured: { reason: 'sso_desligado' },
+        };
+        finish(map[data.error ?? ''] ?? { reason: 'erro' });
       } catch {
-        finish(null);
+        finish({ reason: 'erro' });
       }
     };
 
     window.addEventListener('message', onMessage);
     window.parent.postMessage({ message: 'REQUEST_USER_DATA' }, '*');
-    setTimeout(() => finish(null), timeoutMs);
+    setTimeout(() => finish({ reason: 'sem_resposta' }), timeoutMs);
   });
 }
