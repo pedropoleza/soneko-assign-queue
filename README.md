@@ -2,6 +2,12 @@
 
 Painel interno que recebe webhooks de criação de contato do GoHighLevel (Soneko) e distribui leads em round-robin entre os consultores, com botão de pular para o próximo da fila ou para um vendedor específico.
 
+> **Outros apps neste repositório**
+> `apps/talk-link/` — **Talk Link**, app independente (banco, edge functions, app
+> no Marketplace e URL próprios) que gera links de WhatsApp por influenciador e
+> mede clique *e* mensagem efetivamente enviada.
+> Documentação: [`docs/talk-link/README.md`](docs/talk-link/README.md).
+
 ## Arquitetura
 
 - **Frontend** — Vite + React + Tailwind + Radix UI primitives. Layout wide, sem sidebar, paleta GHL (branco/cinza/azul).

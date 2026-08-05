@@ -11,3 +11,8 @@ dist
 .tsbuild/
 *.tsbuildinfo
 
+
+# apps/*
+apps/*/node_modules
+apps/*/dist
+apps/*/.tsbuild

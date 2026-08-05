@@ -1,0 +1,402 @@
+# Talk Link — links de WhatsApp com rastreio real
+
+App **novo e independente**: banco próprio (schema `wa`), edge functions próprias
+(`wa-*`), app próprio no Marketplace do GoHighLevel e URL própria. Não divide nada
+com o Soneko nem com o Spark QR além do mesmo servidor Postgres.
+
+---
+
+## 1. O problema que ele resolve
+
+Hoje o link de WhatsApp é gerado no ChatGPT e colado no Instagram. A partir daí
+não se sabe nada: quantos clicaram, quem veio de qual influenciador, e — o mais
+importante — quantos **realmente enviaram** a mensagem em vez de só abrir o
+WhatsApp e desistir.
+
+O Talk Link fecha esse funil em três medições:
+
+| Etapa | Como é medida | Confiança |
+|---|---|---|
+| **Clique** | O link curto é nosso; contamos o acesso antes do 302 | exata |
+| **Abriu o WhatsApp** | É o próprio redirect (o clique já implica isso) | exata |
+| **Enviou a mensagem** | Webhook `InboundMessage` do GHL + casamento da mensagem | exata a alta |
+
+---
+
+## 2. Como o rastreio viaja
+
+Todo o rastreio vive **na própria URL** e **dentro da mensagem**. Não existe
+página intermediária — quem clica cai direto no WhatsApp.
+
+```
+https://talk.sparkleads.com/maria-silva/black-friday?s=story&m=instagram&ct=a
+                            └── quem ──┘└─ campanha ─┘  └──── onde / como ────┘
+                            (slug legível = o "UTM" no caminho)   (nosso UTM curto)
+```
+
+| Parâmetro | Equivale a | Exemplo |
+|---|---|---|
+| `s` | `utm_source` | `bio`, `story`, `reels`, `grupo`, `status` |
+| `m` | `utm_medium` | `instagram`, `tiktok`, `whatsapp`, `email` |
+| `c` | `utm_campaign` | `blackfriday` |
+| `ct` | `utm_content` | `a`, `b` (teste A/B de criativo) |
+
+Os `utm_*` completos também são aceitos, para quem já tem o hábito de colar UTM.
+
+Depois do clique, o redirect monta:
+
+```
+https://wa.me/5511999998888?text=<mensagem>+<marcador invisível>
+```
+
+### O marcador invisível
+
+O código do link (5 caracteres, ex.: `DKPDB`) é codificado em **caracteres de
+largura zero** (`U+200B`, `U+200C`, `U+200D`, `U+2060`) grudados no fim da
+mensagem. São 20 caracteres que **não aparecem** na conversa, sobrevivem a
+copiar/colar e chegam íntegros no webhook do GHL.
+
+Modos disponíveis por link:
+
+- `invisible` (padrão) — nada visível.
+- `discreet` — `(ref: DKPDB)` no fim.
+- `visible` — `Código: DKPDB` no fim.
+- `none` — sem marcador.
+
+### As camadas de atribuição
+
+Mesmo se o marcador for perdido (a pessoa apaga, o app higieniza o texto), a
+atribuição não cai. O motor tenta, em ordem:
+
+| # | Camada | Como funciona | Confiança |
+|---|---|---|---|
+| 1 | `invisible_code` | decodifica os caracteres de largura zero | 1.00 |
+| 2 | `code` | acha `ref: XXXXX` / `#XXXXX` no texto | 1.00 |
+| 3 | `fingerprint` | texto normalizado idêntico à mensagem do link | 0.98 |
+| 4 | `prefix` | a pessoa acrescentou ou cortou algo no fim | 0.90 |
+| 5 | `head40` | os 40 primeiros caracteres batem | 0.75 |
+
+Por isso a mensagem gerada **sempre inclui o nome do parceiro** — é o que torna
+cada link textualmente único e faz a camada 3 funcionar.
+
+Casado o link, amarramos ao **clique aberto mais recente** daquele link (janela
+de 7 dias) e gravamos a conversão.
+
+---
+
+## 3. O que você precisa criar no GoHighLevel
+
+### 3.1 App novo no Marketplace
+
+`Settings → My Apps → Create App` (ou marketplace.gohighlevel.com/app/create).
+
+| Campo | Valor |
+|---|---|
+| App name | `Talk Link` |
+| Distribution type | **Sub-Account** (nível location) |
+| App type | White-label / Private (não precisa publicar) |
+| Redirect URL | `https://tbziahcpkrfiksqhuhpe.supabase.co/functions/v1/wa-oauth/callback` |
+
+Depois de criar, em **Client Keys**, gere e guarde o **Client ID** e o
+**Client Secret**.
+
+### 3.2 Escopos (Scopes)
+
+Marque exatamente estes:
+
+| Escopo | Para quê |
+|---|---|
+| `locations.readonly` | ler o nome da location na instalação |
+| `contacts.readonly` | ler o contato que mandou a mensagem |
+| `contacts.write` | gravar tag + campos de origem no contato |
+| `conversations.readonly` | ler a conversa |
+| **`conversations/message.readonly`** | **libera o webhook `InboundMessage` — sem isso não existe medição de envio** |
+| `locations/customFields.readonly` | descobrir se os campos de origem já existem |
+| `locations/customFields.write` | criar os campos de origem automaticamente |
+| `locations/tags.readonly` | listar tags |
+| `locations/tags.write` | aplicar as tags de origem |
+| `users.readonly` | identificar o usuário no SSO do iframe |
+
+> `conversations/message.readonly` é o escopo crítico. Se ele não estiver
+> marcado, o app instala, gera links e conta cliques — mas nunca confirma envio.
+
+### 3.3 Webhooks
+
+Em **App Settings → Webhooks**, aponte para:
+
+```
+https://tbziahcpkrfiksqhuhpe.supabase.co/functions/v1/wa-webhook
+```
+
+Assine estes eventos:
+
+| Evento | Obrigatório? | Para quê |
+|---|---|---|
+| `InboundMessage` | **sim** | confirma que a mensagem foi enviada de verdade |
+| `ContactCreate` | sim | costura o `contactId` quando o contato nasce depois da mensagem |
+| `ContactUpdate` | opcional | mesma costura, para contatos atualizados |
+| `INSTALL` | sim | cria a conta quando o cliente instala |
+| `UNINSTALL` | sim | desativa a conta quando desinstala |
+
+Se o app expuser uma **chave pública de assinatura de webhook**, guarde-a: com
+ela configurada, o receptor passa a exigir e validar o header `x-wh-signature`
+(RSA-SHA256 sobre o corpo cru). Sem ela configurada, a validação fica desligada.
+
+### 3.4 Página do app dentro do CRM (o iframe)
+
+Duas opções — a primeira é a boa:
+
+**Custom Page do app (com SSO):**
+`App Settings → Custom Page` → URL `https://<url-do-app>/`
+Depois, em **App Settings → SSO**, copie a **SSO Key**. Com ela configurada, o
+iframe pede os dados do usuário ao GHL (`REQUEST_USER_DATA`), manda o payload
+cifrado para `/wa-oauth/sso` e recebe a chave da conta. O cliente nunca vê
+segredo nenhum na URL.
+
+**Custom Menu Link (alternativa rápida):**
+`Settings → Custom Menu Links → Add`
+- Nome: `Links WhatsApp`
+- URL: `https://<url-do-app>/`
+- Open in: **iframe**
+
+Nesse modo, na primeira vez o cliente entra pelo link de instalação
+(`/wa-oauth/install`), que já devolve com a chave na URL e a salva no navegador.
+
+### 3.5 O número de WhatsApp
+
+O número de destino **precisa ser o número conectado ao GHL** (LC Phone /
+WhatsApp provider da location). É esse número que faz o GHL disparar o
+`InboundMessage`. Se o link apontar para um número fora do CRM, o clique é
+contado mas o envio nunca é confirmado.
+
+### 3.6 O que o app cria sozinho na location
+
+Na primeira conversão, o app cria (se não existirem) e preenche:
+
+**Campos personalizados de contato**
+- `Origem — Parceiro`
+- `Origem — Campanha`
+- `Origem — Código`
+
+**Tags**
+- `talk-link`
+- `origem-<parceiro>` (ex.: `origem-maria-silva`)
+- `campanha-<campanha>` (ex.: `campanha-black-friday`)
+
+**Nota no contato** com link, parceiro, campanha, código e como a origem foi
+confirmada.
+
+---
+
+## 4. Configuração do backend
+
+Preencha estas chaves na tabela `wa.app_config` (ou como env vars das functions,
+que têm prioridade):
+
+| Chave | Valor |
+|---|---|
+| `GHL_CLIENT_ID` | Client ID do app novo |
+| `GHL_CLIENT_SECRET` | Client Secret do app novo |
+| `GHL_OAUTH_REDIRECT_URI` | `https://tbziahcpkrfiksqhuhpe.supabase.co/functions/v1/wa-oauth/callback` |
+| `GHL_SSO_KEY` | SSO Key do app (para o iframe) |
+| `GHL_WEBHOOK_PUBLIC_KEY` | chave pública de assinatura, se o app fornecer (opcional) |
+| `WA_APP_URL` | URL pública do front (ex.: `https://talk-link.vercel.app`) |
+| `WA_CLICK_SALT` | string aleatória — sal do hash de IP dos cliques |
+| `WA_WEBHOOK_SECRET` | opcional, só se usar o webhook via Workflow (seção 7) |
+
+```sql
+select public.wa_set_config('GHL_CLIENT_ID', '...');
+select public.wa_set_config('GHL_CLIENT_SECRET', '...');
+select public.wa_set_config('GHL_OAUTH_REDIRECT_URI', 'https://tbziahcpkrfiksqhuhpe.supabase.co/functions/v1/wa-oauth/callback');
+select public.wa_set_config('GHL_SSO_KEY', '...');
+select public.wa_set_config('WA_APP_URL', 'https://...');
+select public.wa_set_config('WA_CLICK_SALT', encode(gen_random_bytes(16), 'hex'));
+```
+
+---
+
+## 5. Domínio curto (`talk.sparkleads.com`)
+
+O redirecionador é a função `wa-redirect`. Para ele atender no domínio bonito,
+coloque um proxy na frente — mesma ideia do `qr.sparkleads.com`.
+
+**Opção A — projeto Vercel dedicado** (pronto em `apps/talk-redirect/`):
+aponte o CNAME de `talk.sparkleads.com` para a Vercel e faça deploy da pasta.
+O `vercel.json` já reescreve tudo para a edge function preservando o caminho e
+a query string.
+
+**Opção B — Cloudflare Worker:**
+
+```js
+export default {
+  fetch(request) {
+    const url = new URL(request.url);
+    return fetch(
+      `https://tbziahcpkrfiksqhuhpe.supabase.co/functions/v1/wa-redirect${url.pathname}${url.search}`,
+      { headers: request.headers, redirect: 'manual' },
+    );
+  },
+};
+```
+
+Enquanto o DNS não estiver pronto, o app funciona usando a URL da própria
+função. Depois é só salvar o domínio em **Ajustes** — os links já criados passam
+a ser exibidos com o domínio novo (o slug não muda).
+
+---
+
+## 6. Deploy do front
+
+App independente em `apps/talk-link/`. Novo projeto na Vercel:
+
+| Configuração | Valor |
+|---|---|
+| Root Directory | `apps/talk-link` |
+| Framework | Vite |
+| Build Command | `npm run build` |
+| Output | `dist` |
+
+Variáveis de ambiente:
+
+```
+VITE_TALK_API_URL=https://tbziahcpkrfiksqhuhpe.supabase.co/functions/v1/wa-api
+VITE_TALK_OAUTH_URL=https://tbziahcpkrfiksqhuhpe.supabase.co/functions/v1/wa-oauth
+VITE_TALK_SHORT_DOMAIN=https://talk.sparkleads.com
+```
+
+O `vercel.json` do app já libera o embed em iframe nos domínios do GHL.
+
+---
+
+## 7. Plano B: começar antes da aprovação do app
+
+Dá para medir envio sem o app do Marketplace, usando um **Workflow**:
+
+- Trigger: `Customer Replied` (ou `Inbound Message`)
+- Ação: `Webhook` → `POST` para
+  `https://tbziahcpkrfiksqhuhpe.supabase.co/functions/v1/wa-webhook`
+- Header: `x-wa-webhook-secret: <o valor de WA_WEBHOOK_SECRET>`
+- Body (JSON customizado):
+
+```json
+{
+  "type": "InboundMessage",
+  "locationId": "{{location.id}}",
+  "contactId": "{{contact.id}}",
+  "contactName": "{{contact.name}}",
+  "phone": "{{contact.phone}}",
+  "messageId": "{{message.id}}",
+  "conversationId": "{{conversation.id}}",
+  "body": "{{message.body}}",
+  "dateAdded": "{{message.date_added}}"
+}
+```
+
+Limitação: sem OAuth não dá para gravar tag/campo no contato — as métricas
+aparecem no painel, mas a origem não volta para o CRM. Serve para validar o
+funil enquanto o app é aprovado.
+
+---
+
+## 8. Arquitetura
+
+```
+  Instagram / story / grupo
+            │  clique
+            ▼
+  talk.sparkleads.com/maria-silva/black-friday?s=story
+            │
+            ▼
+  ┌──────────────────┐   grava clique (device, origem, país)
+  │   wa-redirect    │──────────────────────────────► wa.clicks
+  └────────┬─────────┘
+           │ 302 (≈30 ms, sem página intermediária)
+           ▼
+  wa.me/55...?text=<mensagem + marcador invisível>
+           │
+           │ a pessoa aperta enviar
+           ▼
+  ┌──────────────────┐
+  │  GoHighLevel     │  InboundMessage
+  └────────┬─────────┘
+           ▼
+  ┌──────────────────┐  casa marcador → código → texto
+  │    wa-webhook    │──► wa.conversions  +  tag/campos/nota no contato
+  └──────────────────┘
+
+  ┌──────────────────┐
+  │     wa-api       │◄── iframe do app dentro do GHL
+  └──────────────────┘
+```
+
+### Endpoints
+
+| Função | URL | JWT |
+|---|---|---|
+| `wa-redirect` | `/functions/v1/wa-redirect/{slug}` | não |
+| `wa-webhook` | `/functions/v1/wa-webhook` | não |
+| `wa-oauth` | `/functions/v1/wa-oauth/{install,callback,sso}` | não |
+| `wa-api` | `/functions/v1/wa-api/*` | não (usa `x-wa-secret`) |
+
+### Banco (schema `wa`)
+
+| Tabela | O que guarda |
+|---|---|
+| `accounts` | uma linha por location instalada, com o app secret |
+| `oauth_tokens` | access/refresh token do GHL |
+| `partners` | influenciadores, lojas, parceiros |
+| `links` | campanhas: slug, código, mensagem, número, UTMs |
+| `clicks` | cada acesso: device, origem da URL, país, se virou envio |
+| `conversions` | cada mensagem confirmada, com como foi casada |
+| `templates` | mensagens salvas |
+| `webhook_events` | log bruto de tudo que o GHL manda |
+| `app_config` | configuração global |
+
+O schema `wa` **não** é exposto pelo PostgREST. Todo acesso passa pelas RPCs
+`public.wa_*` (`SECURITY DEFINER`), executadas só com a service role.
+
+---
+
+## 9. Checklist de validação
+
+1. Instalar o app na location → conferir que apareceu linha em `wa.accounts`.
+2. Abrir o app pelo menu do GHL → o painel carrega sem pedir chave (SSO ok).
+3. Salvar o número do WhatsApp em **Ajustes**.
+4. Gerar um link para um parceiro de teste.
+5. Abrir o link no celular → o WhatsApp abre com a mensagem pronta.
+6. Conferir o clique em **Métricas → Cliques recentes**.
+7. Enviar a mensagem → em até alguns segundos ela aparece em
+   **Últimos envios confirmados** com `marcador invisível`.
+8. Abrir o contato no GHL → tag `talk-link`, tags de origem, campos preenchidos
+   e a nota de origem.
+
+Se o passo 7 não acontecer:
+
+```sql
+select received_at, event_type, status, detail
+from wa.webhook_events
+order by received_at desc limit 20;
+```
+
+- Sem evento nenhum → webhook ou escopo `conversations/message.readonly` faltando.
+- `status = 'ignored'` com `no_link_match` → a mensagem chegou mas não bateu com
+  nenhum link (texto muito alterado ou link de outra location).
+- Conversão criada mas `crm_synced = false` → veja `crm_error` em
+  `wa.conversions`: normalmente é escopo de `contacts.write` faltando.
+
+---
+
+## 10. Limites conhecidos
+
+- **Cliques anônimos.** No momento do clique não sabemos o telefone de quem
+  clicou — só descobrimos quando a mensagem chega. Por isso o clique é amarrado
+  ao envio pelo clique aberto mais recente daquele link, não por identidade.
+  Em volume alto no mesmo link e no mesmo minuto, essa amarração pode trocar
+  cliques entre si; os totais por link e por parceiro continuam corretos.
+- **Preview do WhatsApp.** O robô que gera a pré-visualização do link é
+  detectado e marcado como bot — não conta como clique.
+- **Mensagem reescrita.** Se a pessoa apagar tudo e escrever do zero, nenhuma
+  camada casa. O marcador invisível cobre a maioria dos casos, porque ele
+  sobrevive a edições no meio do texto.
+- **Número fora do CRM.** Link apontando para número não conectado ao GHL conta
+  clique, mas nunca confirma envio.
