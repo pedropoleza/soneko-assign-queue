@@ -4,21 +4,26 @@ import { cn } from '@/lib/utils';
 
 type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: 'primary' | 'quiet' | 'plain' | 'danger';
-  size?: 'sm' | 'md' | 'lg';
+  size?: 'sm' | 'md';
   loading?: boolean;
 };
 
+/**
+ * Botões leves: um sólido só para a ação principal, o resto sem contorno.
+ * O estado desabilitado vira cinza neutro — azul lavado parecia defeito.
+ */
 const VARIANT: Record<NonNullable<ButtonProps['variant']>, string> = {
-  primary: 'bg-accent text-white hover:bg-accent-deep disabled:bg-accent/40',
-  quiet: 'border border-line bg-surface text-ink-2 hover:bg-surface-2 hover:text-ink disabled:opacity-40',
+  primary:
+    'bg-accent text-white shadow-[0_1px_2px_rgb(37_99_235_/_0.25)] hover:bg-[rgb(var(--accent-hover))] ' +
+    'active:scale-[0.99] disabled:bg-line disabled:text-ink-3 disabled:shadow-none',
+  quiet: 'bg-surface-2 text-ink-2 hover:bg-line hover:text-ink disabled:text-ink-3',
   plain: 'text-ink-2 hover:bg-surface-2 hover:text-ink',
-  danger: 'border border-danger/25 bg-surface text-danger hover:bg-danger-soft',
+  danger: 'text-danger hover:bg-danger-soft',
 };
 
 const SIZE = {
-  sm: 'h-8 gap-1.5 rounded-md px-2.5 text-[13px]',
-  md: 'h-9 gap-2 rounded-md px-3.5 text-sm',
-  lg: 'h-10 gap-2 rounded-md px-5 text-sm',
+  sm: 'h-8 gap-1.5 px-3 text-[13px]',
+  md: 'h-10 gap-2 px-4 text-sm',
 };
 
 export function Button({
@@ -35,7 +40,8 @@ export function Button({
       {...rest}
       disabled={disabled || loading}
       className={cn(
-        'inline-flex items-center justify-center font-medium transition-colors disabled:cursor-not-allowed',
+        'inline-flex items-center justify-center rounded-full font-medium transition duration-150',
+        'disabled:cursor-not-allowed',
         SIZE[size],
         VARIANT[variant],
         className,
@@ -55,7 +61,7 @@ export function Textarea(props: TextareaHTMLAttributes<HTMLTextAreaElement>) {
   return <textarea {...props} className={cn('field resize-none leading-relaxed', props.className)} />;
 }
 
-/** Uma pergunta do formulário: número, título e o controle. */
+/** Uma pergunta do formulário. */
 export function Step({
   n,
   title,
@@ -68,17 +74,15 @@ export function Step({
   children: ReactNode;
 }) {
   return (
-    <section className="flex gap-3.5 sm:gap-4">
-      <span className="num mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-md bg-accent-soft text-[12px] font-semibold text-accent-deep">
-        {n}
-      </span>
-      <div className="min-w-0 flex-1">
-        <div className="mb-2.5 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-          <h2 className="text-[15px] font-semibold text-ink">{title}</h2>
-          {aside}
-        </div>
-        {children}
+    <section>
+      <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+        <h2 className="flex items-baseline gap-2 text-[15px] font-semibold text-ink">
+          <span className="num text-[13px] font-medium text-ink-3">{n}</span>
+          {title}
+        </h2>
+        {aside}
       </div>
+      {children}
     </section>
   );
 }
@@ -106,19 +110,25 @@ export function Tag({
   children: ReactNode;
 }) {
   const tones = {
-    neutral: 'border-line bg-surface-2 text-ink-2',
-    accent: 'border-accent/25 bg-accent-soft text-accent-deep',
-    warn: 'border-warn/25 bg-warn-soft text-warn',
-    danger: 'border-danger/25 bg-danger-soft text-danger',
+    neutral: 'bg-surface-2 text-ink-2',
+    accent: 'bg-accent-soft text-accent-deep',
+    warn: 'bg-warn-soft text-warn',
+    danger: 'bg-danger-soft text-danger',
   };
+  return <span className={cn('tag', tones[tone])}>{children}</span>;
+}
+
+/** Inicial em círculo — usada para influenciador e para contato. */
+export function Avatar({ name, size = 'md' }: { name: string; size?: 'sm' | 'md' | 'lg' }) {
+  const sizes = { sm: 'h-7 w-7 text-[11px]', md: 'h-9 w-9 text-[13px]', lg: 'h-11 w-11 text-[15px]' };
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[11px] font-medium',
-        tones[tone],
+        'grid shrink-0 place-items-center rounded-full bg-accent-soft font-semibold text-accent-deep',
+        sizes[size],
       )}
     >
-      {children}
+      {(name || '?').slice(0, 1).toUpperCase()}
     </span>
   );
 }
@@ -135,13 +145,11 @@ export function Empty({
   action?: ReactNode;
 }) {
   return (
-    <div className="flex flex-col items-center px-6 py-16 text-center">
+    <div className="flex flex-col items-center px-6 py-14 text-center">
       {icon && (
-        <div className="mb-4 grid h-12 w-12 place-items-center rounded-lg bg-accent-soft text-accent-deep">
-          {icon}
-        </div>
+        <div className="mb-4 grid h-11 w-11 place-items-center rounded-full bg-surface-2 text-ink-3">{icon}</div>
       )}
-      <h3 className="text-base font-semibold text-ink">{title}</h3>
+      <h3 className="text-[15px] font-semibold text-ink">{title}</h3>
       {description && <p className="mt-1.5 max-w-sm text-sm leading-relaxed text-ink-2">{description}</p>}
       {action && <div className="mt-5">{action}</div>}
     </div>

@@ -1,5 +1,5 @@
 import { API_URL, getSecret } from './config';
-import type { AppState, Link, LinkDetail, Partner, Template } from '@/types';
+import type { AppState, Link, LinkDetail, Partner, PartnerDetail, Template } from '@/types';
 
 export class ApiError extends Error {
   constructor(
@@ -59,6 +59,7 @@ export type LinkInput = {
 export const api = {
   state: (days = 30) => call<AppState>('GET', `/state?days=${days}`),
   linkDetail: (id: string, days = 30) => call<LinkDetail>('GET', `/link/${id}?days=${days}`),
+  partnerDetail: (id: string, months = 6) => call<PartnerDetail>('GET', `/partner/${id}?months=${months}`),
   checkSlug: (slug: string) =>
     call<{ available: boolean; reason?: string; slug?: string }>(
       'GET',

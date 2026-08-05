@@ -155,3 +155,37 @@ export type LinkDetail = {
     message_body: string;
   }>;
 };
+
+export type MonthPoint = { month: string; clicks: number; sends: number };
+
+export type PartnerDetail = {
+  partner: {
+    id: string;
+    name: string;
+    kind: PartnerKind;
+    handle: string | null;
+    active: boolean;
+    created_at: string;
+  };
+  totals: {
+    links: number;
+    clicks: number;
+    sends: number;
+    first_at: string | null;
+    last_at: string | null;
+  };
+  by_month: MonthPoint[];
+  links: Array<{
+    id: string;
+    name: string;
+    slug: string;
+    code: string;
+    created_at: string;
+    active: boolean;
+    clicks: number;
+    sends: number;
+    last_click_at: string | null;
+    by_month: MonthPoint[];
+    short_url: string;
+  }>;
+};

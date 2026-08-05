@@ -34,6 +34,13 @@ O app faz **três perguntas** — quem indicou, sobre o quê, e a mensagem — e
 o link. Tudo o que tem um padrão razoável (nome da campanha, endereço, idioma,
 número, tipo de marcador) fica atrás de *Mais opções*.
 
+Cada influenciador é uma **pasta**: em Resultados, abrir um influenciador mostra
+todos os links dele, o desempenho de cada um e a evolução mês a mês — da pasta
+inteira e de cada link.
+
+Duas abas, só. Não existe tela de ajustes: o número de WhatsApp fica em *Mais
+opções* e o primeiro que você informar vira o padrão da conta.
+
 A resposta aparece como uma **conversa de WhatsApp**: é o jeito honesto de mostrar
 para quem não é técnico que o rastreio é mesmo invisível — a mensagem está ali,
 inteira, e não há nada de estranho nela.
@@ -54,10 +61,10 @@ src/
     CreatePage.tsx           as três perguntas
     ChatPreview.tsx          a conversa como o lead vai ver
     LinkReady.tsx            link pronto: copiar e escolher onde postar
-    ResultsPage.tsx          números, gráfico e as listas (campanha/parceiro/origem)
-    LinkDetailDrawer.tsx     detalhe de uma campanha
-    SettingsPage.tsx         número padrão e endereço dos links
-    Stats.tsx                número grande, anel de conversão, barras, ranking
+    ResultsPage.tsx          números, gráfico e as listas
+    PartnerDrawer.tsx        a pasta do influenciador (links + mês a mês)
+    LinkDetailDrawer.tsx     detalhe de um link
+    Stats.tsx                número grande, anel, barras por dia e por mês
     Topbar.tsx  ui.tsx       navegação e primitivas
 ```
 

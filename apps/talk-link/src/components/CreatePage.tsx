@@ -75,7 +75,8 @@ export function CreatePage({ state, onCreated }: { state: AppState; onCreated: (
   async function submit() {
     if (!ready) {
       if (onlyDigits(phone).length < 10) {
-        toast.error('Falta o número de WhatsApp que vai receber. Defina um padrão em Ajustes.');
+        toast.error('Falta o número de WhatsApp que vai receber — está em “Mais opções”.');
+        setMore(true);
       } else {
         toast.error('Diga quem está indicando para criar o link.');
       }
@@ -100,12 +101,17 @@ export function CreatePage({ state, onCreated }: { state: AppState; onCreated: (
         language,
         lead_name: leadName.trim() || null,
       };
-      onCreated(await api.saveLink(payload));
+      const link = await api.saveLink(payload);
+      // Sem tela de ajustes, o primeiro número informado vira o padrão da conta.
+      if (!state.account.whatsapp_phone && onlyDigits(phone)) {
+        api.saveSettings({ whatsapp_phone: onlyDigits(phone) }).catch(() => {});
+      }
+      onCreated(link);
     } catch (e) {
       const msg = e instanceof ApiError ? e.message : String(e);
       toast.error(
         msg === 'missing_destination_phone'
-          ? 'Defina o número de WhatsApp em Ajustes antes de criar o link.'
+          ? 'Informe o número de WhatsApp em “Mais opções” antes de criar o link.'
           : `Não deu para criar o link. ${msg}`,
       );
     } finally {
@@ -115,7 +121,7 @@ export function CreatePage({ state, onCreated }: { state: AppState; onCreated: (
 
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
-      <div className="card p-6 shadow-card sm:p-7">
+      <div className="card p-6 sm:p-7">
         <div className="mb-7">
           <h1 className="text-lg font-semibold tracking-tight text-ink">Criar um link</h1>
           <p className="mt-1 text-sm text-ink-2">
@@ -301,7 +307,7 @@ export function CreatePage({ state, onCreated }: { state: AppState; onCreated: (
 
       <div className="lg:sticky lg:top-24">
         <p className="eyebrow mb-2.5">Prévia</p>
-        <ChatPreview message={message} businessName={state.account.name} />
+        <ChatPreview message={message} businessName={state.account.name} phone={phone} />
       </div>
     </div>
   );

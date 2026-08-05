@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from 'react';
-import { MessageCircle } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
 import { getSecret, requestSsoSecret, saveSecret } from '@/lib/config';
 import type { AppState, Link } from '@/types';
@@ -7,8 +6,8 @@ import { Topbar, type TabId } from '@/components/Topbar';
 import { CreatePage } from '@/components/CreatePage';
 import { LinkReady } from '@/components/LinkReady';
 import { ResultsPage } from '@/components/ResultsPage';
-import { SettingsPage } from '@/components/SettingsPage';
 import { LinkDetailDrawer } from '@/components/LinkDetailDrawer';
+import { PartnerDrawer } from '@/components/PartnerDrawer';
 import { Button, Input, Skeleton } from '@/components/ui';
 
 export default function App() {
@@ -18,7 +17,8 @@ export default function App() {
   const [refreshing, setRefreshing] = useState(false);
   const [tab, setTab] = useState<TabId>('create');
   const [created, setCreated] = useState<Link | null>(null);
-  const [detailId, setDetailId] = useState<string | null>(null);
+  const [linkId, setLinkId] = useState<string | null>(null);
+  const [partnerId, setPartnerId] = useState<string | null>(null);
   const [manualSecret, setManualSecret] = useState('');
 
   const load = useCallback(async () => {
@@ -51,10 +51,9 @@ export default function App() {
   if (booting) {
     return (
       <div className="min-h-screen bg-paper">
-        <div className="h-14 border-b border-line bg-surface" />
-        <main className="mx-auto max-w-6xl space-y-4 px-4 py-6 sm:px-6">
-          <Skeleton className="h-11 w-56" />
-          <Skeleton className="h-[420px] w-full" />
+        <div className="h-12 border-b border-line bg-surface" />
+        <main className="mx-auto max-w-5xl space-y-4 px-4 py-8 sm:px-6">
+          <Skeleton className="h-[480px] w-full" />
         </main>
       </div>
     );
@@ -63,11 +62,8 @@ export default function App() {
   if (!state) {
     return (
       <div className="grid min-h-screen place-items-center bg-paper px-4">
-        <div className="card w-full max-w-sm p-7 shadow-lift">
-          <span className="mb-5 grid h-11 w-11 place-items-center rounded-lg bg-accent text-white">
-            <MessageCircle className="h-5 w-5" />
-          </span>
-          <h1 className="text-lg font-semibold tracking-tight text-ink">Talk Link</h1>
+        <div className="card w-full max-w-sm p-7">
+          <h1 className="text-lg font-semibold tracking-tight text-ink">Entrar</h1>
           <p className="mt-1.5 text-sm leading-relaxed text-ink-2">
             Abra pelo menu do seu CRM para entrar direto. Se você recebeu uma chave de acesso, cole aqui.
           </p>
@@ -101,8 +97,6 @@ export default function App() {
   return (
     <div className="min-h-screen bg-paper">
       <Topbar
-        accountName={state.account.name}
-        isLive={!error}
         activeTab={tab}
         onTabChange={(t) => {
           setTab(t);
@@ -111,7 +105,7 @@ export default function App() {
         isRefreshing={refreshing}
       />
 
-      <main className="mx-auto max-w-6xl px-4 py-6 pb-20 sm:px-6">
+      <main className="mx-auto max-w-5xl px-4 py-8 pb-20 sm:px-6">
         {tab === 'create' &&
           (created ? (
             <LinkReady
@@ -133,12 +127,25 @@ export default function App() {
             />
           ))}
 
-        {tab === 'results' && <ResultsPage state={state} onRefresh={load} onOpenLink={setDetailId} />}
-
-        {tab === 'settings' && <SettingsPage state={state} onRefresh={load} />}
+        {tab === 'results' && (
+          <ResultsPage
+            state={state}
+            onRefresh={load}
+            onOpenLink={setLinkId}
+            onOpenPartner={setPartnerId}
+          />
+        )}
       </main>
 
-      <LinkDetailDrawer linkId={detailId} onClose={() => setDetailId(null)} />
+      <PartnerDrawer
+        partnerId={partnerId}
+        onClose={() => setPartnerId(null)}
+        onOpenLink={(id) => {
+          setPartnerId(null);
+          setLinkId(id);
+        }}
+      />
+      <LinkDetailDrawer linkId={linkId} onClose={() => setLinkId(null)} />
     </div>
   );
 }

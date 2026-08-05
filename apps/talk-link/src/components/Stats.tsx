@@ -1,4 +1,4 @@
-import type { SeriesPoint } from '@/types';
+import type { MonthPoint, SeriesPoint } from '@/types';
 import { cn, pct } from '@/lib/utils';
 
 /** Número grande. O rótulo vem depois do valor — o olho pega o número primeiro. */
@@ -158,5 +158,47 @@ export function RankRow({
         </div>
       </div>
     </Wrapper>
+  );
+}
+
+/** Barras por mês — mesma leitura das barras diárias, na escala da pasta. */
+export function MonthBars({ months }: { months: MonthPoint[] }) {
+  const max = Math.max(1, ...months.map((m) => m.clicks));
+  if (!months.length) {
+    return <div className="px-6 py-10 text-center text-sm text-ink-3">Sem histórico.</div>;
+  }
+
+  const label = (m: string) =>
+    new Date(`${m}T12:00:00`).toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '');
+
+  return (
+    <div className="px-5 pb-4 pt-3">
+      <div className="flex h-28 items-end gap-2">
+        {months.map((m) => (
+          <div
+            key={m.month}
+            className="group flex h-full flex-1 items-end"
+            title={`${m.clicks} cliques · ${m.sends} enviaram`}
+          >
+            <div
+              className="relative w-full overflow-hidden rounded-lg bg-accent/15 transition group-hover:bg-accent/25"
+              style={{ height: `${Math.max(6, (m.clicks / max) * 100)}%` }}
+            >
+              <div
+                className="absolute inset-x-0 bottom-0 rounded-lg bg-accent"
+                style={{ height: `${m.clicks ? (m.sends / m.clicks) * 100 : 0}%` }}
+              />
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="mt-2 flex gap-2">
+        {months.map((m) => (
+          <div key={m.month} className="flex-1 text-center text-[11px] text-ink-3">
+            {label(m.month)}
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }

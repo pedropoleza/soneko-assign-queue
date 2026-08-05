@@ -1,14 +1,14 @@
 import { useMemo, useState } from 'react';
-import { Check, Copy, LineChart, Send, Trash2 } from 'lucide-react';
+import { Check, ChevronRight, Copy, FolderOpen, Send, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import type { AppState, Link } from '@/types';
 import { placementLabel } from '@/lib/trackingUrl';
 import { copyToClipboard, pct, relativeTime } from '@/lib/utils';
 import { BigStat, DayBars, RankRow, Ring } from './Stats';
-import { Button, Chip, Empty, Tag } from './ui';
+import { Avatar, Button, Chip, Empty, Tag } from './ui';
 
-type View = 'campanhas' | 'parceiros' | 'origens';
+type View = 'pastas' | 'links' | 'origens';
 
 const MATCH_LABEL: Record<string, string> = {
   invisible_code: 'confirmado pelo código',
@@ -23,23 +23,26 @@ export function ResultsPage({
   state,
   onRefresh,
   onOpenLink,
+  onOpenPartner,
 }: {
   state: AppState;
   onRefresh: () => void;
   onOpenLink: (id: string) => void;
+  onOpenPartner: (id: string) => void;
 }) {
-  const [view, setView] = useState<View>('campanhas');
+  const [view, setView] = useState<View>('pastas');
   const [copied, setCopied] = useState<string | null>(null);
 
   const t = state.totals;
-  const links = useMemo(() => [...state.links].sort((a, b) => b.sends - a.sends || b.clicks - a.clicks), [state.links]);
+  const links = useMemo(
+    () => [...state.links].sort((a, b) => b.sends - a.sends || b.clicks - a.clicks),
+    [state.links],
+  );
   const partners = useMemo(
     () => [...state.partners].sort((a, b) => b.sends - a.sends || b.clicks - a.clicks),
     [state.partners],
   );
   const sources = state.sources?.by_src ?? [];
-
-  const maxPartner = Math.max(1, ...partners.map((p) => p.clicks));
   const maxSource = Math.max(1, ...sources.map((s) => s.clicks));
 
   async function copy(l: Link) {
@@ -63,7 +66,7 @@ export function ResultsPage({
   if (!state.links.length) {
     return (
       <Empty
-        icon={<LineChart className="h-5 w-5" />}
+        icon={<FolderOpen className="h-5 w-5" />}
         title="Ainda não há nada para medir"
         description="Crie o primeiro link e os cliques e envios começam a aparecer aqui na hora."
       />
@@ -72,17 +75,10 @@ export function ResultsPage({
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-lg font-semibold tracking-tight text-ink">Resultados</h1>
-        <p className="mt-1 text-sm text-ink-2">Últimos {state.window_days} dias.</p>
-      </div>
-
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
-        <BigStat value={t.clicks} label="Clicaram no link" sub={`${t.unique_clicks} pessoas diferentes`} />
+      <div className="grid grid-cols-3 gap-3 sm:gap-4">
+        <BigStat value={t.clicks} label="Clicaram" sub={`${t.unique_clicks} pessoas`} />
         <BigStat value={t.sends} label="Mandaram mensagem" sub="confirmado no CRM" tone="accent" />
-        <div className="col-span-2 sm:col-span-1">
-          <BigStat value={pct(t.sends, t.clicks)} label="Viraram conversa" sub="de cada 100 que clicaram" />
-        </div>
+        <BigStat value={pct(t.sends, t.clicks)} label="Viraram conversa" sub={`nos últimos ${state.window_days} dias`} />
       </div>
 
       <div className="card">
@@ -94,75 +90,86 @@ export function ResultsPage({
       </div>
 
       <div className="card overflow-hidden">
-        <div className="flex flex-wrap items-center gap-1 border-b border-line px-3 py-3">
+        <div className="flex flex-wrap items-center gap-1.5 px-4 py-3.5">
           {(
             [
-              ['campanhas', `Campanhas (${links.length})`],
-              ['parceiros', `Parceiros (${partners.length})`],
+              ['pastas', `Influenciadores (${partners.length})`],
+              ['links', `Todos os links (${links.length})`],
               ['origens', 'Onde foi postado'],
             ] as const
           ).map(([id, label]) => (
-            <Chip key={id} on={view === id} onClick={() => setView(id)} className="px-3 py-1.5 text-[13px]">
+            <Chip key={id} on={view === id} onClick={() => setView(id)}>
               {label}
             </Chip>
           ))}
         </div>
 
-        {view === 'campanhas' && (
-          <ul className="divide-y divide-line">
-            {links.map((l) => (
-              <li key={l.id} className="group flex items-center gap-4 px-5 py-4 transition hover:bg-surface-2">
-                <Ring part={l.sends} total={l.clicks} />
+        {/* Pastas: um influenciador por linha, com o que ele já rendeu. */}
+        {view === 'pastas' &&
+          (partners.length === 0 ? (
+            <Empty title="Nenhum influenciador ainda" description="Ele é criado junto com o primeiro link." />
+          ) : (
+            <ul className="divide-y divide-line border-t border-line">
+              {partners.map((p) => (
+                <li key={p.id}>
+                  <button
+                    onClick={() => onOpenPartner(p.id)}
+                    className="flex w-full items-center gap-3.5 px-5 py-4 text-left transition hover:bg-surface-2"
+                  >
+                    <Avatar name={p.name} />
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-[15px] font-medium text-ink">{p.name}</div>
+                      <div className="mt-0.5 text-[12px] text-ink-3">
+                        {p.links} {p.links === 1 ? 'link' : 'links'} · {p.clicks} cliques
+                      </div>
+                    </div>
+                    <div className="num shrink-0 text-right">
+                      <div className="text-lg font-semibold leading-none text-ink">{p.sends}</div>
+                      <div className="mt-1 text-[11px] text-ink-3">mandaram</div>
+                    </div>
+                    <Ring part={p.sends} total={p.clicks} size={38} />
+                    <ChevronRight className="h-4 w-4 shrink-0 text-ink-3" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ))}
 
+        {view === 'links' && (
+          <ul className="divide-y divide-line border-t border-line">
+            {links.map((l) => (
+              <li key={l.id} className="group flex items-center gap-3.5 px-5 py-4 transition hover:bg-surface-2">
+                <Ring part={l.sends} total={l.clicks} size={38} />
                 <button onClick={() => onOpenLink(l.id)} className="min-w-0 flex-1 text-left">
                   <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-                    <span className="truncate text-[15px] font-semibold text-ink">{l.name}</span>
+                    <span className="truncate text-[15px] font-medium text-ink">{l.name}</span>
                     {l.partner_name && <Tag tone="accent">{l.partner_name}</Tag>}
                   </div>
-                  <div className="mt-1 flex flex-wrap items-center gap-x-2 text-[12px] text-ink-3">
-                    <span className="truncate font-mono">/{l.slug}</span>
-                    <span>·</span>
-                    <span>{l.last_click_at ? `último clique ${relativeTime(l.last_click_at)}` : 'sem cliques ainda'}</span>
+                  <div className="mt-0.5 truncate text-[12px] text-ink-3">
+                    /{l.slug} ·{' '}
+                    {l.last_click_at ? `último clique ${relativeTime(l.last_click_at)}` : 'sem cliques ainda'}
                   </div>
                 </button>
-
                 <div className="num shrink-0 text-right">
-                  <div className="text-xl font-semibold leading-none text-accent-deep">{l.sends}</div>
-                  <div className="mt-1 text-[11px] text-ink-3">de {l.clicks} cliques</div>
+                  <div className="text-lg font-semibold leading-none text-ink">{l.sends}</div>
+                  <div className="mt-1 text-[11px] text-ink-3">de {l.clicks}</div>
                 </div>
-
-                <div className="flex shrink-0 items-center gap-0.5">
+                <div className="flex shrink-0 items-center">
                   <button
                     onClick={() => copy(l)}
                     title="Copiar link"
-                    className="rounded-lg p-2 text-ink-3 transition hover:bg-surface hover:text-ink"
+                    className="rounded-full p-2 text-ink-3 transition hover:bg-line hover:text-ink"
                   >
                     {copied === l.id ? <Check className="h-4 w-4 text-accent" /> : <Copy className="h-4 w-4" />}
                   </button>
                   <button
                     onClick={() => archive(l)}
                     title="Arquivar"
-                    className="rounded-lg p-2 text-ink-3 opacity-0 transition hover:bg-danger-soft hover:text-danger focus-visible:opacity-100 group-hover:opacity-100"
+                    className="rounded-full p-2 text-ink-3 opacity-0 transition hover:bg-danger-soft hover:text-danger focus-visible:opacity-100 group-hover:opacity-100"
                   >
                     <Trash2 className="h-4 w-4" />
                   </button>
                 </div>
-              </li>
-            ))}
-          </ul>
-        )}
-
-        {view === 'parceiros' && (
-          <ul className="divide-y divide-line">
-            {partners.map((p) => (
-              <li key={p.id}>
-                <RankRow
-                  label={p.name}
-                  meta={`${p.links} ${p.links === 1 ? 'campanha' : 'campanhas'}`}
-                  clicks={p.clicks}
-                  sends={p.sends}
-                  max={maxPartner}
-                />
               </li>
             ))}
           </ul>
@@ -175,7 +182,7 @@ export function ResultsPage({
               description="Ao copiar um link, escolha onde vai postar (bio, story, grupo…). A comparação aparece aqui."
             />
           ) : (
-            <ul className="divide-y divide-line">
+            <ul className="divide-y divide-line border-t border-line">
               {sources.map((s) => (
                 <li key={s.src}>
                   <RankRow label={placementLabel(s.src)} clicks={s.clicks} sends={s.sends} max={maxSource} />
@@ -196,12 +203,10 @@ export function ResultsPage({
             description="Assim que alguém enviar, aparece aqui — e a origem já entra no contato do CRM."
           />
         ) : (
-          <ul className="divide-y divide-line">
-            {state.recent_sends.slice(0, 12).map((s) => (
+          <ul className="divide-y divide-line border-t border-line">
+            {state.recent_sends.slice(0, 10).map((s) => (
               <li key={s.id} className="flex items-center gap-3 px-5 py-3">
-                <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-accent-soft text-[12px] font-semibold text-accent-deep">
-                  {(s.contact_name ?? '?').slice(0, 1).toUpperCase()}
-                </span>
+                <Avatar name={s.contact_name ?? '?'} size="sm" />
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-sm font-medium text-ink">{s.contact_name ?? 'Contato'}</div>
                   <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[12px] text-ink-3">

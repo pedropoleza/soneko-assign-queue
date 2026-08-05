@@ -106,6 +106,17 @@ Deno.serve(async (req: Request) => {
       return json(withUrls(data));
     }
 
+    // A "pasta" do influenciador: links, desempenho de cada um e mês a mês.
+    if (req.method === 'GET' && seg[0] === 'partner' && seg[1]) {
+      const { data, error } = await db.rpc('wa_partner_detail', {
+        p_secret: secret,
+        p_id: seg[1],
+        p_months: Number(url.searchParams.get('months') ?? 6) || 6,
+      });
+      if (error) return json({ error: error.message }, 400);
+      return json(withUrls(data));
+    }
+
     if (req.method === 'GET' && seg[0] === 'report') {
       const end = url.searchParams.get('end') ?? new Date().toISOString();
       const start =

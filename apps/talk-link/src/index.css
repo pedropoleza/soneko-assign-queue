@@ -5,41 +5,39 @@
 @tailwind utilities;
 
 /* ---------------------------------------------------------------------------
-   Mesma linguagem visual dos outros painéis de iframe do GoHighLevel:
-   fundo claro, cartões brancos, cinza-azulado (ink) e o azul do GHL como ação.
-   Os tokens são semânticos para os componentes não conhecerem cor nenhuma.
+   Mesma família dos outros painéis de iframe do GoHighLevel — fundo claro,
+   cartões brancos, neutro cinza-azulado, azul do GHL como ação — mas com a mão
+   mais leve: linhas quase invisíveis, superfícies chapadas, nada de caixa
+   dentro de caixa.
 
-   Tema único, claro, de propósito: o app vive dentro do chrome do GHL, que é
-   claro. Um modo escuro aqui brigaria com a moldura em volta.
+   Tema único e claro, de propósito: o app vive dentro do chrome do CRM.
    --------------------------------------------------------------------------- */
 
 @layer base {
   :root {
-    --paper: 248 250 252; /* ink-50  */
+    --paper: 250 251 253;
     --surface: 255 255 255;
-    --surface-2: 248 250 252;
-    --line: 226 232 240; /* ink-200 */
-    --line-strong: 203 213 225; /* ink-300 */
+    --surface-2: 246 248 251;
+    --line: 234 239 245;
+    --line-strong: 214 222 231;
 
-    --ink: 15 23 42; /* ink-900 */
-    --ink-2: 71 85 105; /* ink-600 */
-    --ink-3: 148 163 184; /* ink-400 */
+    --ink: 17 24 39;
+    --ink-2: 82 95 115;
+    --ink-3: 145 158 175;
 
-    --accent: 37 99 235; /* brand-600 */
-    --accent-deep: 29 78 216; /* brand-700 */
-    --accent-soft: 239 246 255; /* brand-50  */
-
-    --btn: 37 99 235;
-    --btn-ink: 255 255 255;
+    --accent: 37 99 235;
+    --accent-hover: 59 130 246;
+    --accent-deep: 29 78 216;
+    --accent-soft: 239 246 255;
 
     --warn: 180 83 9;
-    --warn-soft: 254 243 199;
+    --warn-soft: 254 246 229;
     --danger: 190 18 60;
-    --danger-soft: 255 241 242;
+    --danger-soft: 255 244 246;
 
-    /* A prévia imita a tela do WhatsApp — essas cores são do app, não do painel. */
-    --chat-bg: 231 221 212;
-    --chat-bubble: 217 253 211;
+    /* A prévia imita a tela do WhatsApp — cores do app, não do painel. */
+    --chat-bg: 233 224 216;
+    --chat-bubble: 216 252 209;
     --chat-ink: 17 27 33;
   }
 
@@ -52,36 +50,32 @@
   body {
     background: rgb(var(--paper));
     color: rgb(var(--ink));
+    /* Inter puro. Os alternates (cv11/ss01) deixavam as letras com aparência
+       estranha para quem está acostumado com a fonte padrão do GHL. */
     font-family: Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-    font-feature-settings: 'cv11', 'ss01';
     -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 
   h1,
   h2,
   h3 {
-    letter-spacing: -0.011em;
+    letter-spacing: -0.014em;
     text-wrap: balance;
   }
 
   :focus-visible {
-    outline: 2px solid rgb(var(--accent) / 0.45);
+    outline: 2px solid rgb(var(--accent) / 0.4);
     outline-offset: 2px;
-    border-radius: 6px;
+    border-radius: 8px;
   }
 }
 
 @layer components {
+  /* Uma linha de contorno e uma sombra de um pixel. Nada mais. */
   .card {
-    @apply rounded-xl border border-line bg-surface shadow-card;
-  }
-
-  .card-header {
-    @apply flex items-center justify-between gap-3 border-b border-line px-5 py-3.5;
-  }
-
-  .card-title {
-    @apply text-sm font-semibold tracking-tight text-ink;
+    @apply rounded-xl border border-line bg-surface;
+    box-shadow: 0 1px 2px rgb(17 24 39 / 0.03);
   }
 
   .eyebrow {
@@ -90,44 +84,32 @@
 
   .num {
     font-variant-numeric: tabular-nums;
-    letter-spacing: -0.02em;
-  }
-
-  .label {
-    @apply mb-1.5 block text-xs font-medium text-ink-2;
+    letter-spacing: -0.022em;
   }
 
   .field {
-    @apply w-full rounded-md border border-line bg-surface px-3 py-2 text-sm text-ink outline-none
-           transition-colors placeholder:text-ink-3
-           focus:border-accent focus:ring-2 focus:ring-accent/15
-           disabled:cursor-not-allowed disabled:bg-surface-2;
+    @apply w-full rounded-lg border border-line bg-surface px-3.5 py-2.5 text-sm text-ink outline-none
+           transition duration-150 placeholder:text-ink-3
+           hover:border-line-strong
+           focus:border-accent focus:ring-4 focus:ring-accent/10
+           disabled:cursor-not-allowed disabled:bg-surface-2 disabled:text-ink-3;
   }
 
-  /* Escolha em linha. Discreto por padrão, azul do GHL quando selecionado. */
+  /* Escolha em linha: preenchimento suave, sem contorno. Fica leve mesmo
+     quando há dez deles lado a lado. */
   .chip {
-    @apply inline-flex select-none items-center gap-2 rounded-md border border-line bg-surface
-           px-3 py-1.5 text-[13px] font-medium text-ink-2 transition-colors
-           hover:border-line-strong hover:bg-surface-2 hover:text-ink;
+    @apply inline-flex select-none items-center gap-2 rounded-full bg-surface-2 px-3.5 py-2
+           text-[13px] font-medium text-ink-2 transition duration-150
+           hover:bg-line hover:text-ink;
   }
 
   .chip-on {
-    @apply border-accent bg-accent-soft text-accent-deep
-           hover:border-accent hover:bg-accent-soft hover:text-accent-deep;
+    @apply bg-accent-soft text-accent-deep shadow-[inset_0_0_0_1px_rgb(var(--accent)/0.35)]
+           hover:bg-accent-soft hover:text-accent-deep;
   }
 
-  .pill {
-    @apply inline-flex items-center gap-1.5 rounded-full border border-line bg-surface px-2.5 py-1
-           text-xs font-medium text-ink-2;
-  }
-
-  .pill-brand {
-    @apply inline-flex items-center gap-1.5 rounded-full border border-accent/25 bg-accent-soft px-2.5 py-1
-           text-xs font-medium text-accent-deep;
-  }
-
-  .table-row {
-    @apply border-b border-line transition-colors last:border-0 hover:bg-surface-2;
+  .tag {
+    @apply inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium;
   }
 }
 
@@ -153,7 +135,7 @@
   }
 
   .rise {
-    animation: rise 220ms ease-out both;
+    animation: rise 240ms cubic-bezier(0.22, 1, 0.36, 1) both;
   }
 
   .chat-paper {

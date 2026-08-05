@@ -65,7 +65,7 @@ export function LinkReady({
               <div className="flex min-w-0 flex-1 items-center rounded-xl border border-line bg-surface-2 px-4 py-3">
                 <span className="truncate font-mono text-[13px] text-ink">{pretty}</span>
               </div>
-              <Button size="lg" onClick={copy} className="sm:w-auto">
+              <Button onClick={copy} className="sm:w-auto">
                 {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
                 {copied ? 'Copiado' : 'Copiar'}
               </Button>
@@ -97,7 +97,7 @@ export function LinkReady({
             </p>
           </div>
 
-          <ChatPreview message={link.message} businessName={businessName} />
+          <ChatPreview message={link.message} businessName={businessName} phone={link.destination_phone} />
         </div>
 
         <div className="flex flex-col gap-2 border-t border-line px-6 py-4 sm:flex-row sm:px-8">
