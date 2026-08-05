@@ -2,10 +2,29 @@ import { useMemo, useState } from 'react';
 import { ArrowUpRight, Check, Copy, Plus } from 'lucide-react';
 import { toast } from 'sonner';
 import type { Link } from '@/types';
+import { directWhatsappUrl } from '@/lib/marker';
 import { buildTrackedUrl, PLACEMENTS } from '@/lib/trackingUrl';
 import { copyToClipboard } from '@/lib/utils';
 import { Button, Chip } from './ui';
 import { ChatPreview } from './ChatPreview';
+
+/**
+ * Os dois formatos do mesmo link. O rastreado passa pelo nosso endereço e conta
+ * o clique; o direto vai reto para o WhatsApp. Nos dois casos o marcador
+ * invisível viaja dentro da mensagem, então o envio é atribuído igual.
+ */
+const FORMATS = [
+  {
+    value: 'tracked' as const,
+    label: 'Link rastreado',
+    note: 'Conta o clique e o envio. É o que você quer na maioria das vezes.',
+  },
+  {
+    value: 'direct' as const,
+    label: 'Link direto do WhatsApp',
+    note: 'Abre o WhatsApp sem passar por nós: conta o envio, mas não o clique.',
+  },
+];
 
 /**
  * A tela de "pronto". Substitui o formulário em vez de aparecer ao lado dele:
@@ -23,14 +42,22 @@ export function LinkReady({
   onSeeResults: () => void;
 }) {
   const [placement, setPlacement] = useState('');
+  const [format, setFormat] = useState<'tracked' | 'direct'>('tracked');
   const [copied, setCopied] = useState(false);
 
   const url = useMemo(() => {
     const p = PLACEMENTS.find((x) => x.value === placement);
+    if (format === 'direct') {
+      return directWhatsappUrl(link.destination_phone, link.message, link.code, { src: p?.value });
+    }
     return buildTrackedUrl(link.short_url, { src: p?.value, medium: p?.medium });
-  }, [link.short_url, placement]);
+  }, [format, link.code, link.destination_phone, link.message, link.short_url, placement]);
 
-  const pretty = url.replace(/^https?:\/\//, '');
+  // O link direto tem a mensagem inteira dentro da URL; mostrar tudo vira ruído.
+  const pretty =
+    format === 'direct'
+      ? `api.whatsapp.com/send/?phone=${link.destination_phone.replace(/\D/g, '')}&text=…`
+      : url.replace(/^https?:\/\//, '');
 
   async function copy() {
     if (!(await copyToClipboard(url))) return toast.error('Não consegui copiar. Selecione e copie à mão.');
@@ -62,6 +89,18 @@ export function LinkReady({
         <div className="grid gap-6 px-6 py-6 sm:px-8 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start">
           <div className="space-y-6">
           <div>
+            <div className="mb-2.5 flex flex-wrap gap-1.5">
+              {FORMATS.map((f) => (
+                <Chip
+                  key={f.value}
+                  on={format === f.value}
+                  onClick={() => setFormat(f.value)}
+                  className="px-3 py-1.5 text-[13px]"
+                >
+                  {f.label}
+                </Chip>
+              ))}
+            </div>
             <div className="flex flex-col gap-2 sm:flex-row">
               <div className="flex min-w-0 flex-1 items-center rounded-xl border border-line bg-surface-2 px-4 py-3">
                 <span className="truncate font-mono text-[13px] text-ink">{pretty}</span>
@@ -72,7 +111,7 @@ export function LinkReady({
               </Button>
             </div>
             <p className="mt-2 text-[12px] text-ink-3">
-              Quem clicar cai direto na conversa, sem passar por página nenhuma.
+              {FORMATS.find((f) => f.value === format)?.note}
             </p>
           </div>
 
@@ -94,7 +133,9 @@ export function LinkReady({
               ))}
             </div>
             <p className="mt-2 text-[12px] text-ink-3">
-              Muda só o fim do endereço. Depois você compara qual lugar trouxe mais gente.
+              {format === 'direct'
+                ? 'Vai dentro da mensagem, invisível. Depois você compara qual lugar trouxe mais gente.'
+                : 'Muda só o fim do endereço. Depois você compara qual lugar trouxe mais gente.'}
             </p>
           </div>
 

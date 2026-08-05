@@ -51,17 +51,58 @@ https://wa.me/5511999998888?text=<mensagem>+<marcador invisível>
 
 ### O marcador invisível
 
-O código do link (5 caracteres, ex.: `DKPDB`) é codificado em **caracteres de
-largura zero** (`U+200B`, `U+200C`, `U+200D`, `U+2060`) grudados no fim da
-mensagem. São 20 caracteres que **não aparecem** na conversa, sobrevivem a
-copiar/colar e chegam íntegros no webhook do GHL.
+O marcador é codificado em **caracteres de largura zero** (`U+200B`, `U+200C`,
+`U+200D`, `U+2060`) grudados no fim da mensagem. Cada byte vira 4 símbolos.
+Eles **não aparecem** na conversa, sobrevivem a copiar/colar e chegam íntegros
+no webhook do GHL.
+
+O conteúdo não é só o código do link:
+
+```
+DKPDB*story*a
+└─┬─┘ └─┬─┘ └┬┘
+  │     │    └── content — variação criativa (`ct` da URL)
+  │     └─────── src     — onde foi postado (`s` da URL)
+  └───────────── code    — o link, e com ele o influenciador e a campanha
+```
+
+| Payload | Tamanho invisível | Quando acontece |
+|---|---|---|
+| `DKPDB` | 20 caracteres | link sem origem marcada |
+| `DKPDB*story` | 44 caracteres | o normal: chip de origem escolhido |
+| `DKPDB*story*a` | 60 caracteres | com teste A/B de criativo |
+
+Por que a origem vai **dentro da mensagem** e não só no clique: a mensagem
+viaja. Ela é encaminhada para um amigo, o link do WhatsApp é colado direto na
+bio sem passar pelo nosso domínio, a gravação do clique falha. Em todos esses
+casos o texto é a única coisa que sobra — e ele continua sabendo de onde veio.
+Payload só com o código continua válido, então links antigos não quebram.
 
 Modos disponíveis por link:
 
-- `invisible` (padrão) — nada visível.
+- `invisible` (padrão) — nada visível, e o único que carrega origem.
 - `discreet` — `(ref: DKPDB)` no fim.
 - `visible` — `Código: DKPDB` no fim.
 - `none` — sem marcador.
+
+### Os dois formatos do link
+
+O mesmo link pode ser distribuído de duas formas. As duas atribuem o **envio**;
+só uma delas conta o **clique**.
+
+| | Link rastreado | Link direto do WhatsApp |
+|---|---|---|
+| Endereço | `talk.sparkleads.com/gabriel/agosto` | `api.whatsapp.com/send/?phone=…&text=…` |
+| Conta clique | sim | não |
+| Conta envio | sim | sim |
+| Origem (`src`) | da URL **e** do marcador | do marcador |
+| Bom para | tudo | onde não dá para usar link encurtado |
+
+`wa.me` e `api.whatsapp.com/send/` são a mesma coisa: o primeiro redireciona
+para o segundo. Ambos aceitam **só** `phone` e `text` — segmento de caminho
+extra devolve `not_found=1` e parâmetro extra o Meta descarta silenciosamente
+(testado). É exatamente por isso que o que precisamos medir viaja *dentro* do
+`text`, e não ao lado dele.
 
 ### As camadas de atribuição
 
@@ -81,6 +122,41 @@ cada link textualmente único e faz a camada 3 funcionar.
 
 Casado o link, amarramos ao **clique aberto mais recente** daquele link (janela
 de 7 dias) e gravamos a conversão.
+
+### De onde sai cada métrica
+
+O mapeamento completo — o que é medido, de onde vem e o que chega no CRM:
+
+| Métrica | Fonte | Guardado em | Vale sem clique? |
+|---|---|---|---|
+| Clique | `GET` no redirecionador | `wa.clicks` | — |
+| Envio confirmado | webhook `InboundMessage` | `wa.conversions` | sim |
+| Influenciador | `code` do marcador → link → parceiro | `conversions.partner_id` | sim |
+| Campanha | `code` do marcador → link | `conversions.link_id` | sim |
+| Origem (`src`) | marcador → clique → padrão do link | `conversions.src` | sim, pelo marcador |
+| Criativo (`content`) | marcador → clique → padrão do link | `conversions.content` | sim, pelo marcador |
+| Canal (`medium`) | só a URL do clique | `clicks.medium` | não |
+| Dispositivo / país | cabeçalhos do clique | `clicks.*` | não |
+| Confiança | camada que casou | `conversions.confidence` | sim |
+
+`conversions.src_source` registra **como** soubemos a origem: `marker` (veio
+dentro da mensagem), `click` (casamos com um clique) ou `link` (padrão do link).
+Marcador ganha do clique — ele veio nesta mensagem, o clique é um palpite por
+proximidade de tempo.
+
+Cliques e envios são contados cada um na sua fonte e reunidos por origem no
+relatório, então um envio que chegou sem clique aparece do mesmo jeito.
+
+No contato do GHL isso vira:
+
+| Onde | Conteúdo |
+|---|---|
+| Tags | `talk-link`, `origem-<parceiro>`, `campanha-<campanha>`, `local-<origem>` |
+| Campo `wa_origem_parceiro` | nome do influenciador |
+| Campo `wa_origem_campanha` | nome da campanha |
+| Campo `wa_origem_codigo` | código do link |
+| Campo `wa_origem_local` | onde foi postado |
+| Nota | resumo legível com tudo acima + camada de confirmação + horário |
 
 ---
 
@@ -225,14 +301,16 @@ Na primeira conversão, o app cria (se não existirem) e preenche:
 - `Origem — Parceiro`
 - `Origem — Campanha`
 - `Origem — Código`
+- `Origem — Onde`
 
 **Tags**
 - `talk-link`
 - `origem-<parceiro>` (ex.: `origem-maria-silva`)
 - `campanha-<campanha>` (ex.: `campanha-black-friday`)
+- `local-<origem>` (ex.: `local-story`) — só quando a origem é conhecida
 
-**Nota no contato** com link, parceiro, campanha, código e como a origem foi
-confirmada.
+**Nota no contato** com link, parceiro, campanha, onde foi postado, código e
+como a origem foi confirmada.
 
 ---
 

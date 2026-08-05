@@ -184,6 +184,8 @@ Deno.serve(async (req: Request) => {
     p_body: body,
     p_code: found?.code ?? null,
     p_code_source: found?.source ?? null,
+    p_src: found?.src ?? null,
+    p_content: found?.content ?? null,
     p_occurred_at: occurredAt,
   });
 
@@ -214,6 +216,7 @@ Deno.serve(async (req: Request) => {
         slug: (link?.slug as string) ?? '',
         matchedBy: (result.matched_by as string) ?? '',
         occurredAt: new Date(occurredAt).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }),
+        src: (result.src as string) ?? null,
       });
       await db.rpc('wa_mark_synced', {
         p_conversion_id: result.conversion_id,

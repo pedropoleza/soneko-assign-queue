@@ -133,6 +133,7 @@ export const ATTRIBUTION_FIELDS = [
   { key: 'wa_origem_parceiro', name: 'Origem — Parceiro' },
   { key: 'wa_origem_campanha', name: 'Origem — Campanha' },
   { key: 'wa_origem_codigo', name: 'Origem — Código' },
+  { key: 'wa_origem_local', name: 'Origem — Onde' },
 ] as const;
 
 const fieldCache = new Map<string, Record<string, string>>();
@@ -187,6 +188,8 @@ export type AttributionPayload = {
   slug: string;
   matchedBy: string;
   occurredAt: string;
+  /** Onde o link foi postado: story, bio, tiktok… */
+  src?: string | null;
 };
 
 function slugify(s: string): string {
@@ -211,11 +214,13 @@ export async function writeAttribution(
   const tags = ['talk-link'];
   if (a.partnerName) tags.push(`origem-${slugify(a.partnerName)}`);
   if (a.linkName) tags.push(`campanha-${slugify(a.linkName)}`);
+  if (a.src) tags.push(`local-${slugify(a.src)}`);
 
   const customFields = [
     { id: fields.wa_origem_parceiro, value: a.partnerName ?? '' },
     { id: fields.wa_origem_campanha, value: a.linkName },
     { id: fields.wa_origem_codigo, value: a.code },
+    { id: fields.wa_origem_local, value: a.src ?? '' },
   ].filter((f) => !!f.id);
 
   const res = await fetch(`${GHL_API}/contacts/${contactId}`, {
@@ -234,6 +239,7 @@ export async function writeAttribution(
         `📲 Lead veio do link rastreado /${a.slug}\n` +
         `• Parceiro: ${a.partnerName ?? '—'}\n` +
         `• Campanha: ${a.linkName}\n` +
+        `• Onde: ${a.src ?? '—'}\n` +
         `• Código: ${a.code}\n` +
         `• Confirmação: ${a.matchedBy}\n` +
         `• Enviado em: ${a.occurredAt}`,

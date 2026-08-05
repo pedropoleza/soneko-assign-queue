@@ -156,7 +156,13 @@ Deno.serve(async (req: Request) => {
     /* runtime local */
   }
 
-  const text = stampMessage(link.message ?? '', link.code, link.code_mode);
+  // A origem entra no próprio marcador: o clique já foi gravado, mas a mensagem
+  // pode ser encaminhada, e aí só o texto sobrevive. Carimbando aqui, o envio
+  // chega ao CRM sabendo de onde veio mesmo sem casar com um clique.
+  const text = stampMessage(link.message ?? '', link.code, link.code_mode, {
+    src: params.src,
+    content: params.content,
+  });
   const target = whatsappUrl(link.destination_phone, text);
 
   return new Response(null, {

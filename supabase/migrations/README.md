@@ -14,6 +14,10 @@ que é a fonte de verdade. Na ordem:
 | `20260805013531` | `wa_link_tracking_url_params` | rastreio na própria URL: colunas de origem no clique, slug de 2 segmentos |
 | `20260805013608` | `wa_link_tracking_readable_slug_and_source_rollup` | slug legível `parceiro/campanha`; conversão herda a origem do clique |
 | `20260805013633` | `wa_link_tracking_source_breakdown` | `wa_by_source` (quebra por `?s=`, `?m=`, `?ct=`) |
+| `20260805024404` | `wa_partner_folder_detail` | `wa_partner_detail`: a pasta do influenciador, com desempenho por link e por mês |
+| `20260805041318` | `wa_agency_install` | `wa.agencies`, `wa_save_agency`, `wa_get_agency` (instalação no nível agência) |
+| `20260805045710` | `wa_marker_carries_source` | o marcador passa a carregar `code*src*content`; `conversions.content` e `conversions.src_source`; `wa_match_inbound` recebe `p_src`/`p_content` |
+| `20260805045758` | `wa_by_source_counts_sends_without_click` | envios sem clique correspondente passam a contar na quebra por origem |
 
 ## Exportar os arquivos `.sql` para cá
 

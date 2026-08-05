@@ -23,7 +23,7 @@
 import { serviceClient } from '../_shared/supabase.ts';
 import { loadConfig } from '../_shared/config.ts';
 import { json, preflight } from '../_shared/cors.ts';
-import { stampMessage, whatsappUrl, type CodeMode } from '../_shared/tracking.ts';
+import { stampMessage, whatsappSendUrl, whatsappUrl, type CodeMode } from '../_shared/tracking.ts';
 
 const FN_BASE = `${Deno.env.get('SUPABASE_URL') ?? ''}/functions/v1/wa-redirect`;
 
@@ -134,11 +134,15 @@ Deno.serve(async (req: Request) => {
       const code = String(body.code ?? 'XXXXX');
       const mode = (String(body.code_mode ?? 'invisible') as CodeMode);
       const phone = String(body.destination_phone ?? acc.whatsapp_phone ?? '').replace(/\D/g, '');
-      const stamped = stampMessage(message, code, mode);
+      const extras = { src: (body.src as string) ?? null, content: (body.content as string) ?? null };
+      const stamped = stampMessage(message, code, mode, extras);
       return json({
         message,
         stamped_message: stamped,
         whatsapp_url: whatsappUrl(phone, stamped),
+        // A forma longa é a que o navegador mostra depois do wa.me; serve para
+        // quem quer publicar o link do WhatsApp sem passar pelo redirecionador.
+        direct_url: whatsappSendUrl(phone, stamped),
         invisible_chars: stamped.length - message.length,
       });
     }
