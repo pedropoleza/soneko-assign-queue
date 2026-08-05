@@ -3,28 +3,24 @@ import { X } from 'lucide-react';
 import { api } from '@/lib/api';
 import type { LinkDetail } from '@/types';
 import { formatDateTime, pct, relativeTime } from '@/lib/utils';
-import { Badge, EmptyState, Skeleton } from './ui';
-import { DailyChart, RankBar } from './Stats';
+import { DayBars, Ring } from './Stats';
+import { Empty, Skeleton, Tag } from './ui';
 
 const MATCH_LABEL: Record<string, string> = {
-  invisible_code: 'marcador invisível',
-  code: 'código na mensagem',
+  invisible_code: 'confirmado pelo código',
+  code: 'confirmado pelo código',
   fingerprint: 'texto idêntico',
   prefix: 'texto com acréscimo',
   head40: 'início do texto',
-  manual: 'manual',
+  manual: 'marcado à mão',
 };
 
 export function LinkDetailDrawer({ linkId, onClose }: { linkId: string | null; onClose: () => void }) {
   const [detail, setDetail] = useState<LinkDetail | null>(null);
   const [loading, setLoading] = useState(false);
-  const [tab, setTab] = useState<'sends' | 'clicks'>('sends');
 
   useEffect(() => {
-    if (!linkId) {
-      setDetail(null);
-      return;
-    }
+    if (!linkId) return setDetail(null);
     setLoading(true);
     api
       .linkDetail(linkId)
@@ -41,140 +37,112 @@ export function LinkDetailDrawer({ linkId, onClose }: { linkId: string | null; o
 
   if (!linkId) return null;
 
-  const maxDevice = Math.max(1, ...(detail?.by_device ?? []).map((d) => d.count));
-
   return (
     <div className="fixed inset-0 z-40 flex justify-end">
-      <div className="absolute inset-0 bg-ink-900/20 backdrop-blur-[1px]" onClick={onClose} />
-      <aside className="relative flex h-full w-full max-w-xl flex-col overflow-y-auto bg-white shadow-2xl">
-        <header className="sticky top-0 z-10 flex items-start justify-between gap-3 border-b border-ink-200 bg-white/95 px-5 py-4 backdrop-blur">
+      <div className="absolute inset-0 bg-ink/25 backdrop-blur-[2px]" onClick={onClose} />
+
+      <aside className="relative flex h-full w-full max-w-lg flex-col overflow-y-auto bg-paper shadow-lift">
+        <header className="sticky top-0 z-10 flex items-start justify-between gap-3 border-b border-line bg-paper/90 px-5 py-4 backdrop-blur">
           <div className="min-w-0">
-            <h2 className="truncate text-sm font-semibold text-ink-900">
+            <h2 className="font-display truncate text-base font-semibold text-ink">
               {detail?.link.name ?? 'Carregando…'}
             </h2>
             {detail && (
               <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                <span className="font-mono text-[11px] text-ink-400">/{detail.link.slug}</span>
-                {detail.link.partner_name && <Badge tone="brand">{detail.link.partner_name}</Badge>}
-                <Badge>código {detail.link.code}</Badge>
+                {detail.link.partner_name && <Tag tone="accent">{detail.link.partner_name}</Tag>}
+                <span className="truncate font-mono text-[11px] text-ink-3">/{detail.link.slug}</span>
               </div>
             )}
           </div>
           <button
             onClick={onClose}
-            className="rounded-md p-1.5 text-ink-400 transition-colors hover:bg-ink-100 hover:text-ink-700"
+            aria-label="Fechar"
+            className="rounded-lg p-2 text-ink-3 transition hover:bg-surface-2 hover:text-ink"
           >
             <X className="h-4 w-4" />
           </button>
         </header>
 
         {loading || !detail ? (
-          <div className="space-y-3 p-5">
+          <div className="space-y-4 p-5">
             <Skeleton className="h-24 w-full" />
-            <Skeleton className="h-40 w-full" />
-            <Skeleton className="h-32 w-full" />
+            <Skeleton className="h-44 w-full" />
+            <Skeleton className="h-56 w-full" />
           </div>
         ) : (
           <div className="space-y-5 p-5">
-            <div className="grid grid-cols-3 gap-3">
-              <div className="rounded-lg border border-ink-200 p-3">
-                <div className="text-[11px] text-ink-500">Cliques</div>
-                <div className="mt-0.5 text-xl font-semibold tabular-nums text-ink-900">{detail.link.clicks}</div>
-              </div>
-              <div className="rounded-lg border border-ink-200 p-3">
-                <div className="text-[11px] text-ink-500">Envios</div>
-                <div className="mt-0.5 text-xl font-semibold tabular-nums text-brand-700">{detail.link.sends}</div>
-              </div>
-              <div className="rounded-lg border border-ink-200 p-3">
-                <div className="text-[11px] text-ink-500">Conversão</div>
-                <div className="mt-0.5 text-xl font-semibold tabular-nums text-ink-900">
-                  {pct(detail.link.sends, detail.link.clicks)}
+            <div className="surface flex items-center gap-5 px-5 py-4">
+              <Ring part={detail.link.sends} total={detail.link.clicks} size={56} />
+              <div className="grid flex-1 grid-cols-2 gap-4">
+                <div>
+                  <div className="num text-2xl font-semibold leading-none text-ink">{detail.link.clicks}</div>
+                  <div className="mt-1 text-[12px] text-ink-2">clicaram</div>
+                </div>
+                <div>
+                  <div className="num text-2xl font-semibold leading-none text-accent-deep">
+                    {detail.link.sends}
+                  </div>
+                  <div className="mt-1 text-[12px] text-ink-2">
+                    mandaram · {pct(detail.link.sends, detail.link.clicks)}
+                  </div>
                 </div>
               </div>
             </div>
 
-            <div className="card">
-              <div className="card-header">
-                <span className="card-title">Evolução</span>
-              </div>
-              <DailyChart series={detail.series} />
+            <div className="surface">
+              <h3 className="px-5 pb-1 pt-4 text-sm font-semibold text-ink">Movimento por dia</h3>
+              <DayBars series={detail.series} />
             </div>
 
-            {detail.by_device.length > 0 && (
-              <div className="card">
-                <div className="card-header">
-                  <span className="card-title">Dispositivos</span>
-                </div>
-                <div className="pb-2 pt-1">
-                  {detail.by_device.map((d) => (
-                    <RankBar key={d.device} label={d.device} value={d.count} total={maxDevice} />
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <div className="card">
-              <div className="flex gap-1 border-b border-ink-100 px-3 py-2">
-                {(
-                  [
-                    ['sends', `Envios (${detail.sends.length})`],
-                    ['clicks', `Cliques (${detail.clicks.length})`],
-                  ] as const
-                ).map(([id, label]) => (
-                  <button
-                    key={id}
-                    onClick={() => setTab(id)}
-                    className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-                      tab === id ? 'bg-brand-50 text-brand-700' : 'text-ink-600 hover:bg-ink-100'
-                    }`}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-
-              {tab === 'sends' ? (
-                detail.sends.length === 0 ? (
-                  <EmptyState title="Nenhum envio confirmado" description="Os cliques ainda não viraram mensagem." />
-                ) : (
-                  <ul className="divide-y divide-ink-100">
-                    {detail.sends.map((s) => (
-                      <li key={s.id} className="px-5 py-3">
-                        <div className="flex items-baseline justify-between gap-2">
-                          <span className="truncate text-sm font-medium text-ink-900">
-                            {s.contact_name ?? 'Contato'}
-                          </span>
-                          <span className="shrink-0 text-[11px] text-ink-400">
-                            {formatDateTime(s.occurred_at)}
-                          </span>
-                        </div>
-                        <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                          <Badge tone={s.confidence >= 0.95 ? 'neutral' : 'warn'}>
-                            {MATCH_LABEL[s.matched_by] ?? s.matched_by}
-                          </Badge>
-                          {s.crm_synced ? <Badge tone="brand">no CRM</Badge> : <Badge tone="warn">CRM pendente</Badge>}
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                )
-              ) : detail.clicks.length === 0 ? (
-                <EmptyState title="Nenhum clique" />
+            <div className="surface overflow-hidden">
+              <h3 className="px-5 pb-3 pt-4 text-sm font-semibold text-ink">
+                Quem mandou mensagem ({detail.sends.length})
+              </h3>
+              {detail.sends.length === 0 ? (
+                <Empty
+                  title="Ninguém enviou ainda"
+                  description="Os cliques chegaram, mas nenhuma mensagem foi confirmada até agora."
+                />
               ) : (
-                <ul className="divide-y divide-ink-100">
-                  {detail.clicks.map((c) => (
-                    <li key={c.id} className="flex items-center justify-between gap-3 px-5 py-2.5">
-                      <div className="min-w-0">
-                        <span className="text-xs text-ink-700">{relativeTime(c.clicked_at)}</span>
-                        <span className="ml-2 text-[11px] capitalize text-ink-400">
-                          {[c.device, c.os, c.city].filter(Boolean).join(' · ') || '—'}
-                        </span>
+                <ul className="divide-y divide-line">
+                  {detail.sends.map((s) => (
+                    <li key={s.id} className="flex items-center gap-3 px-5 py-3">
+                      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-accent-soft text-[12px] font-semibold text-accent-deep">
+                        {(s.contact_name ?? '?').slice(0, 1).toUpperCase()}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-sm font-medium text-ink">
+                          {s.contact_name ?? 'Contato'}
+                        </div>
+                        <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[12px] text-ink-3">
+                          <span>{MATCH_LABEL[s.matched_by] ?? s.matched_by}</span>
+                          {!s.crm_synced && <Tag tone="warn">CRM pendente</Tag>}
+                        </div>
                       </div>
-                      {c.converted_at ? <Badge tone="brand">enviou</Badge> : <Badge>só clicou</Badge>}
+                      <span className="shrink-0 text-[12px] text-ink-3">{formatDateTime(s.occurred_at)}</span>
                     </li>
                   ))}
                 </ul>
               )}
+            </div>
+
+            <div className="surface overflow-hidden">
+              <h3 className="px-5 pb-3 pt-4 text-sm font-semibold text-ink">
+                Cliques ({detail.clicks.length})
+              </h3>
+              <ul className="divide-y divide-line">
+                {detail.clicks.slice(0, 30).map((c) => (
+                  <li key={c.id} className="flex items-center justify-between gap-3 px-5 py-2.5">
+                    <span className="text-[13px] text-ink-2">
+                      {relativeTime(c.clicked_at)}
+                      <span className="ml-2 text-[12px] capitalize text-ink-3">
+                        {[c.device, c.city].filter(Boolean).join(' · ')}
+                      </span>
+                    </span>
+                    {c.converted_at ? <Tag tone="accent">mandou</Tag> : <Tag>só clicou</Tag>}
+                  </li>
+                ))}
+              </ul>
             </div>
           </div>
         )}

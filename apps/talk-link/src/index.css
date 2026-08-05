@@ -1,66 +1,208 @@
+@import './fonts.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+/* ---------------------------------------------------------------------------
+   Tokens.
+   A paleta vem da própria tela do WhatsApp: o verde do balão enviado é a ação
+   primária, o teal do app carrega os dados, e o neutro tem viés verde para não
+   parecer cinza de template. Cores semânticas ficam fora do acento.
+   --------------------------------------------------------------------------- */
+
 @layer base {
+  :root {
+    --paper: 242 245 243;
+    --surface: 255 255 255;
+    --surface-2: 247 250 248;
+    --line: 225 232 228;
+    --line-strong: 205 216 211;
+
+    --ink: 16 35 28;
+    --ink-2: 74 93 86;
+    --ink-3: 124 143 136;
+
+    --accent: 0 168 132;
+    --accent-deep: 0 92 75;
+    --accent-soft: 216 243 234;
+
+    --btn: 0 92 75;
+    --btn-ink: 255 255 255;
+
+    --warn: 180 83 9;
+    --warn-soft: 254 243 199;
+    --danger: 180 35 24;
+    --danger-soft: 254 228 226;
+
+    /* fundo da conversa, igual ao do app */
+    --chat-bg: 231 221 212;
+    --chat-bubble: 217 253 211;
+    --chat-ink: 17 27 33;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: 8 19 16;
+      --surface: 15 31 26;
+      --surface-2: 19 38 32;
+      --line: 30 56 48;
+      --line-strong: 42 74 64;
+
+      --ink: 231 240 236;
+      --ink-2: 157 179 172;
+      --ink-3: 111 136 128;
+
+      --accent: 37 208 168;
+      --accent-deep: 37 208 168;
+      --accent-soft: 16 49 42;
+
+      --btn: 37 208 168;
+      --btn-ink: 6 34 28;
+
+      --warn: 245 158 11;
+      --warn-soft: 61 44 12;
+      --danger: 248 113 113;
+      --danger-soft: 63 26 24;
+
+      --chat-bg: 11 20 26;
+      --chat-bubble: 0 92 75;
+      --chat-ink: 231 240 236;
+    }
+  }
+
+  /* O botão de tema do visualizador tem que vencer a media query nos dois sentidos. */
+  :root[data-theme='dark'] {
+    --paper: 8 19 16;
+    --surface: 15 31 26;
+    --surface-2: 19 38 32;
+    --line: 30 56 48;
+    --line-strong: 42 74 64;
+    --ink: 231 240 236;
+    --ink-2: 157 179 172;
+    --ink-3: 111 136 128;
+    --accent: 37 208 168;
+    --accent-deep: 37 208 168;
+    --accent-soft: 16 49 42;
+    --btn: 37 208 168;
+    --btn-ink: 6 34 28;
+    --warn: 245 158 11;
+    --warn-soft: 61 44 12;
+    --danger: 248 113 113;
+    --danger-soft: 63 26 24;
+    --chat-bg: 11 20 26;
+    --chat-bubble: 0 92 75;
+    --chat-ink: 231 240 236;
+  }
+
+  :root[data-theme='light'] {
+    --paper: 242 245 243;
+    --surface: 255 255 255;
+    --surface-2: 247 250 248;
+    --line: 225 232 228;
+    --line-strong: 205 216 211;
+    --ink: 16 35 28;
+    --ink-2: 74 93 86;
+    --ink-3: 124 143 136;
+    --accent: 0 168 132;
+    --accent-deep: 0 92 75;
+    --accent-soft: 216 243 234;
+    --btn: 0 92 75;
+    --btn-ink: 255 255 255;
+    --warn: 180 83 9;
+    --warn-soft: 254 243 199;
+    --danger: 180 35 24;
+    --danger-soft: 254 228 226;
+    --chat-bg: 231 221 212;
+    --chat-bubble: 217 253 211;
+    --chat-ink: 17 27 33;
+  }
+
   html,
   body,
   #root {
     height: 100%;
   }
+
   body {
-    font-feature-settings: 'cv11', 'ss01';
+    background: rgb(var(--paper));
+    color: rgb(var(--ink));
+    font-family: 'Public Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
     -webkit-font-smoothing: antialiased;
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-family: 'Outfit', ui-sans-serif, system-ui, sans-serif;
+    text-wrap: balance;
+    letter-spacing: -0.015em;
+  }
+
+  :focus-visible {
+    outline: 2px solid rgb(var(--accent));
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+
+  ::selection {
+    background: rgb(var(--accent-soft));
+    color: rgb(var(--accent-deep));
   }
 }
 
 @layer components {
-  .card {
-    @apply rounded-xl border border-ink-200 bg-white shadow-card;
+  .surface {
+    @apply rounded-2xl border border-line bg-surface;
   }
-  .card-header {
-    @apply flex items-center justify-between gap-3 border-b border-ink-100 px-5 py-3.5;
+
+  .eyebrow {
+    @apply text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-3;
   }
-  .card-title {
-    @apply text-sm font-semibold tracking-tight text-ink-900;
+
+  .num {
+    font-family: 'Outfit', ui-sans-serif, system-ui, sans-serif;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
   }
-  .label {
-    @apply mb-1.5 block text-xs font-medium text-ink-700;
-  }
-  .hint {
-    @apply mt-1 text-[11px] leading-relaxed text-ink-400;
-  }
+
+  /* Campo de formulário. Discreto até receber foco. */
   .field {
-    @apply w-full rounded-lg border border-ink-200 bg-white px-3 py-2 text-sm text-ink-900 outline-none
-           transition-colors placeholder:text-ink-400
-           focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20
-           disabled:cursor-not-allowed disabled:bg-ink-50;
+    @apply w-full rounded-xl border border-line bg-surface-2 px-3.5 py-2.5 text-[15px] text-ink
+           outline-none transition placeholder:text-ink-3
+           focus:border-accent focus:bg-surface;
   }
-  .pill {
-    @apply inline-flex items-center gap-1.5 rounded-full border border-ink-200 bg-white px-2.5 py-1
-           text-xs font-medium text-ink-700;
+
+  /* Chip clicável — a unidade de escolha do app inteiro. */
+  .chip {
+    @apply inline-flex select-none items-center gap-2 rounded-full border border-line bg-surface
+           px-3.5 py-2 text-sm font-medium text-ink-2 transition
+           hover:border-line-strong hover:text-ink;
   }
-  .pill-brand {
-    @apply inline-flex items-center gap-1.5 rounded-full border border-brand-200 bg-brand-50 px-2.5 py-1
-           text-xs font-medium text-brand-700;
+
+  .chip-on {
+    @apply border-transparent bg-accent-soft text-accent-deep ring-1 ring-accent/40;
   }
-  .table-row {
-    @apply border-b border-ink-100 transition-colors last:border-0 hover:bg-ink-50/60;
+
+  .tag {
+    @apply inline-flex items-center gap-1 rounded-md bg-surface-2 px-1.5 py-0.5
+           text-[11px] font-medium text-ink-2;
   }
 }
 
 @layer utilities {
-  @keyframes fade-in {
+  @keyframes rise {
     from {
       opacity: 0;
-      transform: translateY(4px);
+      transform: translateY(8px);
     }
     to {
       opacity: 1;
       transform: none;
     }
   }
-  @keyframes slide {
+
+  @keyframes bar {
     0% {
       transform: translateX(-100%);
     }
@@ -68,14 +210,27 @@
       transform: translateX(400%);
     }
   }
-  .fade-in {
-    animation: fade-in 220ms ease-out both;
+
+  .rise {
+    animation: rise 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
   }
-  .no-scrollbar::-webkit-scrollbar {
-    display: none;
+
+  /* O papel de parede da conversa, desenhado em CSS. */
+  .chat-paper {
+    background-color: rgb(var(--chat-bg));
+    background-image:
+      radial-gradient(circle at 20% 30%, rgb(var(--ink) / 0.045) 1.5px, transparent 1.6px),
+      radial-gradient(circle at 70% 60%, rgb(var(--ink) / 0.035) 1.5px, transparent 1.6px),
+      radial-gradient(circle at 45% 85%, rgb(var(--ink) / 0.03) 1.5px, transparent 1.6px);
+    background-size: 48px 48px;
   }
-  .no-scrollbar {
-    -ms-overflow-style: none;
-    scrollbar-width: none;
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.001ms !important;
+      transition-duration: 0.001ms !important;
+    }
   }
 }

@@ -1,26 +1,30 @@
-import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from 'react';
+import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, TextareaHTMLAttributes } from 'react';
 import { Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-// --- Button ------------------------------------------------------------------
-
 type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
-  variant?: 'primary' | 'secondary' | 'ghost' | 'danger';
-  size?: 'sm' | 'md';
+  variant?: 'primary' | 'quiet' | 'plain' | 'danger';
+  size?: 'sm' | 'md' | 'lg';
   loading?: boolean;
 };
 
-const VARIANTS: Record<NonNullable<ButtonProps['variant']>, string> = {
-  primary: 'bg-brand-600 text-white hover:bg-brand-700 disabled:bg-brand-300',
-  secondary: 'border border-ink-200 bg-white text-ink-700 hover:bg-ink-50 disabled:text-ink-300',
-  ghost: 'text-ink-600 hover:bg-ink-100 hover:text-ink-900',
-  danger: 'border border-rose-200 bg-white text-rose-600 hover:bg-rose-50',
+const VARIANT: Record<NonNullable<ButtonProps['variant']>, string> = {
+  primary: 'bg-btn text-btn-ink hover:opacity-90 disabled:opacity-40',
+  quiet: 'border border-line bg-surface text-ink-2 hover:border-line-strong hover:text-ink disabled:opacity-40',
+  plain: 'text-ink-2 hover:bg-surface-2 hover:text-ink',
+  danger: 'text-danger hover:bg-danger-soft',
+};
+
+const SIZE = {
+  sm: 'h-8 gap-1.5 rounded-lg px-2.5 text-[13px]',
+  md: 'h-10 gap-2 rounded-xl px-4 text-sm',
+  lg: 'h-12 gap-2 rounded-xl px-6 text-[15px]',
 };
 
 export function Button({
   variant = 'primary',
   size = 'md',
-  loading = false,
+  loading,
   className,
   children,
   disabled,
@@ -31,44 +35,15 @@ export function Button({
       {...rest}
       disabled={disabled || loading}
       className={cn(
-        'inline-flex items-center justify-center gap-2 rounded-lg font-medium transition-colors',
-        'focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40',
-        'disabled:cursor-not-allowed',
-        size === 'sm' ? 'h-8 px-2.5 text-xs' : 'h-9 px-3.5 text-sm',
-        VARIANTS[variant],
+        'inline-flex items-center justify-center font-semibold transition disabled:cursor-not-allowed',
+        SIZE[size],
+        VARIANT[variant],
         className,
       )}
     >
-      {loading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+      {loading && <Loader2 className="h-4 w-4 animate-spin" />}
       {children}
     </button>
-  );
-}
-
-// --- Form fields --------------------------------------------------------------
-
-export function Field({
-  label,
-  hint,
-  required,
-  children,
-  className,
-}: {
-  label: string;
-  hint?: string;
-  required?: boolean;
-  children: ReactNode;
-  className?: string;
-}) {
-  return (
-    <div className={className}>
-      <label className="label">
-        {label}
-        {required && <span className="ml-0.5 text-rose-500">*</span>}
-      </label>
-      {children}
-      {hint && <p className="hint">{hint}</p>}
-    </div>
   );
 }
 
@@ -77,119 +52,69 @@ export function Input(props: InputHTMLAttributes<HTMLInputElement>) {
 }
 
 export function Textarea(props: TextareaHTMLAttributes<HTMLTextAreaElement>) {
-  return <textarea {...props} className={cn('field resize-y leading-relaxed', props.className)} />;
+  return <textarea {...props} className={cn('field resize-none leading-relaxed', props.className)} />;
 }
 
-export function Select({
-  options,
-  ...rest
-}: SelectHTMLAttributes<HTMLSelectElement> & {
-  options: ReadonlyArray<{ value: string; label: string }>;
-}) {
-  return (
-    <select {...rest} className={cn('field cursor-pointer', rest.className)}>
-      {options.map((o) => (
-        <option key={o.value} value={o.value}>
-          {o.label}
-        </option>
-      ))}
-    </select>
-  );
-}
-
-export function RadioCards<T extends string>({
-  value,
-  onChange,
-  options,
-  columns = 3,
+/** Uma pergunta do formulário: número, título e o controle. */
+export function Step({
+  n,
+  title,
+  aside,
+  children,
 }: {
-  value: T;
-  onChange: (v: T) => void;
-  options: ReadonlyArray<{ value: T; label: string; hint?: string }>;
-  columns?: number;
+  n: number;
+  title: string;
+  aside?: ReactNode;
+  children: ReactNode;
 }) {
   return (
-    <div className={cn('grid gap-2', columns === 2 ? 'grid-cols-2' : 'grid-cols-1 sm:grid-cols-3')}>
-      {options.map((o) => {
-        const active = o.value === value;
-        return (
-          <button
-            key={o.value}
-            type="button"
-            onClick={() => onChange(o.value)}
-            className={cn(
-              'rounded-lg border px-3 py-2 text-left transition-colors',
-              active
-                ? 'border-brand-500 bg-brand-50 ring-1 ring-brand-500/30'
-                : 'border-ink-200 bg-white hover:border-ink-300 hover:bg-ink-50',
-            )}
-          >
-            <span className={cn('block text-xs font-semibold', active ? 'text-brand-800' : 'text-ink-800')}>
-              {o.label}
-            </span>
-            {o.hint && <span className="mt-0.5 block text-[11px] leading-snug text-ink-500">{o.hint}</span>}
-          </button>
-        );
-      })}
-    </div>
+    <section className="flex gap-3.5 sm:gap-4">
+      <span className="num mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-full bg-accent-soft text-[13px] font-semibold text-accent-deep">
+        {n}
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="mb-2.5 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+          <h2 className="text-[15px] font-semibold text-ink">{title}</h2>
+          {aside}
+        </div>
+        {children}
+      </div>
+    </section>
   );
 }
 
-// --- Display -------------------------------------------------------------------
-
-export function Badge({
-  tone = 'neutral',
+export function Chip({
+  on,
+  icon,
   children,
   className,
+  ...rest
+}: ButtonHTMLAttributes<HTMLButtonElement> & { on?: boolean; icon?: ReactNode }) {
+  return (
+    <button type="button" {...rest} className={cn('chip', on && 'chip-on', className)}>
+      {icon}
+      {children}
+    </button>
+  );
+}
+
+export function Tag({
+  tone = 'neutral',
+  children,
 }: {
-  tone?: 'neutral' | 'brand' | 'warn' | 'danger';
+  tone?: 'neutral' | 'accent' | 'warn' | 'danger';
   children: ReactNode;
-  className?: string;
 }) {
   const tones = {
-    neutral: 'border-ink-200 bg-ink-50 text-ink-600',
-    brand: 'border-brand-200 bg-brand-50 text-brand-700',
-    warn: 'border-amber-200 bg-amber-50 text-amber-700',
-    danger: 'border-rose-200 bg-rose-50 text-rose-700',
+    neutral: '',
+    accent: 'bg-accent-soft text-accent-deep',
+    warn: 'bg-warn-soft text-warn',
+    danger: 'bg-danger-soft text-danger',
   };
-  return (
-    <span
-      className={cn(
-        'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium',
-        tones[tone],
-        className,
-      )}
-    >
-      {children}
-    </span>
-  );
+  return <span className={cn('tag', tones[tone])}>{children}</span>;
 }
 
-export function Card({ children, className }: { children: ReactNode; className?: string }) {
-  return <div className={cn('card', className)}>{children}</div>;
-}
-
-export function CardHeader({
-  title,
-  subtitle,
-  action,
-}: {
-  title: ReactNode;
-  subtitle?: ReactNode;
-  action?: ReactNode;
-}) {
-  return (
-    <div className="card-header">
-      <div className="min-w-0">
-        <div className="card-title truncate">{title}</div>
-        {subtitle && <div className="mt-0.5 truncate text-xs text-ink-500">{subtitle}</div>}
-      </div>
-      {action}
-    </div>
-  );
-}
-
-export function EmptyState({
+export function Empty({
   icon,
   title,
   description,
@@ -201,15 +126,19 @@ export function EmptyState({
   action?: ReactNode;
 }) {
   return (
-    <div className="flex flex-col items-center justify-center px-6 py-14 text-center">
-      {icon && <div className="mb-3 text-ink-300">{icon}</div>}
-      <div className="text-sm font-medium text-ink-800">{title}</div>
-      {description && <p className="mt-1 max-w-sm text-xs leading-relaxed text-ink-500">{description}</p>}
-      {action && <div className="mt-4">{action}</div>}
+    <div className="flex flex-col items-center px-6 py-16 text-center">
+      {icon && (
+        <div className="mb-4 grid h-12 w-12 place-items-center rounded-2xl bg-accent-soft text-accent-deep">
+          {icon}
+        </div>
+      )}
+      <h3 className="font-display text-base font-semibold text-ink">{title}</h3>
+      {description && <p className="mt-1.5 max-w-sm text-sm leading-relaxed text-ink-2">{description}</p>}
+      {action && <div className="mt-5">{action}</div>}
     </div>
   );
 }
 
 export function Skeleton({ className }: { className?: string }) {
-  return <div className={cn('animate-pulse rounded-md bg-ink-100', className)} />;
+  return <div className={cn('animate-pulse rounded-xl bg-surface-2', className)} />;
 }
