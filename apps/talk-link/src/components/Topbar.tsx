@@ -28,7 +28,7 @@ export function Topbar({
         </div>
       )}
 
-      <nav className="mx-auto flex h-12 max-w-5xl items-center gap-1 px-4 sm:px-6">
+      <nav className="mx-auto flex h-12 max-w-[1440px] items-center gap-1 px-4 sm:px-6 lg:px-8">
         {TABS.map((t) => (
           <button
             key={t.id}

@@ -85,7 +85,7 @@ export default function App() {
     return (
       <div className="min-h-screen bg-paper">
         <div className="h-12 border-b border-line bg-surface" />
-        <main className="mx-auto max-w-5xl space-y-4 px-4 py-8 sm:px-6">
+        <main className="mx-auto max-w-[1440px] space-y-4 px-4 py-6 sm:px-6 lg:px-8">
           <Skeleton className="h-[480px] w-full" />
         </main>
       </div>
@@ -144,7 +144,7 @@ export default function App() {
         isRefreshing={refreshing}
       />
 
-      <main className="mx-auto max-w-5xl px-4 py-8 pb-20 sm:px-6">
+      <main className="mx-auto max-w-[1440px] px-4 py-6 pb-16 sm:px-6 lg:px-8">
         {tab === 'create' &&
           (created ? (
             <LinkReady

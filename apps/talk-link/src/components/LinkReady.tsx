@@ -40,7 +40,7 @@ export function LinkReady({
   }
 
   return (
-    <div className="rise mx-auto max-w-2xl">
+    <div className="rise mx-auto max-w-5xl">
       <div className="card overflow-hidden shadow-lift">
         <div className="border-b border-line px-6 py-6 text-center sm:px-8">
           <span className="mx-auto mb-3 grid h-11 w-11 place-items-center rounded-xl bg-accent-soft text-accent-deep">
@@ -59,7 +59,8 @@ export function LinkReady({
           </p>
         </div>
 
-        <div className="space-y-6 px-6 py-6 sm:px-8">
+        <div className="grid gap-6 px-6 py-6 sm:px-8 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start">
+          <div className="space-y-6">
           <div>
             <div className="flex flex-col gap-2 sm:flex-row">
               <div className="flex min-w-0 flex-1 items-center rounded-xl border border-line bg-surface-2 px-4 py-3">
@@ -95,6 +96,8 @@ export function LinkReady({
             <p className="mt-2 text-[12px] text-ink-3">
               Muda só o fim do endereço. Depois você compara qual lugar trouxe mais gente.
             </p>
+          </div>
+
           </div>
 
           <ChatPreview message={link.message} businessName={businessName} phone={link.destination_phone} />

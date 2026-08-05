@@ -119,7 +119,7 @@ export function CreatePage({ state, onCreated }: { state: AppState; onCreated: (
   }
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
+    <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_400px] lg:items-start xl:gap-6">
       <div className="card p-6 sm:p-7">
         <div className="mb-7">
           <h1 className="text-lg font-semibold tracking-tight text-ink">Criar um link</h1>
@@ -234,7 +234,7 @@ export function CreatePage({ state, onCreated }: { state: AppState; onCreated: (
           </button>
 
           {more && (
-            <div className="rise mt-5 grid gap-4 sm:grid-cols-2">
+            <div className="rise mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
               <label className="block">
                 <span className="mb-1.5 block text-[12px] font-medium text-ink-2">Nome da campanha</span>
                 <Input value={campaign} onChange={(e) => setCampaign(e.target.value)} placeholder={defaultCampaign} />
@@ -275,8 +275,7 @@ export function CreatePage({ state, onCreated }: { state: AppState; onCreated: (
         </div>
 
         {/* Rodapé do cartão, no padrão dos outros painéis: ação à direita. */}
-        <div className="-mx-6 mt-7 flex items-center justify-between gap-3 border-t border-line px-6 pt-4 sm:-mx-7 sm:px-7">
-          <p className="text-xs text-ink-3">O link já nasce contando cliques.</p>
+        <div className="-mx-6 mt-7 flex items-center justify-end gap-3 border-t border-line px-6 pt-4 sm:-mx-7 sm:px-7">
           <Button onClick={submit} loading={saving} disabled={!ready}>
             <Sparkles className="h-3.5 w-3.5" />
             Criar link
