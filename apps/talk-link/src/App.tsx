@@ -20,18 +20,19 @@ export default function App() {
   const [linkId, setLinkId] = useState<string | null>(null);
   const [partnerId, setPartnerId] = useState<string | null>(null);
   const [manualSecret, setManualSecret] = useState('');
+  const [days, setDays] = useState(30);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (window = days) => {
     setRefreshing(true);
     try {
-      setState(await api.state(30));
+      setState(await api.state(window));
       setError(null);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : String(e));
     } finally {
       setRefreshing(false);
     }
-  }, []);
+  }, [days]);
 
   useEffect(() => {
     (async () => {
@@ -44,7 +45,7 @@ export default function App() {
   // Os envios chegam por webhook, então o painel se atualiza sozinho.
   useEffect(() => {
     if (!state) return;
-    const id = setInterval(load, 60_000);
+    const id = setInterval(() => load(), 60_000);
     return () => clearInterval(id);
   }, [state, load]);
 
@@ -130,7 +131,12 @@ export default function App() {
         {tab === 'results' && (
           <ResultsPage
             state={state}
-            onRefresh={load}
+            days={days}
+            onChangeDays={(d) => {
+              setDays(d);
+              load(d);
+            }}
+            onRefresh={() => load()}
             onOpenLink={setLinkId}
             onOpenPartner={setPartnerId}
           />

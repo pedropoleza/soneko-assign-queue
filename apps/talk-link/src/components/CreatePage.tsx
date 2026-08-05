@@ -45,8 +45,8 @@ export function CreatePage({ state, onCreated }: { state: AppState; onCreated: (
   const [slug, setSlug] = useState('');
   const [phone, setPhone] = useState(state.account.whatsapp_phone ?? '');
   const [language, setLanguage] = useState<Language>('pt');
-  const [leadName, setLeadName] = useState('');
-  const [codeMode, setCodeMode] = useState<CodeMode>('invisible');
+  // Invisível serve para praticamente toda campanha; deixou de ser pergunta.
+  const codeMode: CodeMode = 'invisible';
 
   const known = useMemo(
     () => state.partners.filter((p) => p.active).map((p) => p.name),
@@ -57,8 +57,8 @@ export function CreatePage({ state, onCreated }: { state: AppState; onCreated: (
     !known.some((n) => n.toLowerCase() === partner.trim().toLowerCase());
 
   const generated = useMemo(
-    () => buildMessage({ partnerName: partner, objective: subject, tone, language, leadName }),
-    [partner, subject, tone, language, leadName],
+    () => buildMessage({ partnerName: partner, objective: subject, tone, language }),
+    [partner, subject, tone, language],
   );
 
   useEffect(() => {
@@ -99,7 +99,6 @@ export function CreatePage({ state, onCreated }: { state: AppState; onCreated: (
         objective: subject,
         tone,
         language,
-        lead_name: leadName.trim() || null,
       };
       const link = await api.saveLink(payload);
       // Sem tela de ajustes, o primeiro número informado vira o padrão da conta.
@@ -230,7 +229,7 @@ export function CreatePage({ state, onCreated }: { state: AppState; onCreated: (
             <ChevronDown className={`h-4 w-4 transition-transform ${more ? 'rotate-180' : ''}`} />
             Mais opções
             <span className="hidden text-[12px] font-normal text-ink-3 sm:inline">
-              nome da campanha, endereço, número, idioma
+              campanha, número, endereço, idioma
             </span>
           </button>
 
@@ -270,27 +269,7 @@ export function CreatePage({ state, onCreated }: { state: AppState; onCreated: (
                 </select>
               </label>
 
-              <label className="block">
-                <span className="mb-1.5 block text-[12px] font-medium text-ink-2">Nome do lead</span>
-                <Input
-                  value={leadName}
-                  onChange={(e) => setLeadName(e.target.value)}
-                  placeholder="deixe vazio se não souber"
-                />
-              </label>
 
-              <label className="block">
-                <span className="mb-1.5 block text-[12px] font-medium text-ink-2">Confirmação de envio</span>
-                <select
-                  className="field cursor-pointer"
-                  value={codeMode}
-                  onChange={(e) => setCodeMode(e.target.value as CodeMode)}
-                >
-                  <option value="invisible">Invisível (recomendado)</option>
-                  <option value="discreet">Código curto no fim</option>
-                  <option value="none">Sem marcador</option>
-                </select>
-              </label>
             </div>
           )}
         </div>

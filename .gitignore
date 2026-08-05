@@ -16,3 +16,6 @@ dist
 apps/*/node_modules
 apps/*/dist
 apps/*/.tsbuild
+
+# Vercel
+.vercel
