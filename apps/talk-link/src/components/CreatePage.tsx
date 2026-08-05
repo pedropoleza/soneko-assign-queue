@@ -115,9 +115,9 @@ export function CreatePage({ state, onCreated }: { state: AppState; onCreated: (
 
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
-      <div className="surface p-6 shadow-card sm:p-7">
+      <div className="card p-6 shadow-card sm:p-7">
         <div className="mb-7">
-          <h1 className="font-display text-2xl font-semibold text-ink">Criar um link</h1>
+          <h1 className="text-lg font-semibold tracking-tight text-ink">Criar um link</h1>
           <p className="mt-1 text-sm text-ink-2">
             Três respostas e o link fica pronto para o influenciador postar.
           </p>
@@ -289,10 +289,14 @@ export function CreatePage({ state, onCreated }: { state: AppState; onCreated: (
           )}
         </div>
 
-        <Button size="lg" className="mt-7 w-full" onClick={submit} loading={saving} disabled={!ready}>
-          <Sparkles className="h-4 w-4" />
-          Criar link
-        </Button>
+        {/* Rodapé do cartão, no padrão dos outros painéis: ação à direita. */}
+        <div className="-mx-6 mt-7 flex items-center justify-between gap-3 border-t border-line px-6 pt-4 sm:-mx-7 sm:px-7">
+          <p className="text-xs text-ink-3">O link já nasce contando cliques.</p>
+          <Button onClick={submit} loading={saving} disabled={!ready}>
+            <Sparkles className="h-3.5 w-3.5" />
+            Criar link
+          </Button>
+        </div>
       </div>
 
       <div className="lg:sticky lg:top-24">

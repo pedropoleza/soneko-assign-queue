@@ -14,10 +14,10 @@ export function BigStat({
   tone?: 'ink' | 'accent';
 }) {
   return (
-    <div className="surface px-5 py-4 shadow-card">
+    <div className="card px-5 py-4">
       <div
         className={cn(
-          'num text-[34px] font-semibold leading-none',
+          'num text-[30px] font-semibold leading-none',
           tone === 'accent' ? 'text-accent-deep' : 'text-ink',
         )}
       >

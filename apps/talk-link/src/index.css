@@ -5,114 +5,39 @@
 @tailwind utilities;
 
 /* ---------------------------------------------------------------------------
-   Tokens.
-   A paleta vem da própria tela do WhatsApp: o verde do balão enviado é a ação
-   primária, o teal do app carrega os dados, e o neutro tem viés verde para não
-   parecer cinza de template. Cores semânticas ficam fora do acento.
+   Mesma linguagem visual dos outros painéis de iframe do GoHighLevel:
+   fundo claro, cartões brancos, cinza-azulado (ink) e o azul do GHL como ação.
+   Os tokens são semânticos para os componentes não conhecerem cor nenhuma.
+
+   Tema único, claro, de propósito: o app vive dentro do chrome do GHL, que é
+   claro. Um modo escuro aqui brigaria com a moldura em volta.
    --------------------------------------------------------------------------- */
 
 @layer base {
   :root {
-    --paper: 242 245 243;
+    --paper: 248 250 252; /* ink-50  */
     --surface: 255 255 255;
-    --surface-2: 247 250 248;
-    --line: 225 232 228;
-    --line-strong: 205 216 211;
+    --surface-2: 248 250 252;
+    --line: 226 232 240; /* ink-200 */
+    --line-strong: 203 213 225; /* ink-300 */
 
-    --ink: 16 35 28;
-    --ink-2: 74 93 86;
-    --ink-3: 124 143 136;
+    --ink: 15 23 42; /* ink-900 */
+    --ink-2: 71 85 105; /* ink-600 */
+    --ink-3: 148 163 184; /* ink-400 */
 
-    --accent: 0 168 132;
-    --accent-deep: 0 92 75;
-    --accent-soft: 216 243 234;
+    --accent: 37 99 235; /* brand-600 */
+    --accent-deep: 29 78 216; /* brand-700 */
+    --accent-soft: 239 246 255; /* brand-50  */
 
-    --btn: 0 92 75;
+    --btn: 37 99 235;
     --btn-ink: 255 255 255;
 
     --warn: 180 83 9;
     --warn-soft: 254 243 199;
-    --danger: 180 35 24;
-    --danger-soft: 254 228 226;
+    --danger: 190 18 60;
+    --danger-soft: 255 241 242;
 
-    /* fundo da conversa, igual ao do app */
-    --chat-bg: 231 221 212;
-    --chat-bubble: 217 253 211;
-    --chat-ink: 17 27 33;
-  }
-
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --paper: 8 19 16;
-      --surface: 15 31 26;
-      --surface-2: 19 38 32;
-      --line: 30 56 48;
-      --line-strong: 42 74 64;
-
-      --ink: 231 240 236;
-      --ink-2: 157 179 172;
-      --ink-3: 111 136 128;
-
-      --accent: 37 208 168;
-      --accent-deep: 37 208 168;
-      --accent-soft: 16 49 42;
-
-      --btn: 37 208 168;
-      --btn-ink: 6 34 28;
-
-      --warn: 245 158 11;
-      --warn-soft: 61 44 12;
-      --danger: 248 113 113;
-      --danger-soft: 63 26 24;
-
-      --chat-bg: 11 20 26;
-      --chat-bubble: 0 92 75;
-      --chat-ink: 231 240 236;
-    }
-  }
-
-  /* O botão de tema do visualizador tem que vencer a media query nos dois sentidos. */
-  :root[data-theme='dark'] {
-    --paper: 8 19 16;
-    --surface: 15 31 26;
-    --surface-2: 19 38 32;
-    --line: 30 56 48;
-    --line-strong: 42 74 64;
-    --ink: 231 240 236;
-    --ink-2: 157 179 172;
-    --ink-3: 111 136 128;
-    --accent: 37 208 168;
-    --accent-deep: 37 208 168;
-    --accent-soft: 16 49 42;
-    --btn: 37 208 168;
-    --btn-ink: 6 34 28;
-    --warn: 245 158 11;
-    --warn-soft: 61 44 12;
-    --danger: 248 113 113;
-    --danger-soft: 63 26 24;
-    --chat-bg: 11 20 26;
-    --chat-bubble: 0 92 75;
-    --chat-ink: 231 240 236;
-  }
-
-  :root[data-theme='light'] {
-    --paper: 242 245 243;
-    --surface: 255 255 255;
-    --surface-2: 247 250 248;
-    --line: 225 232 228;
-    --line-strong: 205 216 211;
-    --ink: 16 35 28;
-    --ink-2: 74 93 86;
-    --ink-3: 124 143 136;
-    --accent: 0 168 132;
-    --accent-deep: 0 92 75;
-    --accent-soft: 216 243 234;
-    --btn: 0 92 75;
-    --btn-ink: 255 255 255;
-    --warn: 180 83 9;
-    --warn-soft: 254 243 199;
-    --danger: 180 35 24;
-    --danger-soft: 254 228 226;
+    /* A prévia imita a tela do WhatsApp — essas cores são do app, não do painel. */
     --chat-bg: 231 221 212;
     --chat-bubble: 217 253 211;
     --chat-ink: 17 27 33;
@@ -127,66 +52,82 @@
   body {
     background: rgb(var(--paper));
     color: rgb(var(--ink));
-    font-family: 'Public Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    font-feature-settings: 'cv11', 'ss01';
     -webkit-font-smoothing: antialiased;
   }
 
   h1,
   h2,
   h3 {
-    font-family: 'Outfit', ui-sans-serif, system-ui, sans-serif;
+    letter-spacing: -0.011em;
     text-wrap: balance;
-    letter-spacing: -0.015em;
   }
 
   :focus-visible {
-    outline: 2px solid rgb(var(--accent));
+    outline: 2px solid rgb(var(--accent) / 0.45);
     outline-offset: 2px;
     border-radius: 6px;
-  }
-
-  ::selection {
-    background: rgb(var(--accent-soft));
-    color: rgb(var(--accent-deep));
   }
 }
 
 @layer components {
-  .surface {
-    @apply rounded-2xl border border-line bg-surface;
+  .card {
+    @apply rounded-xl border border-line bg-surface shadow-card;
+  }
+
+  .card-header {
+    @apply flex items-center justify-between gap-3 border-b border-line px-5 py-3.5;
+  }
+
+  .card-title {
+    @apply text-sm font-semibold tracking-tight text-ink;
   }
 
   .eyebrow {
-    @apply text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-3;
+    @apply text-[11px] font-medium uppercase tracking-wide text-ink-3;
   }
 
   .num {
-    font-family: 'Outfit', ui-sans-serif, system-ui, sans-serif;
     font-variant-numeric: tabular-nums;
     letter-spacing: -0.02em;
   }
 
-  /* Campo de formulário. Discreto até receber foco. */
-  .field {
-    @apply w-full rounded-xl border border-line bg-surface-2 px-3.5 py-2.5 text-[15px] text-ink
-           outline-none transition placeholder:text-ink-3
-           focus:border-accent focus:bg-surface;
+  .label {
+    @apply mb-1.5 block text-xs font-medium text-ink-2;
   }
 
-  /* Chip clicável — a unidade de escolha do app inteiro. */
+  .field {
+    @apply w-full rounded-md border border-line bg-surface px-3 py-2 text-sm text-ink outline-none
+           transition-colors placeholder:text-ink-3
+           focus:border-accent focus:ring-2 focus:ring-accent/15
+           disabled:cursor-not-allowed disabled:bg-surface-2;
+  }
+
+  /* Escolha em linha. Discreto por padrão, azul do GHL quando selecionado. */
   .chip {
-    @apply inline-flex select-none items-center gap-2 rounded-full border border-line bg-surface
-           px-3.5 py-2 text-sm font-medium text-ink-2 transition
-           hover:border-line-strong hover:text-ink;
+    @apply inline-flex select-none items-center gap-2 rounded-md border border-line bg-surface
+           px-3 py-1.5 text-[13px] font-medium text-ink-2 transition-colors
+           hover:border-line-strong hover:bg-surface-2 hover:text-ink;
   }
 
   .chip-on {
-    @apply border-transparent bg-accent-soft text-accent-deep ring-1 ring-accent/40;
+    @apply border-accent bg-accent-soft text-accent-deep
+           hover:border-accent hover:bg-accent-soft hover:text-accent-deep;
   }
 
-  .tag {
-    @apply inline-flex items-center gap-1 rounded-md bg-surface-2 px-1.5 py-0.5
-           text-[11px] font-medium text-ink-2;
+  .pill {
+    @apply inline-flex items-center gap-1.5 rounded-full border border-line bg-surface px-2.5 py-1
+           text-xs font-medium text-ink-2;
+  }
+
+  .pill-brand {
+    @apply inline-flex items-center gap-1.5 rounded-full border border-accent/25 bg-accent-soft px-2.5 py-1
+           text-xs font-medium text-accent-deep;
+  }
+
+  .table-row {
+    @apply border-b border-line transition-colors last:border-0 hover:bg-surface-2;
   }
 }
 
@@ -194,7 +135,7 @@
   @keyframes rise {
     from {
       opacity: 0;
-      transform: translateY(8px);
+      transform: translateY(6px);
     }
     to {
       opacity: 1;
@@ -212,16 +153,15 @@
   }
 
   .rise {
-    animation: rise 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation: rise 220ms ease-out both;
   }
 
-  /* O papel de parede da conversa, desenhado em CSS. */
   .chat-paper {
     background-color: rgb(var(--chat-bg));
     background-image:
-      radial-gradient(circle at 20% 30%, rgb(var(--ink) / 0.045) 1.5px, transparent 1.6px),
-      radial-gradient(circle at 70% 60%, rgb(var(--ink) / 0.035) 1.5px, transparent 1.6px),
-      radial-gradient(circle at 45% 85%, rgb(var(--ink) / 0.03) 1.5px, transparent 1.6px);
+      radial-gradient(circle at 20% 30%, rgb(17 27 33 / 0.05) 1.5px, transparent 1.6px),
+      radial-gradient(circle at 70% 60%, rgb(17 27 33 / 0.04) 1.5px, transparent 1.6px),
+      radial-gradient(circle at 45% 85%, rgb(17 27 33 / 0.035) 1.5px, transparent 1.6px);
     background-size: 48px 48px;
   }
 

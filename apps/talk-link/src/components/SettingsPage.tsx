@@ -31,11 +31,11 @@ export function SettingsPage({ state, onRefresh }: { state: AppState; onRefresh:
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <div>
-        <h1 className="font-display text-2xl font-semibold text-ink">Ajustes</h1>
+        <h1 className="text-lg font-semibold tracking-tight text-ink">Ajustes</h1>
         <p className="mt-1 text-sm text-ink-2">O que todo link novo usa por padrão.</p>
       </div>
 
-      <div className="surface p-6 shadow-card">
+      <div className="card p-6">
         <label className="block">
           <span className="mb-1.5 block text-sm font-semibold text-ink">Número que recebe as mensagens</span>
           <span className="mb-2.5 block text-[13px] leading-relaxed text-ink-2">
@@ -62,7 +62,7 @@ export function SettingsPage({ state, onRefresh }: { state: AppState; onRefresh:
         </Button>
       </div>
 
-      <div className="surface overflow-hidden shadow-card">
+      <div className="card overflow-hidden">
         <div className="px-6 pb-2 pt-5">
           <h2 className="text-sm font-semibold text-ink">Conexão com o CRM</h2>
         </div>

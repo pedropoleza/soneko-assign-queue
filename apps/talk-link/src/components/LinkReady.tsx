@@ -41,12 +41,12 @@ export function LinkReady({
 
   return (
     <div className="rise mx-auto max-w-2xl">
-      <div className="surface overflow-hidden shadow-lift">
+      <div className="card overflow-hidden shadow-lift">
         <div className="border-b border-line px-6 py-6 text-center sm:px-8">
-          <span className="mx-auto mb-3 grid h-11 w-11 place-items-center rounded-2xl bg-accent-soft text-accent-deep">
+          <span className="mx-auto mb-3 grid h-11 w-11 place-items-center rounded-xl bg-accent-soft text-accent-deep">
             <Check className="h-5 w-5" strokeWidth={2.5} />
           </span>
-          <h1 className="font-display text-xl font-semibold text-ink">Link pronto</h1>
+          <h1 className="text-xl font-semibold text-ink">Link pronto</h1>
           <p className="mt-1 text-sm text-ink-2">
             {link.partner_name ? (
               <>

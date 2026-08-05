@@ -18,7 +18,7 @@ export function ChatPreview({
   time?: string;
 }) {
   return (
-    <div className="overflow-hidden rounded-2xl border border-line bg-surface">
+    <div className="overflow-hidden rounded-xl border border-line bg-surface">
       <div className="flex items-center gap-2.5 border-b border-line bg-surface-2 px-4 py-3">
         <span className="grid h-8 w-8 place-items-center rounded-full bg-accent-soft text-[13px] font-semibold text-accent-deep">
           {businessName.slice(0, 1).toUpperCase()}
@@ -31,7 +31,7 @@ export function ChatPreview({
 
       <div className="chat-paper px-4 pb-7 pt-5">
         <div className="ml-auto max-w-[85%]">
-          <div className="relative rounded-2xl rounded-tr-md bg-chat-bubble px-3.5 py-2.5 shadow-sm">
+          <div className="relative rounded-xl rounded-tr-md bg-chat-bubble px-3.5 py-2.5 shadow-sm">
             <p className="whitespace-pre-wrap break-words text-[14px] leading-[1.45] text-chat-ink">
               {message || 'A mensagem aparece aqui…'}
             </p>

@@ -17,6 +17,17 @@ npm run dev
 Abra `http://localhost:5174/?secret=<app secret da location>` na primeira vez.
 A chave fica salva no localStorage; dentro do GHL ela vem sozinha pelo SSO.
 
+## Visual
+
+Segue a mesma linguagem dos outros painéis de iframe do GoHighLevel neste
+repositório: fundo claro, cartões brancos com borda `ink-200`, neutro
+cinza-azulado, o azul do GHL como ação, Inter, abas com sublinhado e indicador
+de conexão no topo. Tema único e claro, de propósito — o app vive dentro do
+chrome do GHL, que é claro.
+
+Os componentes só falam com tokens semânticos (`surface`, `line`, `ink`,
+`accent`), definidos em `index.css`. Trocar a paleta é editar um bloco.
+
 ## Ideia da interface
 
 O app faz **três perguntas** — quem indicou, sobre o quê, e a mensagem — e devolve
@@ -32,8 +43,8 @@ inteira, e não há nada de estranho nela.
 ```
 src/
   App.tsx                    três abas e estado global
-  fonts.css                  Outfit + Public Sans embutidos (sem request externo)
-  index.css                  tokens de cor/tipo, tema claro e escuro
+  fonts.css                  Inter embutido como woff2 (sem request externo)
+  index.css                  tokens semânticos sobre a paleta ink/azul do GHL
   lib/
     api.ts                   cliente da edge function wa-api
     config.ts                chave de acesso + SSO do GHL

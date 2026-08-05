@@ -44,7 +44,7 @@ export function LinkDetailDrawer({ linkId, onClose }: { linkId: string | null; o
       <aside className="relative flex h-full w-full max-w-lg flex-col overflow-y-auto bg-paper shadow-lift">
         <header className="sticky top-0 z-10 flex items-start justify-between gap-3 border-b border-line bg-paper/90 px-5 py-4 backdrop-blur">
           <div className="min-w-0">
-            <h2 className="font-display truncate text-base font-semibold text-ink">
+            <h2 className="truncate text-base font-semibold text-ink">
               {detail?.link.name ?? 'Carregando…'}
             </h2>
             {detail && (
@@ -71,7 +71,7 @@ export function LinkDetailDrawer({ linkId, onClose }: { linkId: string | null; o
           </div>
         ) : (
           <div className="space-y-5 p-5">
-            <div className="surface flex items-center gap-5 px-5 py-4">
+            <div className="card flex items-center gap-5 px-5 py-4">
               <Ring part={detail.link.sends} total={detail.link.clicks} size={56} />
               <div className="grid flex-1 grid-cols-2 gap-4">
                 <div>
@@ -89,12 +89,12 @@ export function LinkDetailDrawer({ linkId, onClose }: { linkId: string | null; o
               </div>
             </div>
 
-            <div className="surface">
+            <div className="card">
               <h3 className="px-5 pb-1 pt-4 text-sm font-semibold text-ink">Movimento por dia</h3>
               <DayBars series={detail.series} />
             </div>
 
-            <div className="surface overflow-hidden">
+            <div className="card overflow-hidden">
               <h3 className="px-5 pb-3 pt-4 text-sm font-semibold text-ink">
                 Quem mandou mensagem ({detail.sends.length})
               </h3>
@@ -126,7 +126,7 @@ export function LinkDetailDrawer({ linkId, onClose }: { linkId: string | null; o
               )}
             </div>
 
-            <div className="surface overflow-hidden">
+            <div className="card overflow-hidden">
               <h3 className="px-5 pb-3 pt-4 text-sm font-semibold text-ink">
                 Cliques ({detail.clicks.length})
               </h3>

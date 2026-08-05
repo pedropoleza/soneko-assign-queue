@@ -73,7 +73,7 @@ export function ResultsPage({
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="font-display text-2xl font-semibold text-ink">Resultados</h1>
+        <h1 className="text-lg font-semibold tracking-tight text-ink">Resultados</h1>
         <p className="mt-1 text-sm text-ink-2">Últimos {state.window_days} dias.</p>
       </div>
 
@@ -85,7 +85,7 @@ export function ResultsPage({
         </div>
       </div>
 
-      <div className="surface shadow-card">
+      <div className="card">
         <div className="flex items-baseline justify-between px-5 pb-1 pt-4">
           <h2 className="text-sm font-semibold text-ink">Movimento por dia</h2>
           {t.bots > 0 && <span className="text-[11px] text-ink-3">{t.bots} acessos de robô descartados</span>}
@@ -93,7 +93,7 @@ export function ResultsPage({
         <DayBars series={state.series} />
       </div>
 
-      <div className="surface overflow-hidden shadow-card">
+      <div className="card overflow-hidden">
         <div className="flex flex-wrap items-center gap-1 border-b border-line px-3 py-3">
           {(
             [
@@ -185,7 +185,7 @@ export function ResultsPage({
           ))}
       </div>
 
-      <div className="surface overflow-hidden shadow-card">
+      <div className="card overflow-hidden">
         <div className="flex items-center gap-2 px-5 py-4">
           <Send className="h-4 w-4 text-accent" />
           <h2 className="text-sm font-semibold text-ink">Quem mandou mensagem</h2>

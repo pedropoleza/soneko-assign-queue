@@ -9,16 +9,16 @@ type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
 };
 
 const VARIANT: Record<NonNullable<ButtonProps['variant']>, string> = {
-  primary: 'bg-btn text-btn-ink hover:opacity-90 disabled:opacity-40',
-  quiet: 'border border-line bg-surface text-ink-2 hover:border-line-strong hover:text-ink disabled:opacity-40',
+  primary: 'bg-accent text-white hover:bg-accent-deep disabled:bg-accent/40',
+  quiet: 'border border-line bg-surface text-ink-2 hover:bg-surface-2 hover:text-ink disabled:opacity-40',
   plain: 'text-ink-2 hover:bg-surface-2 hover:text-ink',
-  danger: 'text-danger hover:bg-danger-soft',
+  danger: 'border border-danger/25 bg-surface text-danger hover:bg-danger-soft',
 };
 
 const SIZE = {
-  sm: 'h-8 gap-1.5 rounded-lg px-2.5 text-[13px]',
-  md: 'h-10 gap-2 rounded-xl px-4 text-sm',
-  lg: 'h-12 gap-2 rounded-xl px-6 text-[15px]',
+  sm: 'h-8 gap-1.5 rounded-md px-2.5 text-[13px]',
+  md: 'h-9 gap-2 rounded-md px-3.5 text-sm',
+  lg: 'h-10 gap-2 rounded-md px-5 text-sm',
 };
 
 export function Button({
@@ -35,7 +35,7 @@ export function Button({
       {...rest}
       disabled={disabled || loading}
       className={cn(
-        'inline-flex items-center justify-center font-semibold transition disabled:cursor-not-allowed',
+        'inline-flex items-center justify-center font-medium transition-colors disabled:cursor-not-allowed',
         SIZE[size],
         VARIANT[variant],
         className,
@@ -69,7 +69,7 @@ export function Step({
 }) {
   return (
     <section className="flex gap-3.5 sm:gap-4">
-      <span className="num mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-full bg-accent-soft text-[13px] font-semibold text-accent-deep">
+      <span className="num mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-md bg-accent-soft text-[12px] font-semibold text-accent-deep">
         {n}
       </span>
       <div className="min-w-0 flex-1">
@@ -106,12 +106,21 @@ export function Tag({
   children: ReactNode;
 }) {
   const tones = {
-    neutral: '',
-    accent: 'bg-accent-soft text-accent-deep',
-    warn: 'bg-warn-soft text-warn',
-    danger: 'bg-danger-soft text-danger',
+    neutral: 'border-line bg-surface-2 text-ink-2',
+    accent: 'border-accent/25 bg-accent-soft text-accent-deep',
+    warn: 'border-warn/25 bg-warn-soft text-warn',
+    danger: 'border-danger/25 bg-danger-soft text-danger',
   };
-  return <span className={cn('tag', tones[tone])}>{children}</span>;
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[11px] font-medium',
+        tones[tone],
+      )}
+    >
+      {children}
+    </span>
+  );
 }
 
 export function Empty({
@@ -128,11 +137,11 @@ export function Empty({
   return (
     <div className="flex flex-col items-center px-6 py-16 text-center">
       {icon && (
-        <div className="mb-4 grid h-12 w-12 place-items-center rounded-2xl bg-accent-soft text-accent-deep">
+        <div className="mb-4 grid h-12 w-12 place-items-center rounded-lg bg-accent-soft text-accent-deep">
           {icon}
         </div>
       )}
-      <h3 className="font-display text-base font-semibold text-ink">{title}</h3>
+      <h3 className="text-base font-semibold text-ink">{title}</h3>
       {description && <p className="mt-1.5 max-w-sm text-sm leading-relaxed text-ink-2">{description}</p>}
       {action && <div className="mt-5">{action}</div>}
     </div>
