@@ -3,7 +3,7 @@
   "rewrites": [
     {
       "source": "/:path*",
-      "destination": "https://tbziahcpkrfiksqhuhpe.supabase.co/functions/v1/wa-redirect/:path*"
+      "destination": "/api/go?p=:path*"
     }
   ]
 }

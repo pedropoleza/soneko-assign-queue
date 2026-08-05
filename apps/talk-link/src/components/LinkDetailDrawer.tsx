@@ -3,6 +3,7 @@ import { X } from 'lucide-react';
 import { api } from '@/lib/api';
 import type { LinkDetail } from '@/types';
 import { formatDateTime, pct, relativeTime } from '@/lib/utils';
+import { appLabel } from '@/lib/trackingUrl';
 import { DayBars, Ring } from './Stats';
 import { Empty, Skeleton, Tag } from './ui';
 
@@ -136,7 +137,13 @@ export function LinkDetailDrawer({ linkId, onClose }: { linkId: string | null; o
                     <span className="text-[13px] text-ink-2">
                       {relativeTime(c.clicked_at)}
                       <span className="ml-2 text-[12px] capitalize text-ink-3">
-                        {[c.device, c.city].filter(Boolean).join(' · ')}
+                        {[
+                          c.device,
+                          appLabel(c.app),
+                          [c.city, c.country].filter(Boolean).join(', '),
+                        ]
+                          .filter(Boolean)
+                          .join(' · ')}
                       </span>
                     </span>
                     {c.converted_at ? <Tag tone="accent">mandou</Tag> : <Tag>só clicou</Tag>}

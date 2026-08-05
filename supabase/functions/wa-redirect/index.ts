@@ -15,7 +15,7 @@
 import { serviceClient } from '../_shared/supabase.ts';
 import { conf, loadConfig } from '../_shared/config.ts';
 import { stampMessage, whatsappUrl, type CodeMode } from '../_shared/tracking.ts';
-import { clientIp, hashIp, parseUa } from '../_shared/ua.ts';
+import { clientIp, detectApp, hashIp, parseUa } from '../_shared/ua.ts';
 
 const IGNORE = new Set(['', 'favicon.ico', 'robots.txt', 'sitemap.xml', 'health', 'healthz', 'apple-touch-icon.png']);
 
@@ -43,6 +43,36 @@ function readParams(url: URL): Record<string, string | null> {
     out[field] = value;
   }
   return out;
+}
+
+// A localização não chega sozinha até aqui: o runtime das Edge Functions não
+// repassa o `cf-ipcountry`, e um rewrite da Vercel para um destino externo
+// manda os cabeçalhos originais do cliente, sem os `x-vercel-ip-*` que a Vercel
+// injeta na própria borda. Por isso a borda (apps/talk-redirect) reenvia a
+// localização em `x-geo-*`. Os outros nomes ficam como plano B para quando o
+// redirecionador estiver atrás de outra CDN.
+function geo(req: Request): { country: string | null; city: string | null } {
+  const pick = (...names: string[]): string | null => {
+    for (const n of names) {
+      const v = req.headers.get(n)?.trim();
+      if (v) return v;
+    }
+    return null;
+  };
+  const city = pick('x-geo-city', 'x-vercel-ip-city', 'x-city');
+  return {
+    country: pick('x-geo-country', 'cf-ipcountry', 'x-vercel-ip-country', 'x-country')?.toUpperCase() ?? null,
+    // A Vercel manda a cidade percent-encoded ("S%C3%A3o%20Paulo").
+    city: city ? decodeCity(city) : null,
+  };
+}
+
+function decodeCity(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
 }
 
 function notFound(slug: string): Response {
@@ -111,6 +141,7 @@ Deno.serve(async (req: Request) => {
   const ua = req.headers.get('user-agent');
   const info = parseUa(ua);
   const params = readParams(url);
+  const where = geo(req);
 
   // O clique não pode segurar o redirect — vai para o waitUntil.
   const record = (async () => {
@@ -123,20 +154,11 @@ Deno.serve(async (req: Request) => {
         p_device: info.device,
         p_os: info.os,
         p_browser: info.browser,
-        p_country:
-          req.headers.get('cf-ipcountry') ??
-          req.headers.get('x-vercel-ip-country') ??
-          req.headers.get('x-country'),
-        p_city: (() => {
-          const c = req.headers.get('x-vercel-ip-city') ?? req.headers.get('x-city');
-          try {
-            return c ? decodeURIComponent(c) : null;
-          } catch {
-            return c;
-          }
-        })(),
+        p_country: where.country,
+        p_city: where.city,
         p_referer: req.headers.get('referer'),
         p_is_bot: info.isBot,
+        p_app: detectApp(ua),
         p_src: params.src,
         p_medium: params.medium,
         p_campaign: params.campaign,

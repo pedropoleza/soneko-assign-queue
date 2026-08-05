@@ -53,3 +53,23 @@ export function placementLabel(src: string | null | undefined): string {
   if (!src || src === 'direto') return 'Direto';
   return PLACEMENTS.find((p) => p.value === src)?.label ?? src;
 }
+
+// O app de onde a pessoa saiu, detectado pelo navegador embutido. Diferente da
+// origem declarada no link: esta a gente observa, não depende de marcação.
+const APP_LABELS: Record<string, string> = {
+  instagram: 'Instagram',
+  tiktok: 'TikTok',
+  facebook: 'Facebook',
+  messenger: 'Messenger',
+  twitter: 'X/Twitter',
+  linkedin: 'LinkedIn',
+  snapchat: 'Snapchat',
+  pinterest: 'Pinterest',
+  telegram: 'Telegram',
+};
+
+/** Rótulo legível do app de origem detectado no clique. */
+export function appLabel(app: string | null | undefined): string | null {
+  if (!app) return null;
+  return APP_LABELS[app] ?? app;
+}

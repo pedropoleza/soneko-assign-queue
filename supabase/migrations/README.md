@@ -18,6 +18,8 @@ que é a fonte de verdade. Na ordem:
 | `20260805041318` | `wa_agency_install` | `wa.agencies`, `wa_save_agency`, `wa_get_agency` (instalação no nível agência) |
 | `20260805045710` | `wa_marker_carries_source` | o marcador passa a carregar `code*src*content`; `conversions.content` e `conversions.src_source`; `wa_match_inbound` recebe `p_src`/`p_content` |
 | `20260805045758` | `wa_by_source_counts_sends_without_click` | envios sem clique correspondente passam a contar na quebra por origem |
+| `20260805130951` | `clicks_app_and_geo` | `clicks.app` (navegador embutido do app de origem); `wa_record_click` recebe `p_app` |
+| `20260805131046` | `link_detail_exposes_app` | `wa_link_detail` devolve `app` no clique e a quebra `by_app` |
 
 ## Exportar os arquivos `.sql` para cá
 

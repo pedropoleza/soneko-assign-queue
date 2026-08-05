@@ -43,6 +43,35 @@ export function parseUa(ua: string | null): UaInfo {
   };
 }
 
+// De qual app a pessoa saiu. Quando alguém abre um link dentro do Instagram,
+// do TikTok ou do Facebook, o app usa um navegador embutido e assina o
+// user-agent — então dá para saber a origem mesmo quando quem publicou o link
+// esqueceu de marcar o `?s=`. É um sinal observado, não declarado: fica numa
+// coluna própria e nunca sobrescreve a origem que veio na URL.
+//
+// A ordem importa: o navegador embutido do Instagram também carrega a
+// assinatura FBAN/FBAV do Facebook, então o Instagram tem que ser testado antes.
+const APP_SIGNATURES: Array<[string, RegExp]> = [
+  ['instagram', /instagram/i],
+  ['tiktok', /bytedancewebview|musical_ly|tiktok|trill/i],
+  ['facebook', /\bfb(an|av|_iab|ios|sv)\b|\bfban\/|\bfbav\//i],
+  ['messenger', /messengerlite|\bfb_iab\/messenger/i],
+  ['twitter', /twitter(android|for ?iphone)?\b/i],
+  ['linkedin', /linkedin/i],
+  ['snapchat', /snapchat/i],
+  ['pinterest', /pinterest/i],
+  ['telegram', /\btelegram\b/i],
+];
+
+/** Identifica o navegador embutido do app de origem, quando houver assinatura. */
+export function detectApp(ua: string | null): string | null {
+  if (!ua) return null;
+  for (const [name, re] of APP_SIGNATURES) {
+    if (re.test(ua)) return name;
+  }
+  return null;
+}
+
 export async function hashIp(ip: string | null, salt: string): Promise<string | null> {
   if (!ip) return null;
   const data = new TextEncoder().encode(`${salt}:${ip}`);
