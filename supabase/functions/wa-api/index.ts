@@ -85,14 +85,19 @@ Deno.serve(async (req: Request) => {
     // ---- leitura -----------------------------------------------------------
     if (req.method === 'GET' && seg[0] === 'state') {
       const days = Number(url.searchParams.get('days') ?? 30) || 30;
-      const [state, sources] = await Promise.all([
+      const [state, sources, signals] = await Promise.all([
         db.rpc('wa_state', { p_secret: secret, p_days: days }),
         db.rpc('wa_by_source', { p_secret: secret, p_days: days }),
+        // Avisos, qualidade do clique e evolução do parceiro. Vem junto porque
+        // a tela mostra tudo de uma vez — uma ida a mais serviria três leituras.
+        db.rpc('wa_signals', { p_secret: secret, p_days: days, p_stale_days: 7 }),
       ]);
       if (state.error) return json({ error: state.error.message }, 400);
       return json({
         ...(withUrls(state.data) as Record<string, unknown>),
         sources: sources.data ?? {},
+        // Sinal é acessório: se falhar, a tela ainda tem que abrir.
+        signals: signals.data ?? {},
       });
     }
 

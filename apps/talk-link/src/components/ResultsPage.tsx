@@ -7,6 +7,7 @@ import { placementLabel } from '@/lib/trackingUrl';
 import { copyToClipboard, pct, relativeTime } from '@/lib/utils';
 import { DayBars, RankRow, Ring } from './Stats';
 import { InfluencersCard } from './InfluencersCard';
+import { AlertStrip, SignalsCard } from './SignalsCard';
 import { Avatar, Button, Chip, Empty, Tag } from './ui';
 
 type Detail = 'links' | 'origens' | 'mensagens';
@@ -82,6 +83,9 @@ export function ResultsPage({
 
   return (
     <div className="space-y-5">
+      {/* Link parado é a única coisa que interrompe a leitura do relatório. */}
+      {state.signals && <AlertStrip signals={state.signals} onOpenLink={onOpenLink} />}
+
       {/* Uma faixa: os três números e o período, na mesma linha. */}
       <div className="card flex flex-wrap items-center gap-x-8 gap-y-4 px-5 py-4">
         <Figure value={t.clicks} label="clicaram" sub={`${t.unique_clicks} pessoas`} />
@@ -111,6 +115,14 @@ export function ResultsPage({
       </div>
 
       <InfluencersCard partners={state.partners} onOpen={onOpenPartner} />
+
+      {state.signals && (
+        <SignalsCard
+          signals={state.signals}
+          onOpenLink={onOpenLink}
+          onOpenPartner={onOpenPartner}
+        />
+      )}
 
       {/* O detalhe fica embaixo, num único cartão que troca de conteúdo. */}
       <div className="card overflow-hidden">

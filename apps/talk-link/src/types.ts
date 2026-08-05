@@ -126,6 +126,49 @@ export type AppState = {
     by_medium: Array<{ medium: string; clicks: number }>;
     by_content: Array<{ content: string; clicks: number; sends: number }>;
   };
+  signals?: Signals;
+};
+
+/** Leituras que o relatório não fazia: o que parou, o que é ruído, quem evoluiu. */
+export type Signals = {
+  window_days: number;
+  stale_days: number;
+  alerts: Array<{
+    kind: 'sem_entrada' | 'nunca_clicado' | 'sem_envio';
+    severity: string;
+    link_id: string;
+    link_name: string;
+    link_slug: string;
+    partner_name: string | null;
+    last_click_at: string | null;
+    clicks_window: number;
+    sends_window: number;
+    days_quiet: number | null;
+  }>;
+  quality: Array<{
+    link_id: string;
+    link_name: string;
+    link_slug: string;
+    partner_name: string | null;
+    clicks: number;
+    uniques: number;
+    top_ip_clicks: number;
+    no_ip: number;
+    concentration: number | null;
+    suspect: boolean;
+  }>;
+  trend: Array<{
+    partner_id: string;
+    partner_name: string;
+    clicks: number;
+    clicks_prev: number;
+    delta_clicks: number;
+    sends: number;
+    sends_prev: number;
+    delta_sends: number;
+    pct_sends: number | null;
+    pct_clicks: number | null;
+  }>;
 };
 
 export type LinkDetail = {

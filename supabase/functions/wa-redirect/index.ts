@@ -166,8 +166,79 @@ function bouncePage(appUrl: string, webUrl: string, token: string): Response {
 
 /** Liga/desliga a página de salto sem novo deploy (alavanca de rollback). */
 function deepLinkEnabled(): boolean {
-  const v = (conf('WA_MOBILE_DEEPLINK') ?? '').trim().toLowerCase();
+  return switchOn('WA_MOBILE_DEEPLINK');
+}
+
+/** Liga/desliga a prévia rica entregue ao crawler. */
+function previewEnabled(): boolean {
+  return switchOn('WA_LINK_PREVIEW');
+}
+
+function switchOn(key: string): boolean {
+  const v = (conf(key) ?? '').trim().toLowerCase();
   return v !== 'off' && v !== '0' && v !== 'false';
+}
+
+function esc(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+// ---------------------------------------------------------------------------
+// Prévia rica (só para crawler).
+//
+// Um 302 não tem o que mostrar: colado no Instagram ou no WhatsApp, o link
+// aparece pelado — sem título, sem descrição — e lê como encurtador suspeito.
+// Isso derruba clique antes mesmo de existir clique.
+//
+// O crawler já é separado do humano para não inflar a métrica, então o mesmo
+// teste serve para entregar a ele um HTML com as tags de Open Graph. Quem é
+// gente continua no caminho de sempre e não vê esta página.
+// ---------------------------------------------------------------------------
+function previewPage(link: Lookup, webUrl: string): Response {
+  const business = (link.business_name ?? '').trim();
+  const partner = (link.partner_name ?? '').trim();
+  const campaign = (link.link_name ?? '').trim();
+
+  const title = business ? `Falar com ${business} no WhatsApp` : 'Falar no WhatsApp';
+  const description = partner
+    ? `Indicação de ${partner}${campaign ? ` · ${campaign}` : ''}. Toque para abrir a conversa com a mensagem pronta.`
+    : campaign || 'Toque para abrir a conversa no WhatsApp com a mensagem pronta.';
+  const canonical = link.short_domain
+    ? `${link.short_domain.replace(/\/+$/, '')}/${link.slug}`
+    : '';
+
+  const html = `<!doctype html>
+<html lang="pt-BR"><head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>${esc(title)}</title>
+<meta name="description" content="${esc(description)}"/>
+<meta property="og:type" content="website"/>
+<meta property="og:title" content="${esc(title)}"/>
+<meta property="og:description" content="${esc(description)}"/>${
+    business ? `\n<meta property="og:site_name" content="${esc(business)}"/>` : ''
+  }${canonical ? `\n<meta property="og:url" content="${esc(canonical)}"/>` : ''}
+<meta name="twitter:card" content="summary"/>
+<meta name="twitter:title" content="${esc(title)}"/>
+<meta name="twitter:description" content="${esc(description)}"/>
+<meta name="theme-color" content="#25D366"/>
+<!-- Rede de segurança: se um humano cair aqui por engano de detecção, segue. -->
+<meta http-equiv="refresh" content="0;url=${esc(webUrl)}"/>
+</head>
+<body><p><a href="${esc(webUrl)}">${esc(title)}</a></p></body></html>`;
+
+  return new Response(html, {
+    status: 200,
+    headers: {
+      'content-type': HTML_PASSTHROUGH,
+      // O crawler pode guardar: a prévia só muda quando o link muda de nome.
+      'cache-control': 'public, max-age=300',
+    },
+  });
 }
 
 function notFound(slug: string): Response {
@@ -207,6 +278,11 @@ type Lookup = {
   message: string | null;
   code: string;
   code_mode: CodeMode;
+  slug: string;
+  link_name: string | null;
+  partner_name: string | null;
+  business_name: string | null;
+  short_domain: string | null;
   active: boolean;
 };
 
@@ -302,9 +378,13 @@ Deno.serve(async (req: Request) => {
   });
   const target = whatsappUrl(link.destination_phone, text);
 
-  // Só o celular muda de caminho. Desktop e crawler seguem no 302 de sempre:
-  // no desktop a página do Meta é o comportamento esperado, e crawler não roda
-  // JavaScript — entregar a página de salto para eles só quebraria o preview.
+  // Crawler ganha o cartão; o clique dele já não contava mesmo.
+  if (info.isBot && previewEnabled()) {
+    return previewPage(link, target);
+  }
+
+  // Só o celular muda de caminho. Desktop segue no 302 de sempre — lá a página
+  // do Meta é o comportamento esperado, e o pulo para o Safari não existe.
   const isMobile = info.device === 'mobile' || info.device === 'tablet';
   if (isMobile && !info.isBot && deepLinkEnabled()) {
     return bouncePage(whatsappAppUrl(link.destination_phone, text), target, clickToken);

@@ -20,6 +20,10 @@ que é a fonte de verdade. Na ordem:
 | `20260805045758` | `wa_by_source_counts_sends_without_click` | envios sem clique correspondente passam a contar na quebra por origem |
 | `20260805130951` | `clicks_app_and_geo` | `clicks.app` (navegador embutido do app de origem); `wa_record_click` recebe `p_app` |
 | `20260805131046` | `link_detail_exposes_app` | `wa_link_detail` devolve `app` no clique e a quebra `by_app` |
+| `20260805182703` | `clicks_app_opened` | `clicks.app_opened_at` e `wa_mark_app_opened`: degrau de abertura do app no funil |
+| `20260805185126` | `wa_signals_alerts_quality_trend` | `wa_signals`: link parado, concentração de clique e evolução do parceiro |
+| `20260805185306` | `wa_signals_quality_ignores_null_ip` | corrige falso positivo: clique sem IP não conta como aparelho concentrado |
+| `20260805185925` | `wa_lookup_carries_preview_fields` | `wa_lookup` devolve nome do link, do parceiro, do negócio e o domínio curto |
 
 ## Exportar os arquivos `.sql` para cá
 
