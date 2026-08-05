@@ -240,3 +240,57 @@ export async function writeAttribution(
     }),
   }).catch(() => {});
 }
+
+// --- instalação no nível agência --------------------------------------------
+//
+// Quando a agência instala o app, o token volta como Company e sem locationId.
+// Com ele dá para listar as sub-contas onde o app está instalado e cunhar um
+// token por sub-conta — que é o que o resto do sistema espera.
+
+/** O appId é o client_id sem o sufixo depois do hífen. */
+export function appId(): string {
+  const explicit = conf('GHL_APP_ID');
+  if (explicit) return explicit;
+  return (conf('GHL_CLIENT_ID') ?? '').split('-')[0];
+}
+
+export type InstalledLocation = { id: string; name: string | null };
+
+export async function getInstalledLocations(
+  agencyToken: string,
+  companyId: string,
+): Promise<InstalledLocation[]> {
+  const params = new URLSearchParams({ companyId, appId: appId(), limit: '500', isInstalled: 'true' });
+  const res = await fetch(`${GHL_API}/oauth/installedLocations?${params}`, {
+    headers: { Authorization: `Bearer ${agencyToken}`, Version: GHL_VERSION, Accept: 'application/json' },
+  });
+  if (!res.ok) throw new Error(`ghl_installed_locations_${res.status}:${(await res.text()).slice(0, 300)}`);
+
+  const d = (await res.json()) as { locations?: Array<Record<string, unknown>> };
+  return (d.locations ?? [])
+    .map((l) => ({
+      id: String(l._id ?? l.id ?? l.locationId ?? ''),
+      name: (l.name as string) ?? null,
+    }))
+    .filter((l) => l.id);
+}
+
+/** Troca o token da agência por um token daquela sub-conta. */
+export async function mintLocationToken(
+  agencyToken: string,
+  companyId: string,
+  locationId: string,
+): Promise<GhlToken> {
+  const res = await fetch(`${GHL_API}/oauth/locationToken`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${agencyToken}`,
+      Version: GHL_VERSION,
+      Accept: 'application/json',
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body: new URLSearchParams({ companyId, locationId }),
+  });
+  if (!res.ok) throw new Error(`ghl_location_token_${res.status}:${(await res.text()).slice(0, 300)}`);
+  return (await res.json()) as GhlToken;
+}
