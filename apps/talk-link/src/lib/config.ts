@@ -45,8 +45,14 @@ export function getSecret(): string | null {
 export function getLocationId(): string | null {
   if (typeof window === 'undefined') return null;
   const q = new URL(window.location.href).searchParams;
-  const id = q.get('location_id') ?? q.get('locationId');
-  return id && id.trim() ? id.trim() : null;
+  const raw = (q.get('location_id') ?? q.get('locationId') ?? '').trim();
+  if (!raw) return null;
+
+  // Merge field que não foi substituído ({{location.id}}) chegaria aqui como
+  // texto literal e nunca bateria com o id real — o app ficaria descartando a
+  // chave a cada abertura. Só aceitamos o que tem cara de id do GHL.
+  if (!/^[A-Za-z0-9_-]{10,40}$/.test(raw)) return null;
+  return raw;
 }
 
 export function saveSecret(s: string) {

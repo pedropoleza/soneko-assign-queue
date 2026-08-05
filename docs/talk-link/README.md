@@ -150,15 +150,21 @@ ela configurada, o receptor passa a exigir e validar o header `x-wh-signature`
 
 Depende de já existir o app do Marketplace:
 
-**Com o app + SSO (recomendado) — um link só, serve para todas as sub-contas:**
+**Custom Page do app (recomendado) — um link só, serve para todas as sub-contas.**
+Em *App Settings → Custom Page*, URL **sem nenhum parâmetro**:
 
 ```
-https://talk-link-nu.vercel.app/?location_id={{location.id}}
+https://talk-link-nu.vercel.app/
 ```
 
 O iframe pergunta ao GHL quem está logado (`REQUEST_USER_DATA`), manda o
 payload cifrado para `/wa-oauth/sso` e recebe a chave da sub-conta. Ninguém vê
-segredo na URL.
+segredo na URL, e a sub-conta vem do próprio payload — por isso não se usa
+merge field aqui.
+
+> O handshake de SSO **só existe na Custom Page de um app do Marketplace**.
+> Num Custom Menu Link comum o CRM ignora o `REQUEST_USER_DATA`, e a entrada
+> automática não acontece — use a forma com chave, abaixo.
 
 **Sem o app ainda — um link por sub-conta:**
 
