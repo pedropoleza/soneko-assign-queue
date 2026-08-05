@@ -61,7 +61,11 @@ Deno.serve(async (req: Request) => {
       const account = data as { app_secret: string };
       const target = appUrl();
       if (!target) return json({ ok: true, installed: true, app_secret: account.app_secret });
-      return Response.redirect(`${target}/links?secret=${encodeURIComponent(account.app_secret)}`, 302);
+      // A rota /links não existe mais — o app abre na raiz.
+      return Response.redirect(
+        `${target}/?secret=${encodeURIComponent(account.app_secret)}&location_id=${encodeURIComponent(token.locationId)}`,
+        302,
+      );
     }
 
     if (path === '/sso' && req.method === 'POST') {
