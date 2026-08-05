@@ -33,9 +33,14 @@ export default async function handler(req: Request): Promise<Response> {
 
   // O vercel.json injeta o caminho original em `p` — depois do rewrite, o
   // `req.url` já aponta para /api/go e não serve mais para achar o link.
+  //
+  // A Vercel ainda acrescenta por conta própria o grupo nomeado do `source`
+  // como `path`. Os dois são roteamento nosso e não podem seguir adiante: o
+  // que sobra desta query é gravado em clicks.query como origem do clique.
   const params = new URLSearchParams(url.searchParams);
-  const path = (params.get('p') ?? '').replace(/^\/+/, '');
+  const path = (params.get('p') ?? params.get('path') ?? '').replace(/^\/+/, '');
   params.delete('p');
+  params.delete('path');
 
   const query = params.toString();
   const target = `${UPSTREAM}/${path}${query ? `?${query}` : ''}`;
