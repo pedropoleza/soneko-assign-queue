@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api, ApiError } from '@/lib/api';
-import { getSecret, requestSsoSecret, saveSecret } from '@/lib/config';
+import { clearSecret, getLocationId, getSecret, requestSsoSecret, saveSecret } from '@/lib/config';
 import type { AppState, Link } from '@/types';
 import { Topbar, type TabId } from '@/components/Topbar';
 import { CreatePage } from '@/components/CreatePage';
@@ -37,7 +37,22 @@ export default function App() {
   useEffect(() => {
     (async () => {
       if (!getSecret()) await requestSsoSecret();
-      if (getSecret()) await load();
+      if (getSecret()) {
+        const data = await api.state(30).catch(() => null);
+
+        // A chave guardada pode ser de outra sub-conta — acontece com quem
+        // administra várias e troca de cliente na mesma aba.
+        const wanted = getLocationId();
+        if (data && wanted && data.account.ghl_location_id !== wanted) {
+          clearSecret();
+          if (await requestSsoSecret()) await load();
+        } else if (data) {
+          setState(data);
+          setError(null);
+        } else {
+          await load();
+        }
+      }
       setBooting(false);
     })();
   }, [load]);

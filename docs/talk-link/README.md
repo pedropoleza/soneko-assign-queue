@@ -144,23 +144,65 @@ ela configurada, o receptor passa a exigir e validar o header `x-wh-signature`
 
 ### 3.4 Página do app dentro do CRM (o iframe)
 
-Duas opções — a primeira é a boa:
+**URL do app publicado:** `https://talk-link-nu.vercel.app`
 
-**Custom Page do app (com SSO):**
-`App Settings → Custom Page` → URL `https://<url-do-app>/`
-Depois, em **App Settings → SSO**, copie a **SSO Key**. Com ela configurada, o
-iframe pede os dados do usuário ao GHL (`REQUEST_USER_DATA`), manda o payload
-cifrado para `/wa-oauth/sso` e recebe a chave da conta. O cliente nunca vê
-segredo nenhum na URL.
+#### Qual URL colar no Custom Menu Link
 
-**Custom Menu Link (alternativa rápida):**
-`Settings → Custom Menu Links → Add`
-- Nome: `Links WhatsApp`
-- URL: `https://<url-do-app>/`
-- Open in: **iframe**
+Depende de já existir o app do Marketplace:
 
-Nesse modo, na primeira vez o cliente entra pelo link de instalação
-(`/wa-oauth/install`), que já devolve com a chave na URL e a salva no navegador.
+**Com o app + SSO (recomendado) — um link só, serve para todas as sub-contas:**
+
+```
+https://talk-link-nu.vercel.app/?location_id={{location.id}}
+```
+
+O iframe pergunta ao GHL quem está logado (`REQUEST_USER_DATA`), manda o
+payload cifrado para `/wa-oauth/sso` e recebe a chave da sub-conta. Ninguém vê
+segredo na URL.
+
+**Sem o app ainda — um link por sub-conta:**
+
+```
+https://talk-link-nu.vercel.app/?secret=<app_secret da location>&location_id={{location.id}}
+```
+
+O `secret` é por sub-conta e é o que identifica **e** autentica. Ele fica salvo
+no navegador na primeira abertura.
+
+#### Para que serve o `location_id`
+
+`{{location.id}}` é o campo de mesclagem do GHL para a sub-conta aberta.
+Ele **não** é credencial — é conferência. Quem administra várias contas e troca
+de cliente na mesma aba veria os dados da anterior, porque a chave fica no
+navegador. Com o `location_id` na URL, o app compara: se a chave guardada é de
+outra sub-conta, ele descarta e refaz o SSO. Se o campo não interpolar, nada
+quebra — só perde essa conferência.
+
+#### Se aparecer "refused to connect"
+
+O navegador está recusando o enquadramento. Três causas, nesta ordem:
+
+1. **Vercel Authentication ligada.** Todo projeto novo nasce com ela em
+   `all_except_custom_domains`, o que exige login da Vercel — dentro de um
+   iframe isso vira "refused to connect". Desligue em
+   *Project → Settings → Deployment Protection*.
+2. **`X-Frame-Options` inválido.** Esse header aceita um valor único, não uma
+   lista, e valores inválidos (como `ALLOWALL`) fazem o Chrome bloquear tudo.
+   Não use — quem controla isso é o `frame-ancestors` do CSP.
+3. **Domínio white-label fora da lista.** O `frame-ancestors` em
+   `apps/talk-link/vercel.json` precisa conter o domínio em que o CRM abre.
+   Hoje cobre `*.gohighlevel.com`, `*.leadconnectorhq.com`, `*.msgsndr.com`,
+   `*.sparkleads.pro` e `*.sparkleads.com`. Se o CRM do cliente abrir em outro,
+   acrescente lá e faça deploy.
+
+Para conferir sem abrir o CRM:
+
+```bash
+curl -sI https://talk-link-nu.vercel.app/ | grep -i -e x-frame -e content-security
+```
+
+Tem que sair **só** o `content-security-policy` com o domínio do CRM na lista,
+e nenhum `x-frame-options`.
 
 ### 3.5 O número de WhatsApp
 

@@ -34,6 +34,21 @@ export function getSecret(): string | null {
   return localStorage.getItem(STORAGE_KEY);
 }
 
+/**
+ * Sub-conta que o CRM está exibindo agora.
+ *
+ * O Custom Menu Link do GHL passa isso por `?location_id={{location.id}}`.
+ * Não é credencial — serve para saber se a chave guardada no navegador é
+ * mesmo desta sub-conta. Sem isso, quem administra várias contas veria os
+ * dados da anterior ao trocar de cliente na mesma aba.
+ */
+export function getLocationId(): string | null {
+  if (typeof window === 'undefined') return null;
+  const q = new URL(window.location.href).searchParams;
+  const id = q.get('location_id') ?? q.get('locationId');
+  return id && id.trim() ? id.trim() : null;
+}
+
 export function saveSecret(s: string) {
   localStorage.setItem(STORAGE_KEY, s);
 }
