@@ -5,19 +5,32 @@
 //     -> resolve o link pelo caminho
 //     -> lê os parâmetros de origem da própria URL (o "UTM da casa")
 //     -> registra o clique (fora do caminho crítico)
-//     -> 302 para wa.me/<numero>?text=<mensagem carimbada>
+//     -> desktop e crawler: 302 para wa.me/<numero>?text=<mensagem carimbada>
+//     -> celular: página de salto que abre o app pelo esquema whatsapp://
 //
-// Não existe página intermediária: todo o rastreio vive na URL e no 302.
+//   GET|POST  /__open?t={click_token}
+//     -> confirma que o WhatsApp assumiu, disparado pela página de salto
+//
+// O rastreio continua vivendo na URL e no texto da mensagem — a página de salto
+// não guarda estado, só troca o destino do celular pelo que abre o app direto.
 //
 // verify_jwt = false (endpoint público).
 // ---------------------------------------------------------------------------
 
 import { serviceClient } from '../_shared/supabase.ts';
 import { conf, loadConfig } from '../_shared/config.ts';
-import { stampMessage, whatsappUrl, type CodeMode } from '../_shared/tracking.ts';
+import { stampMessage, whatsappAppUrl, whatsappUrl, type CodeMode } from '../_shared/tracking.ts';
 import { clientIp, detectApp, hashIp, parseUa } from '../_shared/ua.ts';
 
 const IGNORE = new Set(['', 'favicon.ico', 'robots.txt', 'sitemap.xml', 'health', 'healthz', 'apple-touch-icon.png']);
+
+// Rota reservada da confirmação de abertura do app. O prefixo `__` não colide
+// com slug de parceiro, que é gerado a partir do nome.
+const OPEN_PATH = '__open';
+
+// Tipo combinado com a borda: "isto é HTML, entregue como HTML no nosso
+// domínio". Ver o comentário em bouncePage() para o porquê de não ser text/html.
+const HTML_PASSTHROUGH = 'text/x-spark-html; charset=utf-8';
 
 // Aceitamos as abreviações curtas (bonitas de compartilhar) e os utm_* padrão,
 // para quem já tem o hábito de colar UTM.
@@ -75,6 +88,88 @@ function decodeCity(value: string): string {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Página de salto (só no celular).
+//
+// No desktop o 302 direto continua valendo. No celular ele não serve: o destino
+// é uma página de 208 KB do Meta, o universal link do WhatsApp normalmente não
+// é honrado dentro da webview do Instagram, e a navegação escapa para o Safari.
+//
+// Aqui a gente entrega ~1 KB que tenta o esquema do app na hora. Se o WhatsApp
+// assumir, esta página some em ~200 ms e ninguém a vê. Se não assumir — app não
+// instalado, ou webview que bloqueia esquema customizado — o temporizador cai
+// no destino web de sempre, então nunca existe beco sem saída.
+//
+// De quebra, é o único ponto do caminho que consegue confirmar que o app abriu.
+// ---------------------------------------------------------------------------
+const BOUNCE_MS = 1500;
+
+/** Embute valor em <script> sem chance de fechar a tag ou escapar do literal. */
+function js(value: string): string {
+  return JSON.stringify(value).replace(/</g, '\\u003c');
+}
+
+function bouncePage(appUrl: string, webUrl: string, token: string): Response {
+  const html = `<!doctype html>
+<html lang="pt-BR"><head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<meta name="robots" content="noindex"/>
+<title>Abrindo o WhatsApp…</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { margin:0; height:100vh; display:grid; place-items:center;
+    background:#0F172A; color:#94A3B8;
+    font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+  .d { width:26px; height:26px; border:2px solid #1E293B; border-top-color:#25D366;
+    border-radius:50%; animation:s .7s linear infinite; }
+  @keyframes s { to { transform:rotate(360deg) } }
+  @media (prefers-reduced-motion: reduce) { .d { animation:none } }
+</style></head>
+<body><div class="d" role="status" aria-label="Abrindo o WhatsApp"></div>
+<script>
+(function(){
+  var app=${js(appUrl)}, web=${js(webUrl)}, t=${js(token)}, sent=false;
+  function opened(){
+    if(sent) return; sent=true;
+    try{
+      var u='/__open?t='+encodeURIComponent(t);
+      if(navigator.sendBeacon){ navigator.sendBeacon(u); }
+      else{ fetch(u,{method:'POST',keepalive:true}); }
+    }catch(e){}
+  }
+  // O app assumindo a navegação esconde a página — é essa a confirmação.
+  document.addEventListener('visibilitychange',function(){ if(document.hidden) opened(); });
+  window.addEventListener('pagehide',opened);
+  // Ainda visível depois do tempo = o app não assumiu. Cai no destino de sempre.
+  setTimeout(function(){ if(!document.hidden) location.replace(web); },${BOUNCE_MS});
+  location.replace(app);
+})();
+</script>
+<noscript><meta http-equiv="refresh" content="0;url=${webUrl.replace(/"/g, '&quot;')}"/></noscript>
+</body></html>`;
+  return new Response(html, {
+    status: 200,
+    headers: {
+      // Não é `text/html` de propósito: o gateway do Supabase rebaixa qualquer
+      // `text/html` para `text/plain` — presumivelmente para não deixar
+      // hospedar HTML arbitrário em supabase.co. Com `text/plain` o navegador
+      // mostra o código-fonte e o script nunca roda, o que mataria a página.
+      // A borda (apps/talk-redirect) traduz este tipo para text/html no nosso
+      // domínio, onde temos controle do cabeçalho.
+      'content-type': HTML_PASSTHROUGH,
+      'cache-control': 'no-store, no-cache, must-revalidate',
+      'referrer-policy': 'no-referrer-when-downgrade',
+    },
+  });
+}
+
+/** Liga/desliga a página de salto sem novo deploy (alavanca de rollback). */
+function deepLinkEnabled(): boolean {
+  const v = (conf('WA_MOBILE_DEEPLINK') ?? '').trim().toLowerCase();
+  return v !== 'off' && v !== '0' && v !== 'false';
+}
+
 function notFound(slug: string): Response {
   const safe = slug.replace(/[<>&"]/g, '');
   const html = `<!doctype html>
@@ -101,7 +196,7 @@ function notFound(slug: string): Response {
 </div></body></html>`;
   return new Response(html, {
     status: 404,
-    headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' },
+    headers: { 'content-type': HTML_PASSTHROUGH, 'cache-control': 'no-store' },
   });
 }
 
@@ -116,7 +211,7 @@ type Lookup = {
 };
 
 Deno.serve(async (req: Request) => {
-  if (req.method !== 'GET' && req.method !== 'HEAD') {
+  if (req.method !== 'GET' && req.method !== 'HEAD' && req.method !== 'POST') {
     return new Response('method_not_allowed', { status: 405 });
   }
 
@@ -127,6 +222,22 @@ Deno.serve(async (req: Request) => {
   const raw = url.pathname.replace(/^.*\/wa-redirect/, '').replace(/^\/+/, '').replace(/\/+$/, '');
   // O slug pode ter dois níveis: /parceiro/campanha.
   const slug = decodeURIComponent(raw).toLowerCase().trim().split('/').slice(0, 2).join('/');
+
+  // Confirmação de abertura do app, disparada pela página de salto. Vem antes
+  // da resolução do link porque `__open` é rota reservada, não slug.
+  if (slug.split('/')[0] === OPEN_PATH) {
+    const token = url.searchParams.get('t') ?? '';
+    try {
+      await db.rpc('wa_mark_app_opened', { p_token: token });
+    } catch {
+      /* a confirmação é melhor-esforço; nunca vira erro para quem clicou */
+    }
+    // Sempre 204, com ou sem token válido: quem chama é um beacon, e responder
+    // diferente por token só entregaria um oráculo de tokens válidos.
+    return new Response(null, { status: 204, headers: { 'cache-control': 'no-store' } });
+  }
+
+  if (req.method === 'POST') return new Response('method_not_allowed', { status: 405 });
   if (!slug || IGNORE.has(slug)) return notFound(slug);
 
   let link: Lookup | null = null;
@@ -143,12 +254,16 @@ Deno.serve(async (req: Request) => {
   const params = readParams(url);
   const where = geo(req);
 
+  // O token sai daqui, e não de dentro do waitUntil, porque a página de salto
+  // precisa dele para confirmar a abertura do app.
+  const clickToken = crypto.randomUUID().replace(/-/g, '').slice(0, 12);
+
   // O clique não pode segurar o redirect — vai para o waitUntil.
   const record = (async () => {
     try {
       await db.rpc('wa_record_click', {
         p_link_id: link.link_id,
-        p_token: crypto.randomUUID().replace(/-/g, '').slice(0, 12),
+        p_token: clickToken,
         p_ip_hash: await hashIp(clientIp(req), conf('WA_CLICK_SALT') ?? 'spark-talk-link'),
         p_ua: ua,
         p_device: info.device,
@@ -186,6 +301,14 @@ Deno.serve(async (req: Request) => {
     content: params.content,
   });
   const target = whatsappUrl(link.destination_phone, text);
+
+  // Só o celular muda de caminho. Desktop e crawler seguem no 302 de sempre:
+  // no desktop a página do Meta é o comportamento esperado, e crawler não roda
+  // JavaScript — entregar a página de salto para eles só quebraria o preview.
+  const isMobile = info.device === 'mobile' || info.device === 'tablet';
+  if (isMobile && !info.isBot && deepLinkEnabled()) {
+    return bouncePage(whatsappAppUrl(link.destination_phone, text), target, clickToken);
+  }
 
   return new Response(null, {
     status: 302,

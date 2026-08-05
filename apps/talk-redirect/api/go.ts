@@ -25,6 +25,9 @@ const FORWARD = ['user-agent', 'referer', 'accept-language', 'x-forwarded-for', 
 /** Cabeçalhos de resposta que descrevem o corpo *desta* conexão, não o de lá. */
 const HOP_BY_HOP = ['content-encoding', 'content-length', 'transfer-encoding', 'connection'];
 
+/** Tipo combinado com o wa-redirect para o HTML que ele não pode rotular. */
+const HTML_PASSTHROUGH = 'text/x-spark-html';
+
 export default async function handler(req: Request): Promise<Response> {
   const url = new URL(req.url);
 
@@ -49,10 +52,14 @@ export default async function handler(req: Request): Promise<Response> {
   if (country) headers.set('x-geo-country', country);
   if (city) headers.set('x-geo-city', city);
 
+  // POST existe por causa de um caso só: o beacon da página de salto
+  // confirmando que o WhatsApp abriu. Qualquer outro método vira GET.
+  const method = req.method === 'HEAD' || req.method === 'POST' ? req.method : 'GET';
+
   let upstream: Response;
   try {
     upstream = await fetch(target, {
-      method: req.method === 'HEAD' ? 'HEAD' : 'GET',
+      method,
       headers,
       redirect: 'manual', // o 302 é o produto: seguir aqui gastaria o hop à toa
     });
@@ -65,7 +72,16 @@ export default async function handler(req: Request): Promise<Response> {
   const out = new Headers(upstream.headers);
   for (const name of HOP_BY_HOP) out.delete(name);
 
-  return new Response(req.method === 'HEAD' ? null : upstream.body, {
+  // O gateway do Supabase rebaixa `text/html` para `text/plain`, e aí o
+  // navegador mostra o código-fonte em vez de renderizar — o que quebraria a
+  // página de salto (o script nunca rodaria) e a de link indisponível. Por isso
+  // o upstream marca o HTML com um tipo próprio e a tradução acontece aqui, no
+  // nosso domínio, onde o cabeçalho é nosso.
+  if (out.get('content-type')?.startsWith(HTML_PASSTHROUGH)) {
+    out.set('content-type', 'text/html; charset=utf-8');
+  }
+
+  return new Response(req.method === 'HEAD' || upstream.status === 204 ? null : upstream.body, {
     status: upstream.status,
     headers: out,
   });

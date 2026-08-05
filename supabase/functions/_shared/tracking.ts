@@ -181,6 +181,24 @@ export function whatsappUrl(phoneDigits: string, message: string): string {
   return `https://wa.me/${phone}${text}`;
 }
 
+/**
+ * O esquema do aplicativo — o único destino que abre a conversa sem passar por
+ * uma página do Meta.
+ *
+ * `wa.me` e `api.whatsapp.com` são páginas web: dentro do navegador embutido do
+ * Instagram ou do TikTok o universal link costuma não ser honrado, a página de
+ * 208 KB carrega de verdade e a navegação escapa para o Safari. O `whatsapp://`
+ * é entendido pela própria webview e abre o app direto.
+ *
+ * Só serve com plano B: se o WhatsApp não estiver instalado, não existe destino.
+ */
+export function whatsappAppUrl(phoneDigits: string, message: string): string {
+  const phone = (phoneDigits ?? '').replace(/\D/g, '');
+  const qs = new URLSearchParams({ phone });
+  if (message) qs.set('text', message);
+  return `whatsapp://send?${qs.toString()}`;
+}
+
 /** A forma longa e canônica, a mesma que o navegador mostra depois do wa.me. */
 export function whatsappSendUrl(phoneDigits: string, message: string): string {
   const phone = (phoneDigits ?? '').replace(/\D/g, '');
