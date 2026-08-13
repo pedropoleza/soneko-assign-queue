@@ -3,7 +3,14 @@ import { serverEnv } from "@/lib/config";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { signProposalToken, verifyProposalToken } from "./token";
 import { getBrand } from "./brand";
-import type { PlanOptionDraft, PublicProposal, Quote, QuoteOption, QuoteProfile } from "./types";
+import type {
+  PlanOptionDraft,
+  PublicProposal,
+  Quote,
+  QuoteOption,
+  QuoteProfile,
+  QuoteSummary,
+} from "./types";
 
 /**
  * Persistence facade for cotações (CLAUDE.md §5). Production reads/writes the
@@ -44,6 +51,8 @@ export interface CreateQuoteInput {
   householdJson: unknown;
   recommendedPlanId?: string | null;
   ttlDays?: number;
+  /** Rótulo desta proposta — distingue as várias do mesmo cliente. */
+  titulo?: string | null;
 }
 
 export async function createQuote(input: CreateQuoteInput): Promise<Quote> {
@@ -74,6 +83,7 @@ export async function createQuote(input: CreateQuoteInput): Promise<Quote> {
     tokenExpiresAt: expiresAt,
     householdJson: input.householdJson,
     recommendedPlanId: input.recommendedPlanId ?? null,
+    titulo: input.titulo?.trim() || null,
     options,
   };
 
@@ -109,8 +119,51 @@ export async function getProposalByToken(token: string): Promise<PublicProposal 
     year: quote.year,
     expired,
     recommendedPlanId: quote.recommendedPlanId ?? null,
+    titulo: quote.titulo ?? null,
     options: quote.options,
   };
+}
+
+/**
+ * As propostas de um cliente, da mais nova para a mais antiga.
+ *
+ * O dia da corretora tem mais de uma proposta por cliente — cenários diferentes
+ * da mesma família. Sem esta lista, cada nova proposta apagava a anterior da
+ * tela e ela perdia o link do que já tinha mandado.
+ */
+export async function listQuotesByContact(args: {
+  contactId: string;
+  corretoraId: string;
+  limit?: number;
+}): Promise<QuoteSummary[]> {
+  if (persistenceMode() === "db") {
+    const db = supabaseAdmin()!;
+    const { data, error } = await db.rpc("spark_cotacao_list_quotes_by_contact", {
+      p_contact_id: args.contactId,
+      p_corretora_id: args.corretoraId,
+      p_limit: args.limit ?? 20,
+    });
+    if (error) throw new Error(`Falha ao listar propostas: ${error.message}`);
+    return (data ?? []) as QuoteSummary[];
+  }
+
+  return [...MEM.values()]
+    .filter((q) => q.ghlContactId === args.contactId && q.corretoraId === args.corretoraId)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    .slice(0, args.limit ?? 20)
+    .map((q) => ({
+      id: q.id,
+      titulo: q.titulo ?? null,
+      createdAt: q.createdAt,
+      status: q.status,
+      year: q.year,
+      proposalToken: q.proposalToken,
+      tokenExpiresAt: q.tokenExpiresAt,
+      recommendedPlanId: q.recommendedPlanId ?? null,
+      optionCount: q.options.length,
+      menorPremio: q.options.length ? Math.min(...q.options.map((o) => o.premioMensal)) : null,
+      temAprovada: q.options.some((o) => o.response?.decisao === "aprovado"),
+    }));
 }
 
 export async function recordResponse(args: {

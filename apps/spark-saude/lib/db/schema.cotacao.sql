@@ -34,6 +34,15 @@ create table if not exists spark_cotacao.quote (
 create index if not exists quote_contact_idx on spark_cotacao.quote (ghl_contact_id);
 create index if not exists quote_corretora_idx on spark_cotacao.quote (corretora_id, created_at desc);
 
+-- A corretora manda MAIS DE UMA proposta para o mesmo cliente (cenários: só o
+-- titular, a família toda, outra faixa de renda). O schema já permitia várias
+-- linhas por contato; faltava um rótulo para distinguir uma da outra — sem ele,
+-- três propostas do mesmo dia são indistinguíveis na lista e para o cliente.
+alter table spark_cotacao.quote add column if not exists titulo text;
+-- Listar as propostas de um cliente é a consulta quente desta tela.
+create index if not exists quote_contact_recent_idx
+  on spark_cotacao.quote (ghl_contact_id, created_at desc);
+
 create table if not exists spark_cotacao.quote_option (
   id               uuid primary key,
   quote_id         uuid not null references spark_cotacao.quote(id) on delete cascade,
@@ -85,7 +94,7 @@ begin
   insert into spark_cotacao.quote
     (id, ghl_contact_id, corretora_id, created_at, zipcode, state, countyfips,
      income, year, status, proposal_token, token_expires_at, household_json,
-     recommended_plan_id)
+     recommended_plan_id, titulo)
   values (
     (p_quote->>'id')::uuid, p_quote->>'ghlContactId', p_quote->>'corretoraId',
     coalesce((p_quote->>'createdAt')::timestamptz, now()),
@@ -94,7 +103,7 @@ begin
     coalesce(p_quote->>'status','rascunho'),
     p_quote->>'proposalToken', (p_quote->>'tokenExpiresAt')::timestamptz,
     coalesce(p_quote->'householdJson', '{}'::jsonb),
-    p_quote->>'recommendedPlanId');
+    p_quote->>'recommendedPlanId', nullif(p_quote->>'titulo',''));
 
   for opt in select * from jsonb_array_elements(coalesce(p_quote->'options','[]'::jsonb)) loop
     insert into spark_cotacao.quote_option
@@ -133,6 +142,7 @@ returns jsonb language sql security definer set search_path = spark_cotacao, pub
     'tokenExpiresAt', q.token_expires_at,
     'householdJson', q.household_json,
     'recommendedPlanId', q.recommended_plan_id,
+    'titulo', q.titulo,
     'options', coalesce((
       select jsonb_agg(jsonb_build_object(
         'id', o.id,
@@ -173,6 +183,38 @@ returns jsonb language sql security definer set search_path = spark_cotacao, pub
   from spark_cotacao.quote q where q.id = p_id;
 $$;
 
+
+-- Propostas de um cliente, da mais nova para a mais antiga.
+-- Devolve RESUMO, não a cotação inteira: a tela lista várias e só carrega os
+-- planos quando a corretora abre uma delas.
+create or replace function public.spark_cotacao_list_quotes_by_contact(
+  p_contact_id text, p_corretora_id text, p_limit int default 20)
+returns jsonb language sql security definer set search_path = spark_cotacao, public as $$
+  select coalesce(jsonb_agg(row_to_json(t)::jsonb order by t."createdAt" desc), '[]'::jsonb)
+  from (
+    select
+      q.id,
+      q.titulo,
+      q.created_at       as "createdAt",
+      q.status,
+      q.year,
+      q.proposal_token   as "proposalToken",
+      q.token_expires_at as "tokenExpiresAt",
+      q.recommended_plan_id as "recommendedPlanId",
+      (select count(*) from spark_cotacao.quote_option o where o.quote_id = q.id) as "optionCount",
+      (select min(o.premio_mensal) from spark_cotacao.quote_option o where o.quote_id = q.id) as "menorPremio",
+      exists (
+        select 1 from spark_cotacao.quote_option o
+        join spark_cotacao.quote_option_response r on r.quote_option_id = o.id
+        where o.quote_id = q.id and r.decisao = 'aprovado') as "temAprovada"
+    from spark_cotacao.quote q
+    where q.ghl_contact_id = p_contact_id
+      and q.corretora_id = p_corretora_id
+    order by q.created_at desc
+    limit greatest(1, least(coalesce(p_limit, 20), 100))
+  ) t;
+$$;
+
 create or replace function public.spark_cotacao_record_response(
   p_option_id uuid, p_decisao text, p_comentario text, p_ip_hash text)
 returns void language plpgsql security definer set search_path = spark_cotacao, public as $$
@@ -186,6 +228,8 @@ end $$;
 revoke all on function public.spark_cotacao_create_quote(jsonb) from public, anon, authenticated;
 revoke all on function public.spark_cotacao_get_quote(uuid) from public, anon, authenticated;
 revoke all on function public.spark_cotacao_record_response(uuid, text, text, text) from public, anon, authenticated;
+revoke all on function public.spark_cotacao_list_quotes_by_contact(text, text, int) from public, anon, authenticated;
 grant execute on function public.spark_cotacao_create_quote(jsonb) to service_role;
 grant execute on function public.spark_cotacao_get_quote(uuid) to service_role;
 grant execute on function public.spark_cotacao_record_response(uuid, text, text, text) to service_role;
+grant execute on function public.spark_cotacao_list_quotes_by_contact(text, text, int) to service_role;

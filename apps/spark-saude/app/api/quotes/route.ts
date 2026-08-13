@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { resolveLocationId } from "@/lib/config";
-import { createQuote, proposalUrl } from "@/lib/cotacao/quotes";
+import { createQuote, listQuotesByContact, proposalUrl } from "@/lib/cotacao/quotes";
 import { buildSearchRequest } from "@/lib/cms/household";
 import { buildQuoteNote, onProposalSent, syncHouseholdMembers } from "@/lib/cotacao/ghl-sync";
 import { jsonError, jsonOk, locationFromRequest } from "@/lib/http";
@@ -51,6 +51,8 @@ const bodySchema = z.object({
   }),
   options: z.array(optionSchema).min(1),
   ttlDays: z.number().int().positive().optional(),
+  /** Rótulo desta proposta — a corretora manda várias para o mesmo cliente. */
+  titulo: z.string().max(80).optional(),
   /** Plan the broker chose to highlight — recorded in the CRM note. */
   recommendedPlanId: z.string().nullish(),
 });
@@ -75,6 +77,7 @@ export async function POST(req: Request) {
       householdJson,
       recommendedPlanId: parsed.recommendedPlanId ?? null,
       ttlDays: parsed.ttlDays,
+      titulo: parsed.titulo ?? null,
     });
 
     const url = proposalUrl(quote.proposalToken);
@@ -98,7 +101,37 @@ export async function POST(req: Request) {
       }),
     );
 
-    return jsonOk({ id: quote.id, token: quote.proposalToken, url, expiresAt: quote.tokenExpiresAt });
+    return jsonOk({
+      id: quote.id,
+      token: quote.proposalToken,
+      url,
+      expiresAt: quote.tokenExpiresAt,
+      titulo: quote.titulo,
+    });
+  } catch (err) {
+    return jsonError(err);
+  }
+}
+
+/**
+ * GET /api/quotes?contactId=... — as propostas já feitas para esse cliente.
+ *
+ * A corretora manda mais de uma proposta para a mesma pessoa (cenários
+ * diferentes da mesma família). Sem esta lista, cada proposta nova apagava a
+ * anterior da tela e o link do que já foi enviado se perdia.
+ */
+export async function GET(req: Request) {
+  try {
+    const url = new URL(req.url);
+    const contactId = url.searchParams.get("contactId");
+    if (!contactId) return jsonError(new Error("Informe o contactId."));
+    const limit = Number(url.searchParams.get("limit") || 20);
+    const items = await listQuotesByContact({
+      contactId,
+      corretoraId: resolveLocationId(locationFromRequest(req)),
+      limit: Number.isFinite(limit) ? limit : 20,
+    });
+    return jsonOk({ items });
   } catch (err) {
     return jsonError(err);
   }

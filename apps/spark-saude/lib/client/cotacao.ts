@@ -1,4 +1,11 @@
-import type { PlanOptionDraft, PlanQuote, PublicProposal, Quote, QuoteProfile } from "@/lib/cotacao/types";
+import type {
+  PlanOptionDraft,
+  PlanQuote,
+  PublicProposal,
+  Quote,
+  QuoteProfile,
+  QuoteSummary,
+} from "@/lib/cotacao/types";
 import type { QuoteSearchResult } from "@/lib/cms";
 import type { PrefillResult } from "@/lib/cotacao/prefill";
 import type { Idioma } from "@/lib/cotacao/i18n";
@@ -45,6 +52,7 @@ export interface CreateQuoteResult {
   token: string;
   url: string;
   expiresAt: string;
+  titulo?: string | null;
 }
 
 export const cotacaoApi = {
@@ -81,11 +89,21 @@ export const cotacaoApi = {
   },
 
   /** Persist a quote from the chosen options and get its shareable link. */
-  create: (profile: QuoteProfile, options: PlanOptionDraft[], recommendedPlanId?: string | null, ttlDays?: number) =>
+  create: (
+    profile: QuoteProfile,
+    options: PlanOptionDraft[],
+    recommendedPlanId?: string | null,
+    titulo?: string | null,
+    ttlDays?: number,
+  ) =>
     request<CreateQuoteResult>("/api/quotes", {
       method: "POST",
-      body: JSON.stringify({ profile, options, recommendedPlanId, ttlDays }),
+      body: JSON.stringify({ profile, options, recommendedPlanId, titulo: titulo || undefined, ttlDays }),
     }),
+
+  /** As propostas já enviadas a este cliente — várias por pessoa é o normal. */
+  listByContact: (contactId: string) =>
+    request<{ items: QuoteSummary[] }>(`/api/quotes?contactId=${encodeURIComponent(contactId)}`),
 
   /** Ask which of the chosen plans to present as the recommendation. */
   recommend: (profile: QuoteProfile, options: PlanOptionDraft[]) =>

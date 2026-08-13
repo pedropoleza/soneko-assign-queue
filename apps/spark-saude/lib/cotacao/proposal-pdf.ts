@@ -41,6 +41,7 @@ export async function renderProposalPdf(
     recommendedPlanId: quote.recommendedPlanId ?? null,
     url: proposalUrl(quote.proposalToken),
     expiresAt: quote.tokenExpiresAt,
+    titulo: quote.titulo,
   });
 }
 

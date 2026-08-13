@@ -130,7 +130,33 @@ export interface Quote {
   householdJson: unknown;
   /** Plan the broker chose to highlight to the client. */
   recommendedPlanId?: string | null;
+  /**
+   * Rótulo da proposta. A corretora manda mais de uma para o mesmo cliente
+   * ("Família toda", "Só o titular"), e sem um nome elas ficam indistinguíveis
+   * — tanto na lista dela quanto para o cliente que recebe dois links.
+   */
+  titulo?: string | null;
   options: QuoteOption[];
+}
+
+/**
+ * Uma proposta na lista do cliente. É RESUMO: a tela mostra várias e só carrega
+ * os planos quando a corretora abre uma delas.
+ */
+export interface QuoteSummary {
+  id: string;
+  titulo?: string | null;
+  createdAt: string;
+  status: QuoteStatus;
+  year: number;
+  proposalToken: string;
+  tokenExpiresAt: string;
+  recommendedPlanId?: string | null;
+  optionCount: number;
+  /** Menor mensalidade entre as opções — o número que ela lembra. */
+  menorPremio: number | null;
+  /** O cliente já aprovou alguma opção desta proposta. */
+  temAprovada: boolean;
 }
 
 /**
@@ -145,6 +171,8 @@ export interface PublicProposal {
   expired: boolean;
   /** Plan the broker highlighted — shown as "recomendada" to the client. */
   recommendedPlanId?: string | null;
+  /** Rótulo da proposta — o que distingue dois links do mesmo cliente. */
+  titulo?: string | null;
   options: QuoteOption[];
 }
 

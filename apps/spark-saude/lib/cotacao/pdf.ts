@@ -702,16 +702,18 @@ export interface ProposalPdfInput {
   recommendedPlanId?: string | null;
   url?: string;
   expiresAt?: string;
+  /** Rótulo desta proposta — o cliente pode ter recebido mais de uma. */
+  titulo?: string | null;
 }
 
 export async function buildProposalPdf(input: ProposalPdfInput): Promise<{ bytes: Uint8Array; filename: string }> {
-  const { profile, options, recommendedPlanId, url, expiresAt } = input;
+  const { profile, options, recommendedPlanId, url, expiresAt, titulo } = input;
 
   const d = dict(profile.idioma);
   const L = d.locale;
 
   const doc = await PDFDocument.create();
-  doc.setTitle(`${d.pdf.title} ${profile.year}`);
+  doc.setTitle(titulo ? `${d.pdf.title} ${profile.year} - ${titulo}` : `${d.pdf.title} ${profile.year}`);
   doc.setAuthor(LEAO_BRAND.name);
   doc.setCreator(LEAO_BRAND.name);
   doc.setSubject(`${d.pdf.title} — Marketplace / Obamacare`);
@@ -752,7 +754,20 @@ export async function buildProposalPdf(input: ProposalPdfInput): Promise<{ bytes
   if (profile.contactName) {
     const who = safe(d.pdf.preparedFor(profile.contactName));
     first.drawText(who, { x: (A4[0] - bold.widthOfTextAtSize(who, 12)) / 2, y, size: 12, font: bold, color: INK });
+    y -= 20;
+  }
+
+  // O rótulo do cenário. O cliente pode ter dois PDFs abertos ao mesmo tempo —
+  // é esta linha que diz qual é qual antes de ele comparar preço com preço.
+  if (titulo) {
+    const label = safe(titulo.toUpperCase());
+    const w = bold.widthOfTextAtSize(label, 8.5);
+    const chipW = w + 22;
+    first.drawRectangle({ x: (A4[0] - chipW) / 2, y: y - 4, width: chipW, height: 17, color: GOLD_WASH });
+    first.drawText(label, { x: (A4[0] - w) / 2, y, size: 8.5, font: bold, color: hexRgb("#8A6410") });
     y -= 24;
+  } else if (profile.contactName) {
+    y -= 4;
   }
 
   // As premissas, com o texto dela — é o que enquadra tudo o que vem depois.

@@ -114,6 +114,16 @@ export function ProposalView({ token }: { token: string }) {
         ) : data ? (
           <>
             <div className="animate-fade-up text-center">
+              {/* O cliente pode ter recebido mais de uma proposta. O rótulo é o
+                  que diz qual é esta antes de ele comparar preço com preço. */}
+              {data.titulo ? (
+                <span
+                  className="mb-2 inline-block rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wide"
+                  style={{ background: "#FBF1DC", color: "#8A6410" }}
+                >
+                  {data.titulo}
+                </span>
+              ) : null}
               <h1 className="font-display text-[30px] font-semibold leading-tight tracking-tight" style={{ color: "#1B2A4A" }}>
                 Sua proposta de seguro saúde {data.year}
               </h1>

@@ -25,7 +25,7 @@ import { ageFrom } from "@/lib/cotacao/prefill";
 import { buildClientMessage } from "@/lib/cotacao/message";
 import type { EligibilitySummary } from "@/lib/cms";
 import type { Recommendation } from "@/lib/cotacao/recommend";
-import type { PlanOptionDraft, PlanQuote, QuotePerson, QuoteProfile } from "@/lib/cotacao/types";
+import type { PlanOptionDraft, PlanQuote, QuotePerson, QuoteProfile, QuoteSummary } from "@/lib/cotacao/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { EstimateNote } from "@/components/cotacao/estimate-note";
@@ -125,9 +125,18 @@ export function QuoteBuilder() {
   const [pdfDone, setPdfDone] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [result, setResult] = React.useState<CreateQuoteResult | null>(null);
-  /** O painel de entrega está aberto? Separado de `result` porque gerar o PDF
-   *  também cria a cotação, e não deve abrir o painel por tabela. */
-  const [panelOpen, setPanelOpen] = React.useState(false);
+  /**
+   * A proposta que o painel de entrega está mostrando — a do rascunho atual OU
+   * uma do histórico do cliente. Ela carrega o próprio perfil porque a mensagem
+   * (premissas, idades, renda) tem que ser a daquela proposta, não a do que
+   * estiver na tela agora.
+   */
+  const [panel, setPanel] = React.useState<{ quote: CreateQuoteResult; profile: QuoteProfile } | null>(null);
+  /** Rótulo da próxima proposta — "Família toda", "Só o titular". */
+  const [titulo, setTitulo] = React.useState("");
+  /** Propostas já feitas para o cliente vinculado. */
+  const [historico, setHistorico] = React.useState<QuoteSummary[] | null>(null);
+  const [historicoBusy, setHistoricoBusy] = React.useState(false);
   const [copied, setCopied] = React.useState(false);
   const [copiedMsg, setCopiedMsg] = React.useState(false);
   const [prefill, setPrefill] = React.useState<{ filled: string[]; notes: string[] } | null>(null);
@@ -345,10 +354,89 @@ export function QuoteBuilder() {
       setError("Adicione ao menos um plano à proposta.");
       return null;
     }
-    const created = await cotacaoApi.create(profile, draft, recommendation?.planId ?? null);
+    const created = await cotacaoApi.create(profile, draft, recommendation?.planId ?? null, titulo);
     setResult(created);
     setSent(null);
+    void refreshHistorico();
     return created;
+  };
+
+  /** Relê as propostas do cliente — chamado após criar uma nova. */
+  const refreshHistorico = React.useCallback(async () => {
+    if (!profile.contactId) {
+      setHistorico(null);
+      return;
+    }
+    setHistoricoBusy(true);
+    try {
+      const { items } = await cotacaoApi.listByContact(profile.contactId);
+      setHistorico(items);
+    } catch {
+      setHistorico([]); // o histórico é apoio; falhar nele não trava a cotação
+    } finally {
+      setHistoricoBusy(false);
+    }
+  }, [profile.contactId]);
+
+  React.useEffect(() => {
+    void refreshHistorico();
+  }, [refreshHistorico]);
+
+
+  /**
+   * Abre uma proposta do histórico no painel de entrega.
+   *
+   * Carrega a cotação inteira para reconstruir o perfil DAQUELA proposta — a
+   * mensagem que ela reenvia precisa descrever a família e a renda daquele
+   * cenário, não o que estiver na tela agora.
+   */
+  const abrirProposta = async (item: QuoteSummary) => {
+    setError(null);
+    try {
+      const q = await cotacaoApi.get(item.id);
+      const stored = (q.householdJson ?? {}) as { profile?: Partial<QuoteProfile> };
+      setSent(null);
+      setPanel({
+        quote: {
+          id: q.id,
+          token: q.proposalToken,
+          url: `${typeof window !== "undefined" ? window.location.origin : ""}/proposta/${q.proposalToken}`,
+          expiresAt: q.tokenExpiresAt,
+          titulo: q.titulo,
+        },
+        profile: {
+          contactId: q.ghlContactId ?? undefined,
+          contactName: stored.profile?.contactName ?? profile.contactName,
+          idioma: stored.profile?.idioma ?? "pt",
+          zipcode: q.zipcode,
+          state: q.state,
+          countyfips: q.countyfips ?? undefined,
+          income: q.income,
+          year: q.year,
+          people: stored.profile?.people ?? [],
+        },
+      });
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+
+  /**
+   * Começa outra proposta para o MESMO cliente.
+   *
+   * Limpa os planos e o rótulo, mas mantém o cliente e o perfil — é assim que
+   * ela monta o segundo cenário (só o titular, outra renda) sem redigitar tudo.
+   * A proposta anterior continua viva no histórico, com o link já enviado.
+   */
+  const novaProposta = () => {
+    setDraft([]);
+    setRecommendation(null);
+    setTitulo("");
+    setResult(null);
+    setPanel(null);
+    setSent(null);
+    setError(null);
+    setView("montar");
   };
 
   /** Nome do arquivo que o servidor escolheu (varia com o idioma). */
@@ -364,13 +452,13 @@ export function QuoteBuilder() {
    * iframe do GHL, onde abrir aba nova é bloqueado com frequência e a corretora
    * ficaria olhando um botão que não faz nada.
    */
-  const generatePdf = async () => {
+  const generatePdf = async (quoteId?: string) => {
     setPdfBusy(true);
     setError(null);
     try {
-      const quote = await ensureQuote();
-      if (!quote) return;
-      const res = await fetch(cotacaoApi.pdfUrl(quote.id, profile.idioma));
+      const id = quoteId ?? (await ensureQuote())?.id;
+      if (!id) return;
+      const res = await fetch(cotacaoApi.pdfUrl(id, profile.idioma));
       if (!res.ok) {
         const body = (await res.json().catch(() => ({}))) as { error?: string };
         throw new Error(body.error || "Não foi possível gerar o PDF.");
@@ -398,7 +486,8 @@ export function QuoteBuilder() {
     setGenerating(true);
     setError(null);
     try {
-      if (await ensureQuote()) setPanelOpen(true);
+      const quote = await ensureQuote();
+      if (quote) setPanel({ quote, profile });
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -415,21 +504,22 @@ export function QuoteBuilder() {
    */
   React.useEffect(() => {
     setResult(null);
-    setPanelOpen(false);
+    setPanel(null);
     setSent(null);
   }, [draft]);
 
   // Read where the proposal will land (phone for WhatsApp, e-mail for e-mail).
   React.useEffect(() => {
-    if (!result || !profile.contactId) return;
+    const contactId = panel?.profile.contactId;
+    if (!contactId) return;
     setDest(null);
     setPhoneInput("");
     setEmailInput("");
     api
-      .contact(profile.contactId)
+      .contact(contactId)
       .then((c) => setDest({ phone: c.phone, email: c.email }))
       .catch(() => setDest({}));
-  }, [result, profile.contactId]);
+  }, [panel]);
 
   const wantsWhats = channels.includes("WhatsApp");
   const wantsEmail = channels.includes("Email");
@@ -444,7 +534,7 @@ export function QuoteBuilder() {
 
   /** Send the proposal to the lead on the CRM's own channels (um ou os dois). */
   const sendToLead = async () => {
-    if (!result || !profile.contactId) return;
+    if (!panel || !panel.profile.contactId) return;
     setSending(true);
     setError(null);
     try {
@@ -471,20 +561,20 @@ export function QuoteBuilder() {
       }
       if (basics.phone || basics.email) {
         setSavingDest(true);
-        await api.updateContactBasics(profile.contactId, basics);
+        await api.updateContactBasics(panel.profile.contactId, basics);
         setDest((d) => ({ ...d, ...basics }));
         setSavingDest(false);
       }
 
       const res = await cotacaoApi.sendToLead({
-        contactId: profile.contactId,
+        contactId: panel.profile.contactId,
         message: clientMessage,
         channels,
-        idioma: profile.idioma,
+        idioma: panel.profile.idioma,
         proposalUrl,
-        profile: { contactName: profile.contactName, year: profile.year },
+        profile: { contactName: panel.profile.contactName, year: panel.profile.year },
         // O PDF da proposta vai anexado — é o que a cliente abre no WhatsApp.
-        quoteId: result.id,
+        quoteId: panel.quote.id,
         attachPdf: true,
       });
       setSent(res.results);
@@ -507,14 +597,16 @@ export function QuoteBuilder() {
   // ela vem um caminho relativo, que não serve nem para o e-mail nem para o
   // WhatsApp. Aqui completamos com a origem real do navegador.
   const origin = typeof window !== "undefined" ? window.location.origin : "";
-  const proposalUrl = result
-    ? /^https?:\/\//.test(result.url || "")
-      ? result.url
-      : `${origin}/proposta/${result.token}`
+  const proposalUrl = panel
+    ? /^https?:\/\//.test(panel.quote.url || "")
+      ? panel.quote.url
+      : `${origin}/proposta/${panel.quote.token}`
     : "";
+  // As premissas da mensagem são as DAQUELA proposta, não as do que está na
+  // tela agora — reenviar uma proposta antiga não pode descrever outra família.
   const clientMessage = React.useMemo(
-    () => (result ? `${buildClientMessage(profile)}\n\n${proposalUrl}` : ""),
-    [result, profile, proposalUrl],
+    () => (panel ? `${buildClientMessage(panel.profile)}\n\n${proposalUrl}` : ""),
+    [panel, proposalUrl],
   );
 
   const copy = async () => {
@@ -559,7 +651,7 @@ export function QuoteBuilder() {
 
       <Button
         variant="outline"
-        onClick={generatePdf}
+        onClick={() => generatePdf()}
         disabled={empty || pdfBusy}
         title={empty ? "Adicione ao menos um plano à proposta." : "Baixar o PDF da proposta"}
         className="h-10 border-primary/45 text-primary hover:bg-primary/10 hover:text-primary"
@@ -592,22 +684,27 @@ export function QuoteBuilder() {
    * e nos dois casos ela precisa das mesmas ações: enviar (WhatsApp e/ou
    * e-mail) e gerar o PDF.
    */
-  const resultModal = result && panelOpen ? (
+  const resultModal = panel ? (
     <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/25 p-4 sm:items-center">
       <div className="max-h-full w-full max-w-xl overflow-y-auto rounded-lg border bg-background p-5 shadow-card-hover">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <p className="flex items-center gap-1.5 text-sm font-semibold text-primary">
+            <p className="flex flex-wrap items-center gap-1.5 text-sm font-semibold text-primary">
               <Check className="h-4 w-4" /> Proposta pronta
+              {panel.quote.titulo ? (
+                <span className="rounded-full bg-status-blue-bg px-2 py-0.5 text-xs font-semibold text-status-blue-fg">
+                  {panel.quote.titulo}
+                </span>
+              ) : null}
             </p>
             <p className="mt-0.5 text-xs text-muted-foreground">
-              Válida até {new Date(result.expiresAt).toLocaleDateString("pt-BR")}
-              {profile.contactId ? " · contato marcado com cotacao_enviada" : ""}
+              Válida até {new Date(panel.quote.expiresAt).toLocaleDateString("pt-BR")}
+              {panel.profile.contactId ? " · contato marcado com cotacao_enviada" : ""}
             </p>
           </div>
           <button
             type="button"
-            onClick={() => setPanelOpen(false)}
+            onClick={() => setPanel(null)}
             className="text-sm text-muted-foreground hover:text-foreground"
           >
             Fechar
@@ -621,9 +718,15 @@ export function QuoteBuilder() {
           <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
             Idioma
             <select
-              value={profile.idioma ?? "pt"}
-              aria-label="Idioma do material do cliente"
-              onChange={(e) => patch({ idioma: e.target.value as Idioma })}
+              value={panel.profile.idioma ?? "pt"}
+              aria-label="Idioma desta proposta"
+              onChange={(e) => {
+                const idioma = e.target.value as Idioma;
+                setPanel((s) => (s ? { ...s, profile: { ...s.profile, idioma } } : s));
+                // Quando o painel mostra a proposta do rascunho, o seletor do
+                // cabeçalho tem que acompanhar — é o mesmo material.
+                if (panel.quote.id === result?.id) patch({ idioma });
+              }}
               className="h-8 rounded-md border border-input bg-background px-2 text-xs font-medium text-foreground"
             >
               {IDIOMAS.map((i) => (
@@ -642,17 +745,17 @@ export function QuoteBuilder() {
         />
 
         {/* Enviar direto ao lead pelo GHL */}
-        {profile.contactId ? (
+        {panel.profile.contactId ? (
           <div className="mt-3 rounded-lg border p-3">
             {sent?.some((r) => r.ok) ? (
               <p className="flex items-center gap-1.5 text-sm font-medium text-status-green-fg">
-                <Check className="h-4 w-4" /> Enviada para {profile.contactName} por{" "}
+                <Check className="h-4 w-4" /> Enviada para {panel.profile.contactName} por{" "}
                 {channelLabel(sent.filter((r) => r.ok).map((r) => r.channel))}
               </p>
             ) : (
               <>
                 <p className="text-xs font-medium">
-                  Enviar direto para <strong>{profile.contactName}</strong> pelo GHL
+                  Enviar direto para <strong>{panel.profile.contactName}</strong> pelo GHL
                 </p>
                 <div className="mt-2 grid grid-cols-2 gap-2">
                   {(["WhatsApp", "Email"] as const).map((c) => {
@@ -752,7 +855,7 @@ export function QuoteBuilder() {
         )}
 
         <div className="mt-3 flex flex-wrap items-center gap-2">
-          <Button variant="outline" size="sm" onClick={generatePdf} disabled={pdfBusy} className="h-9">
+          <Button variant="outline" size="sm" onClick={() => generatePdf(panel.quote.id)} disabled={pdfBusy} className="h-9">
             {pdfBusy ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : pdfDone ? (
@@ -768,7 +871,7 @@ export function QuoteBuilder() {
           <Button variant="outline" size="sm" onClick={copy} className="h-9">
             {copied ? <Check className="h-4 w-4" /> : <Link2 className="h-4 w-4" />} {copied ? "Copiado" : "Só o link"}
           </Button>
-          <a href={`/proposta/${result.token}`} target="_blank" rel="noopener noreferrer">
+          <a href={`/proposta/${panel.quote.token}`} target="_blank" rel="noopener noreferrer">
             <Button variant="ghost" size="sm" className="h-9">
               <ExternalLink className="h-4 w-4" /> Ver proposta
             </Button>
@@ -1124,17 +1227,95 @@ export function QuoteBuilder() {
         </div>
       </section>
 
+      {/* Propostas deste cliente — a Dani manda mais de uma para a mesma pessoa
+          (cenários diferentes da mesma família). Sem esta lista, cada proposta
+          nova apagava a anterior da tela e o link já enviado se perdia. */}
+      {profile.contactId && historico && historico.length > 0 ? (
+        <section className="mt-4 rounded-lg border bg-card shadow-card">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b px-5 py-3">
+            <h2 className="text-sm font-semibold tracking-tight">
+              Propostas de {profile.contactName || "este cliente"}
+              <span className="ml-2 rounded-full bg-status-blue-bg px-2 py-0.5 text-xs font-semibold text-status-blue-fg">
+                {historico.length}
+              </span>
+            </h2>
+            <button
+              type="button"
+              onClick={novaProposta}
+              className="inline-flex h-9 items-center gap-1.5 rounded-md border bg-background px-3 text-sm font-medium shadow-card transition-colors hover:bg-muted"
+            >
+              <Plus className="h-4 w-4" /> Nova proposta
+            </button>
+          </div>
+          <ul className="divide-y">
+            {historico.map((h) => (
+              <li key={h.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 px-5 py-3">
+                <div className="min-w-[200px] flex-1">
+                  <p className="flex flex-wrap items-center gap-2 text-sm font-medium">
+                    {h.titulo || `Proposta de ${new Date(h.createdAt).toLocaleDateString("pt-BR")}`}
+                    {h.temAprovada ? (
+                      <span className="rounded-full bg-status-green-bg px-2 py-0.5 text-xs font-semibold text-status-green-fg">
+                        aprovada
+                      </span>
+                    ) : h.status === "respondida" ? (
+                      <span className="rounded-full bg-status-amber-bg px-2 py-0.5 text-xs font-semibold text-status-amber-fg">
+                        respondida
+                      </span>
+                    ) : null}
+                  </p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    {new Date(h.createdAt).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })} ·{" "}
+                    {h.optionCount === 1 ? "1 opção" : `${h.optionCount} opções`}
+                    {h.menorPremio != null ? ` · a partir de ${formatMoneyBR(h.menorPremio)}/mês` : ""}
+                    {new Date(h.tokenExpiresAt) < new Date() ? " · link expirado" : ""}
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <Button variant="outline" size="sm" onClick={() => abrirProposta(h)} className="h-8">
+                    <Send className="h-3.5 w-3.5" /> Enviar
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => generatePdf(h.id)} disabled={pdfBusy} className="h-8">
+                    <FileText className="h-3.5 w-3.5" /> PDF
+                  </Button>
+                  <a href={`/proposta/${h.proposalToken}`} target="_blank" rel="noopener noreferrer">
+                    <Button variant="ghost" size="sm" className="h-8">
+                      <ExternalLink className="h-3.5 w-3.5" /> Ver
+                    </Button>
+                  </a>
+                </div>
+              </li>
+            ))}
+          </ul>
+          {historicoBusy ? (
+            <p className="flex items-center gap-1.5 border-t px-5 py-2 text-xs text-muted-foreground">
+              <Loader2 className="h-3 w-3 animate-spin" /> Atualizando…
+            </p>
+          ) : null}
+        </section>
+      ) : null}
+
       {/* Planos da proposta — o coração da tela */}
       <section className="mt-4 flex flex-1 flex-col rounded-lg border bg-card shadow-card">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b px-5 py-3">
-          <h2 className="text-sm font-semibold tracking-tight">
-            Planos da proposta
-            {draft.length ? (
-              <span className="ml-2 rounded-full bg-status-blue-bg px-2 py-0.5 text-xs font-semibold text-status-blue-fg">
-                {draft.length}
-              </span>
-            ) : null}
-          </h2>
+          <div className="flex flex-wrap items-center gap-3">
+            <h2 className="text-sm font-semibold tracking-tight">
+              Planos da proposta
+              {draft.length ? (
+                <span className="ml-2 rounded-full bg-status-blue-bg px-2 py-0.5 text-xs font-semibold text-status-blue-fg">
+                  {draft.length}
+                </span>
+              ) : null}
+            </h2>
+            {/* O rótulo é o que distingue as várias propostas do mesmo cliente
+                — na lista dela, no PDF e no link que o cliente abre. */}
+            <Input
+              value={titulo}
+              onChange={(e) => setTitulo(e.target.value)}
+              maxLength={80}
+              placeholder="Nome desta proposta (ex.: Família toda)"
+              className="h-9 w-full max-w-[260px] text-sm"
+            />
+          </div>
           <button
             type="button"
             onClick={() => {
