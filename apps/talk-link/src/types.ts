@@ -176,6 +176,7 @@ export type LinkDetail = {
   series: SeriesPoint[];
   by_device: Array<{ device: string; count: number }>;
   by_app: Array<{ app: string; count: number }>;
+  by_region: Array<{ country: string | null; region: string | null; count: number }>;
   clicks: Array<{
     id: string;
     clicked_at: string;
@@ -183,9 +184,11 @@ export type LinkDetail = {
     os: string | null;
     browser: string | null;
     country: string | null;
+    region: string | null;
     city: string | null;
     referer: string | null;
     app: string | null;
+    app_opened: boolean;
     converted_at: string | null;
   }>;
   sends: Array<{

@@ -52,10 +52,17 @@ export default async function handler(req: Request): Promise<Response> {
   }
 
   // A localização, no único ponto do caminho em que ela existe.
-  const country = req.headers.get('x-vercel-ip-country');
-  const city = req.headers.get('x-vercel-ip-city');
-  if (country) headers.set('x-geo-country', country);
-  if (city) headers.set('x-geo-city', city);
+  // O estado vale mais que a cidade para leitura comercial: "quanto veio de SP"
+  // é pergunta de reunião, e a cidade nem sempre resolve.
+  const geo: Array<[string, string]> = [
+    ['x-geo-country', 'x-vercel-ip-country'],
+    ['x-geo-region', 'x-vercel-ip-country-region'],
+    ['x-geo-city', 'x-vercel-ip-city'],
+  ];
+  for (const [out, src] of geo) {
+    const value = req.headers.get(src);
+    if (value) headers.set(out, value);
+  }
 
   // POST existe por causa de um caso só: o beacon da página de salto
   // confirmando que o WhatsApp abriu. Qualquer outro método vira GET.

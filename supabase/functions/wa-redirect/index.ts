@@ -64,7 +64,7 @@ function readParams(url: URL): Record<string, string | null> {
 // injeta na própria borda. Por isso a borda (apps/talk-redirect) reenvia a
 // localização em `x-geo-*`. Os outros nomes ficam como plano B para quando o
 // redirecionador estiver atrás de outra CDN.
-function geo(req: Request): { country: string | null; city: string | null } {
+function geo(req: Request): { country: string | null; region: string | null; city: string | null } {
   const pick = (...names: string[]): string | null => {
     for (const n of names) {
       const v = req.headers.get(n)?.trim();
@@ -73,7 +73,10 @@ function geo(req: Request): { country: string | null; city: string | null } {
     return null;
   };
   const city = pick('x-geo-city', 'x-vercel-ip-city', 'x-city');
+  const region = pick('x-geo-region', 'x-vercel-ip-country-region', 'x-region');
   return {
+    // Sigla do padrão ISO 3166-2: "SP", "RJ", "CA".
+    region: region ? region.toUpperCase().slice(0, 8) : null,
     country: pick('x-geo-country', 'cf-ipcountry', 'x-vercel-ip-country', 'x-country')?.toUpperCase() ?? null,
     // A Vercel manda a cidade percent-encoded ("S%C3%A3o%20Paulo").
     city: city ? decodeCity(city) : null,
@@ -346,6 +349,7 @@ Deno.serve(async (req: Request) => {
         p_os: info.os,
         p_browser: info.browser,
         p_country: where.country,
+        p_region: where.region,
         p_city: where.city,
         p_referer: req.headers.get('referer'),
         p_is_bot: info.isBot,

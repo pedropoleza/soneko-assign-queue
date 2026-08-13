@@ -127,6 +127,32 @@ export function LinkDetailDrawer({ linkId, onClose }: { linkId: string | null; o
               )}
             </div>
 
+            {detail.by_region.length > 0 && (
+              <div className="card overflow-hidden">
+                <h3 className="px-5 pb-3 pt-4 text-sm font-semibold text-ink">De onde clicaram</h3>
+                <ul className="space-y-2.5 px-5 pb-4">
+                  {detail.by_region.slice(0, 6).map((r) => (
+                    <li key={`${r.country}-${r.region}`} className="flex items-center gap-3">
+                      <span className="w-16 shrink-0 truncate text-[13px] font-medium text-ink">
+                        {r.region ?? r.country}
+                      </span>
+                      <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-line">
+                        <span
+                          className="block h-full rounded-full bg-accent"
+                          style={{
+                            width: `${Math.max(2, (r.count / detail.by_region[0].count) * 100)}%`,
+                          }}
+                        />
+                      </span>
+                      <span className="num w-8 shrink-0 text-right text-[12px] text-ink-2">
+                        {r.count}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
             <div className="card overflow-hidden">
               <h3 className="px-5 pb-3 pt-4 text-sm font-semibold text-ink">
                 Cliques ({detail.clicks.length})
@@ -140,11 +166,16 @@ export function LinkDetailDrawer({ linkId, onClose }: { linkId: string | null; o
                         {[
                           c.device,
                           appLabel(c.app),
-                          [c.city, c.country].filter(Boolean).join(', '),
+                          // Cidade nem sempre resolve; o estado quase sempre.
+                          [c.city, c.region ?? c.country].filter(Boolean).join(', '),
                         ]
                           .filter(Boolean)
                           .join(' · ')}
                       </span>
+                      {/* Fora do `capitalize` acima, que estragaria a frase. */}
+                      {c.app_opened && (
+                        <span className="ml-2 text-[12px] text-ink-3">· abriu o app</span>
+                      )}
                     </span>
                     {c.converted_at ? <Tag tone="accent">mandou</Tag> : <Tag>só clicou</Tag>}
                   </li>

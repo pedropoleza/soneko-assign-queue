@@ -24,6 +24,8 @@ que é a fonte de verdade. Na ordem:
 | `20260805185126` | `wa_signals_alerts_quality_trend` | `wa_signals`: link parado, concentração de clique e evolução do parceiro |
 | `20260805185306` | `wa_signals_quality_ignores_null_ip` | corrige falso positivo: clique sem IP não conta como aparelho concentrado |
 | `20260805185925` | `wa_lookup_carries_preview_fields` | `wa_lookup` devolve nome do link, do parceiro, do negócio e o domínio curto |
+| `20260805215027` | `clicks_region` | `clicks.region` (estado ISO 3166-2); `wa_record_click` recebe `p_region` |
+| `20260805215120` | `link_detail_exposes_region` | `wa_link_detail` devolve `region` no clique e a quebra `by_region` |
 
 ## Exportar os arquivos `.sql` para cá
 
