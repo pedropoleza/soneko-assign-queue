@@ -51,13 +51,27 @@ export default function App() {
 
   useEffect(() => {
     (async () => {
-      if (!getSecret()) setSso(await requestSsoSecret());
+      const inIframe = typeof window !== 'undefined' && window.parent !== window;
+      const wanted = getLocationId();
+
+      // Custom Page (dentro do iframe, sem location_id na URL): o SSO é a única
+      // fonte que sabe QUAL sub-conta o CRM está exibindo agora. A chave em cache
+      // é só atalho e pode ter ficado de outra sub-conta — quem administra várias
+      // troca de cliente na mesma aba. Então perguntamos ao CRM, e a resposta
+      // dele (que requestSsoSecret grava por cima do cache) vence o atalho.
+      // Sem isso, a location da Freguglia abria mostrando a Nathalia Lucca.
+      if (inIframe && !wanted) {
+        const res = await requestSsoSecret();
+        if (!('secret' in res)) setSso(res);
+      } else if (!getSecret()) {
+        setSso(await requestSsoSecret());
+      }
+
       if (getSecret()) {
         const data = await api.state(30).catch(() => null);
 
-        // A chave guardada pode ser de outra sub-conta — acontece com quem
-        // administra várias e troca de cliente na mesma aba.
-        const wanted = getLocationId();
+        // Custom Menu Link: a própria URL nomeia a sub-conta. Se a chave guardada
+        // é de outra, descarta e refaz o SSO.
         if (data && wanted && data.account.ghl_location_id !== wanted) {
           clearSecret();
           const again = await requestSsoSecret();
