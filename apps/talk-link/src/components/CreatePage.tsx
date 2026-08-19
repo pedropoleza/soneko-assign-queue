@@ -285,7 +285,7 @@ export function CreatePage({ state, onCreated }: { state: AppState; onCreated: (
 
       <div className="lg:sticky lg:top-24">
         <p className="eyebrow mb-2.5">Prévia</p>
-        <ChatPreview message={message} businessName={state.account.name} phone={phone} />
+        <ChatPreview message={message} />
       </div>
     </div>
   );

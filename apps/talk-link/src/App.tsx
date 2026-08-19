@@ -163,7 +163,6 @@ export default function App() {
           (created ? (
             <LinkReady
               link={created}
-              businessName={state.account.name}
               onNew={() => setCreated(null)}
               onSeeResults={() => {
                 setCreated(null);

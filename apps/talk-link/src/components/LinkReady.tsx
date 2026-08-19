@@ -32,12 +32,10 @@ const FORMATS = [
  */
 export function LinkReady({
   link,
-  businessName,
   onNew,
   onSeeResults,
 }: {
   link: Link;
-  businessName: string;
   onNew: () => void;
   onSeeResults: () => void;
 }) {
@@ -141,7 +139,7 @@ export function LinkReady({
 
           </div>
 
-          <ChatPreview message={link.message} businessName={businessName} phone={link.destination_phone} />
+          <ChatPreview message={link.message} />
         </div>
 
         <div className="flex flex-col gap-2 border-t border-line px-6 py-4 sm:flex-row sm:px-8">

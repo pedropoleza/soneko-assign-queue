@@ -1,6 +1,4 @@
 import { Check, Lock } from 'lucide-react';
-import { formatPhone } from '@/lib/utils';
-import { Avatar } from './ui';
 
 /**
  * A conversa como o lead vai ver.
@@ -12,25 +10,13 @@ import { Avatar } from './ui';
  */
 export function ChatPreview({
   message,
-  businessName,
-  phone,
   time = '09:41',
 }: {
   message: string;
-  businessName: string;
-  phone?: string;
   time?: string;
 }) {
   return (
     <div className="card overflow-hidden">
-      <div className="flex items-center gap-2.5 border-b border-line px-4 py-3">
-        <Avatar name={businessName} size="sm" />
-        <div className="min-w-0">
-          <div className="truncate text-[13px] font-medium text-ink">{businessName}</div>
-          {phone && <div className="text-[11px] text-ink-3">{formatPhone(phone)}</div>}
-        </div>
-      </div>
-
       <div className="chat-paper px-4 pb-7 pt-5">
         <div className="ml-auto max-w-[88%]">
           <div className="rounded-xl rounded-tr-md bg-chat-bubble px-3.5 py-2.5 shadow-sm">
