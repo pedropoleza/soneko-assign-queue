@@ -13,24 +13,36 @@ export const SHORT_DOMAIN: string =
 
 const STORAGE_KEY = 'talk_link_secret';
 
+/** O app está aberto dentro do iframe do CRM? */
+export function inCrmFrame(): boolean {
+  return typeof window !== 'undefined' && window.parent !== window;
+}
+
 /**
- * O segredo chega por três caminhos, nesta ordem:
- *   1. ?secret=... (Custom Menu Link ou retorno do OAuth)
- *   2. localStorage (visitas seguintes)
- *   3. SSO do GHL (o iframe pede os dados do usuário ao app pai)
+ * Tira o `?secret=` da URL e devolve — sem gravar.
+ *
+ * Quem decide se essa chave vale é o boot, e a distinção é o que sustenta o
+ * multi-conta: a Custom Page tem UMA URL para todas as sub-contas. Uma chave
+ * presa nela (o callback do OAuth devolve exatamente `?secret=…&location_id=…`,
+ * e essa URL acaba colada na configuração do app) faria toda sub-conta entrar
+ * na mesma conta. Dentro do CRM, portanto, esta chave é só plano B — quem manda
+ * é o SSO, que sabe qual sub-conta está aberta agora.
  */
-export function getSecret(): string | null {
+export function consumeUrlSecret(): string | null {
   if (typeof window === 'undefined') return null;
 
   const url = new URL(window.location.href);
   const fromQuery = url.searchParams.get('secret');
-  if (fromQuery) {
-    localStorage.setItem(STORAGE_KEY, fromQuery);
-    url.searchParams.delete('secret');
-    window.history.replaceState({}, '', url.toString());
-    return fromQuery;
-  }
+  if (!fromQuery) return null;
 
+  url.searchParams.delete('secret');
+  window.history.replaceState({}, '', url.toString());
+  return fromQuery;
+}
+
+/** A chave guardada neste navegador. */
+export function getSecret(): string | null {
+  if (typeof window === 'undefined') return null;
   return localStorage.getItem(STORAGE_KEY);
 }
 

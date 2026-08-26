@@ -1,6 +1,15 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api, ApiError } from '@/lib/api';
-import { clearSecret, getLocationId, getSecret, requestSsoSecret, saveSecret, type SsoResult } from '@/lib/config';
+import {
+  clearSecret,
+  consumeUrlSecret,
+  getLocationId,
+  getSecret,
+  inCrmFrame,
+  requestSsoSecret,
+  saveSecret,
+  type SsoResult,
+} from '@/lib/config';
 import type { AppState, Link } from '@/types';
 import { Topbar, type TabId } from '@/components/Topbar';
 import { CreatePage } from '@/components/CreatePage';
@@ -51,18 +60,28 @@ export default function App() {
 
   useEffect(() => {
     (async () => {
-      const inIframe = typeof window !== 'undefined' && window.parent !== window;
+      // Sempre tiramos o ?secret= da URL. Se ele vale é o passo seguinte que diz.
+      const urlSecret = consumeUrlSecret();
       const wanted = getLocationId();
 
-      // Custom Page (dentro do iframe, sem location_id na URL): o SSO é a única
-      // fonte que sabe QUAL sub-conta o CRM está exibindo agora. A chave em cache
-      // é só atalho e pode ter ficado de outra sub-conta — quem administra várias
-      // troca de cliente na mesma aba. Então perguntamos ao CRM, e a resposta
-      // dele (que requestSsoSecret grava por cima do cache) vence o atalho.
-      // Sem isso, a location da Freguglia abria mostrando a Nathalia Lucca.
-      if (inIframe && !wanted) {
+      // Dentro do CRM, o SSO é a fonte da verdade: só ele sabe qual sub-conta
+      // está aberta agora. Ele vence os outros dois caminhos, e é isso que faz
+      // o app ser multi-conta de verdade:
+      //   • a URL — a Custom Page é uma só para todas as sub-contas, então uma
+      //     chave presa nela apontaria todo mundo para a mesma conta;
+      //   • o cache — a chave guardada é da conta aberta antes, e quem
+      //     administra várias troca de cliente na mesma aba.
+      // Quando o SSO responde, requestSsoSecret grava a chave certa por cima.
+      if (inCrmFrame()) {
         const res = await requestSsoSecret();
-        if (!('secret' in res)) setSso(res);
+        if (!('secret' in res)) {
+          // Custom Menu Link (o pai não responde ao SSO) ou SSO fora do ar:
+          // aí sim a chave da URL vale, e o guarda de location_id abaixo cobre.
+          setSso(res);
+          if (urlSecret) saveSecret(urlSecret);
+        }
+      } else if (urlSecret) {
+        saveSecret(urlSecret); // retorno do OAuth, fora do iframe
       } else if (!getSecret()) {
         setSso(await requestSsoSecret());
       }
