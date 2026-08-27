@@ -1,0 +1,166 @@
+import { useMemo, useState } from 'react';
+import { ArrowUpRight, Check, Copy, Plus } from 'lucide-react';
+import { toast } from 'sonner';
+import type { Link } from '@/types';
+import { directWhatsappUrl } from '@/lib/marker';
+import { buildTrackedUrl, PLACEMENTS } from '@/lib/trackingUrl';
+import { copyToClipboard } from '@/lib/utils';
+import { Button, Chip } from './ui';
+import { ChatPreview } from './ChatPreview';
+
+/**
+ * Os dois formatos do mesmo link. O rastreado passa pelo nosso endereço e conta
+ * o clique; o direto vai reto para o WhatsApp. Nos dois casos o marcador
+ * invisível viaja dentro da mensagem, então o envio é atribuído igual.
+ */
+const FORMATS = [
+  {
+    value: 'tracked' as const,
+    label: 'Link rastreado',
+    note: 'Conta o clique e o envio. É o que você quer na maioria das vezes.',
+  },
+  {
+    value: 'direct' as const,
+    label: 'Link direto do WhatsApp',
+    note: 'Abre o WhatsApp sem passar por nós: conta o envio, mas não o clique.',
+  },
+];
+
+/**
+ * A tela de "pronto". Substitui o formulário em vez de aparecer ao lado dele:
+ * criado o link, a única coisa que importa é copiar e ir postar.
+ */
+export function LinkReady({
+  link,
+  onNew,
+  onSeeResults,
+}: {
+  link: Link;
+  onNew: () => void;
+  onSeeResults: () => void;
+}) {
+  const [placement, setPlacement] = useState('');
+  const [format, setFormat] = useState<'tracked' | 'direct'>('tracked');
+  const [copied, setCopied] = useState(false);
+
+  const url = useMemo(() => {
+    const p = PLACEMENTS.find((x) => x.value === placement);
+    if (format === 'direct') {
+      return directWhatsappUrl(link.destination_phone, link.message, link.code, { src: p?.value });
+    }
+    return buildTrackedUrl(link.short_url, { src: p?.value, medium: p?.medium });
+  }, [format, link.code, link.destination_phone, link.message, link.short_url, placement]);
+
+  // O link direto tem a mensagem inteira dentro da URL; mostrar tudo vira ruído.
+  const pretty =
+    format === 'direct'
+      ? `api.whatsapp.com/send/?phone=${link.destination_phone.replace(/\D/g, '')}&text=…`
+      : url.replace(/^https?:\/\//, '');
+
+  async function copy() {
+    if (!(await copyToClipboard(url))) return toast.error('Não consegui copiar. Selecione e copie à mão.');
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1800);
+    toast.success('Link copiado');
+  }
+
+  return (
+    <div className="rise mx-auto max-w-5xl">
+      <div className="card overflow-hidden shadow-lift">
+        <div className="border-b border-line px-6 py-6 text-center sm:px-8">
+          <span className="mx-auto mb-3 grid h-11 w-11 place-items-center rounded-xl bg-accent-soft text-accent-deep">
+            <Check className="h-5 w-5" strokeWidth={2.5} />
+          </span>
+          <h1 className="text-xl font-semibold text-ink">Link pronto</h1>
+          <p className="mt-1 text-sm text-ink-2">
+            {link.partner_name ? (
+              <>
+                Indicação de <strong className="font-semibold text-ink">{link.partner_name}</strong> ·{' '}
+                {link.name}
+              </>
+            ) : (
+              link.name
+            )}
+          </p>
+        </div>
+
+        <div className="grid gap-6 px-6 py-6 sm:px-8 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start">
+          <div className="space-y-6">
+          <div>
+            <div className="mb-2.5 flex flex-wrap gap-1.5">
+              {FORMATS.map((f) => (
+                <Chip
+                  key={f.value}
+                  on={format === f.value}
+                  onClick={() => setFormat(f.value)}
+                  className="px-3 py-1.5 text-[13px]"
+                >
+                  {f.label}
+                </Chip>
+              ))}
+            </div>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <div className="flex min-w-0 flex-1 items-center rounded-xl border border-line bg-surface-2 px-4 py-3">
+                <span className="truncate font-mono text-[13px] text-ink">{pretty}</span>
+              </div>
+              <Button onClick={copy} className="sm:w-auto">
+                {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                {copied ? 'Copiado' : 'Copiar'}
+              </Button>
+            </div>
+            <p className="mt-2 text-[12px] text-ink-3">
+              {FORMATS.find((f) => f.value === format)?.note}
+            </p>
+          </div>
+
+          <div>
+            <p className="eyebrow mb-2.5">Onde você vai postar?</p>
+            <div className="flex flex-wrap gap-1.5">
+              <Chip on={!placement} onClick={() => setPlacement('')} className="px-3 py-1.5 text-[13px]">
+                Não marcar
+              </Chip>
+              {PLACEMENTS.map((p) => (
+                <Chip
+                  key={p.value}
+                  on={placement === p.value}
+                  onClick={() => setPlacement(p.value === placement ? '' : p.value)}
+                  className="px-3 py-1.5 text-[13px]"
+                >
+                  {p.label}
+                </Chip>
+              ))}
+            </div>
+            <p className="mt-2 text-[12px] text-ink-3">
+              {format === 'direct'
+                ? 'Vai dentro da mensagem, invisível. Depois você compara qual lugar trouxe mais gente.'
+                : 'Muda só o fim do endereço. Depois você compara qual lugar trouxe mais gente.'}
+            </p>
+          </div>
+
+          </div>
+
+          <ChatPreview message={link.message} />
+        </div>
+
+        <div className="flex flex-col gap-2 border-t border-line px-6 py-4 sm:flex-row sm:px-8">
+          <Button variant="quiet" onClick={onNew} className="sm:w-auto">
+            <Plus className="h-4 w-4" />
+            Criar outro
+          </Button>
+          <Button variant="plain" onClick={onSeeResults} className="sm:w-auto">
+            Ver resultados
+          </Button>
+          <a
+            href={url}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-xl px-4 text-sm font-semibold text-ink-2 transition hover:bg-surface-2 hover:text-ink sm:ml-auto sm:w-auto"
+          >
+            Testar o link
+            <ArrowUpRight className="h-4 w-4" />
+          </a>
+        </div>
+      </div>
+    </div>
+  );
+}
