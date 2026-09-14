@@ -148,8 +148,8 @@ export function QrFormModal({ open, onClose, onSaved, editing, defaultWaPhone = 
         </>
       }
     >
-      <div className="grid gap-7 sm:grid-cols-[1fr_auto]">
-        <div className="space-y-5">
+      <div className="grid gap-7 md:grid-cols-[minmax(0,1fr)_auto]">
+        <div className="min-w-0 space-y-5">
           <div>
             <label className="label">Nome</label>
             <input className="input" value={name} placeholder="Ex: Cartaz vitrine loja 1"
@@ -226,8 +226,8 @@ export function QrFormModal({ open, onClose, onSaved, editing, defaultWaPhone = 
           </div>
         </div>
 
-        <div className="flex flex-col items-center gap-3 sm:w-60">
-          <div className="grid h-56 w-56 place-items-center rounded-2xl border border-ink-200 bg-white p-3">
+        <div className="flex min-w-0 flex-col items-center gap-3 md:w-56">
+          <div className="grid aspect-square w-full max-w-[14rem] place-items-center rounded-2xl border border-ink-200 bg-white p-3">
             {preview ? <img src={preview} alt="QR preview" className="h-full w-full object-contain" />
               : <span className="text-sm text-ink-400">prévia do QR</span>}
           </div>
