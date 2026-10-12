@@ -41,6 +41,14 @@ export interface Dict {
     cta: string;
     orCopy: string;
   };
+  /**
+   * Destaques da comparação (lib/cotacao/highlights.ts). Ficam fora de `pdf`
+   * porque a tela da corretora e a página do cliente usam os mesmos rótulos.
+   */
+  highlights: Record<
+    "maisBarato" | "menorCustoAnual" | "menorDedutivel" | "menorTeto" | "melhorAvaliado",
+    { label: string; explain: string }
+  >;
   pdf: {
     title: string;
     subtitle: (year: number) => string;
@@ -118,6 +126,13 @@ export const DICTS: Record<Idioma, Dict> = {
       cta: "Ver minha cotação",
       orCopy: "Ou copie este link:",
     },
+    highlights: {
+      maisBarato: { label: "Mais barato", explain: "a menor mensalidade entre as opções" },
+      menorCustoAnual: { label: "Melhor custo no ano", explain: "o menor gasto total estimado em 12 meses" },
+      menorDedutivel: { label: "Menor dedutível", explain: "você começa a ser coberto antes" },
+      menorTeto: { label: "Menor teto de gasto", explain: "o limite do que você pode gastar no ano" },
+      melhorAvaliado: { label: "Melhor avaliado", explain: "a melhor nota de qualidade (CMS)" },
+    },
     pdf: {
       title: "Proposta de seguro saúde",
       subtitle: (year) => `Marketplace / Obamacare · cobertura ${year}`,
@@ -194,6 +209,13 @@ export const DICTS: Record<Idioma, Dict> = {
       cta: "Ver mi cotización",
       orCopy: "O copie este enlace:",
     },
+    highlights: {
+      maisBarato: { label: "Más barato", explain: "la prima mensual más baja entre las opciones" },
+      menorCustoAnual: { label: "Mejor costo anual", explain: "el menor gasto total estimado en 12 meses" },
+      menorDedutivel: { label: "Menor deducible", explain: "la cobertura empieza antes" },
+      menorTeto: { label: "Menor tope de gasto", explain: "el límite de lo que usted puede gastar en el año" },
+      melhorAvaliado: { label: "Mejor calificado", explain: "la mejor nota de calidad (CMS)" },
+    },
     pdf: {
       title: "Propuesta de seguro de salud",
       subtitle: (year) => `Marketplace / Obamacare · cobertura ${year}`,
@@ -269,6 +291,13 @@ export const DICTS: Record<Idioma, Dict> = {
       hello: (first) => `Hi ${first} 👋`,
       cta: "View my quote",
       orCopy: "Or copy this link:",
+    },
+    highlights: {
+      maisBarato: { label: "Lowest premium", explain: "the lowest monthly premium of the set" },
+      menorCustoAnual: { label: "Best yearly cost", explain: "the lowest estimated total over 12 months" },
+      menorDedutivel: { label: "Lowest deductible", explain: "coverage kicks in sooner" },
+      menorTeto: { label: "Lowest spending cap", explain: "the most you could spend in a year" },
+      melhorAvaliado: { label: "Best rated", explain: "the highest CMS quality rating" },
     },
     pdf: {
       title: "Health insurance proposal",

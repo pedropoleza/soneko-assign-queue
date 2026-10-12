@@ -16,6 +16,7 @@ import {
 import { LEAO_BRAND } from "./brand";
 import { dict, type Dict } from "./i18n";
 import { describePeople } from "./message";
+import { computeHighlights, topHighlights, type Highlight } from "./highlights";
 import { metalStyle } from "./metal";
 import type { PlanOptionDraft, QuoteProfile } from "./types";
 
@@ -499,6 +500,57 @@ function drawPremises(ctx: Ctx, profile: QuoteProfile): number {
   return top - y;
 }
 
+
+/**
+ * A faixa de destaques — quem ganha em cada critério.
+ *
+ * Numa proposta de seis ou oito opções, a tabela sozinha é um campo de números:
+ * o cliente lê tudo e não decide nada. Esta faixa dá o atalho ("mais barato",
+ * "menor teto de gasto") antes de ele entrar na grade, e é a mesma leitura que
+ * a corretora vê na tela e que a página online repete.
+ */
+function drawHighlights(ctx: Ctx, highlights: Highlight[]): void {
+  if (!highlights.length) return;
+  const { page, regular, bold } = ctx;
+
+  // Três por linha: mais que isso e cada chip fica estreito demais para o nome
+  // do plano, que é a informação que importa no selo.
+  const perRow = 3;
+  const gap = 8;
+  const w = (CONTENT - gap * (perRow - 1)) / perRow;
+  const rows = Math.ceil(highlights.length / perRow);
+  const h = 44;
+  const total = rows * h + (rows - 1) * gap;
+
+  ensure(ctx, total + 10);
+  const top = ctx.y;
+
+  highlights.forEach((hl, i) => {
+    const col = i % perRow;
+    const row = Math.floor(i / perRow);
+    const x = M + col * (w + gap);
+    const y = top - row * (h + gap) - h;
+
+    page.drawRectangle({ x, y, width: w, height: h, color: WASH });
+    page.drawRectangle({ x, y, width: 2.5, height: h, color: GREEN });
+
+    // O valor manda: o rótulo recebe só o que sobra e é cortado se não couber.
+    const valueW = bold.widthOfTextAtSize(safe(hl.value), 9.5);
+    const [label] = wrapMax(hl.label.toUpperCase(), bold, 7, w - 20 - valueW - 8, 1);
+    page.drawText(safe(label ?? ""), { x: x + 10, y: y + h - 14, size: 7, font: bold, color: GREEN });
+    rightText(page, hl.value, bold, 9.5, x + w - 10, y + h - 14, INK);
+
+    // Nome do plano: uma linha, cortada com reticências — o selo aponta para um
+    // plano, não conta a ficha dele.
+    const [name] = wrapMax(hl.planId, regular, 8, w - 20, 1);
+    page.drawText(safe(name ?? ""), { x: x + 10, y: y + h - 27, size: 8, font: bold, color: NAVY });
+    const [explain] = wrapMax(hl.explain, regular, 7, w - 20, 1);
+    page.drawText(safe(explain ?? ""), { x: x + 10, y: y + 9, size: 7, font: regular, color: MUTED });
+  });
+
+  ctx.y = top - total - 14;
+}
+
 // ------------------------------------------------------- Como seguir daqui
 
 const QR_SIZE = 74;
@@ -781,6 +833,17 @@ export async function buildProposalPdf(input: ProposalPdfInput): Promise<{ bytes
   ctx.y -= 8;
   ctx.page.drawRectangle({ x: M, y: ctx.y, width: 34, height: 1.6, color: GOLD });
   ctx.y -= 18;
+
+  /*
+   * Destaques antes da tabela. O selo aponta para o plano pelo NOME, então
+   * trocamos o planId pelo nome aqui — quem lê o PDF não conhece ids.
+   */
+  const highlights = computeHighlights(options, d, (n) => moneyShort(n, L)).map((h) => ({
+    ...h,
+    planId: options.find((o) => o.planId === h.planId)?.nomePlano ?? h.planId,
+  }));
+  drawHighlights(ctx, topHighlights(highlights));
+
   const comparisonY = ctx.y;
   const comparisonPage = 1;
 

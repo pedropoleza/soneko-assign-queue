@@ -317,3 +317,20 @@ Reaproveita a estrutura já definida na conta (mesmos nomes):
 - **Privacidade:** storage privado, tokens assinados com expiração, dado sensível
   protegido.
 - Sem segredos no repositório. `.env.example` com chaves vazias.
+
+### Comparar muitas opções (lib/cotacao/highlights.ts)
+
+Com duas ou três opções o cliente compara sozinho. Com seis ou oito, a tabela
+vira um campo de números e ele escolhe pelo primeiro que leu — ou não escolhe.
+Três peças resolvem isso, e as três leem o MESMO cálculo:
+
+- **Destaques** — quem ganha em cada critério (mais barato, melhor custo no ano,
+  menor dedutível, menor teto, melhor avaliado). Só há destaque com vencedor
+  **único**: empate não vira selo. Na faixa, no máximo um destaque por plano e
+  três no total (`topHighlights`) — "Molina, Molina, Molina" não ensina nada. A
+  lista completa continua nos selos do card e na tabela.
+- **Tabela comparativa** (`components/cotacao/compare-table.tsx`) — uma linha por
+  plano, colunas alinhadas, ordenável. Padrão na tela da corretora a partir de 4
+  planos (ela alterna Cards/Comparar) e na página do cliente a partir de 4.
+  Coluna que nenhum plano preenche é escondida.
+- **PDF** — a mesma faixa de destaques acima do comparativo da página 1.

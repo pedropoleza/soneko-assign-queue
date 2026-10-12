@@ -14,6 +14,8 @@ import {
   ArrowLeft,
   ImagePlus,
   Pencil,
+  LayoutGrid,
+  Rows3,
   FileText,
   Send,
 } from "lucide-react";
@@ -33,6 +35,10 @@ import { ContactPicker } from "@/components/cotacao/contact-picker";
 import { MemberPicker } from "@/components/cotacao/member-picker";
 import { OptionEditor } from "@/components/cotacao/option-editor";
 import { PlanCard } from "@/components/cotacao/plan-card";
+import { CompareTable } from "@/components/cotacao/compare-table";
+import { HighlightStrip } from "@/components/cotacao/highlight-strip";
+import { computeHighlights, highlightsOf, topHighlights } from "@/lib/cotacao/highlights";
+import { dict } from "@/lib/cotacao/i18n";
 import { metalStyle } from "@/lib/cotacao/metal";
 import { EligibilityBanner } from "@/components/cotacao/eligibility-banner";
 import { ErrorState } from "@/components/ui/data-state";
@@ -141,6 +147,19 @@ export function QuoteBuilder() {
   const [copiedMsg, setCopiedMsg] = React.useState(false);
   const [prefill, setPrefill] = React.useState<{ filled: string[]; notes: string[] } | null>(null);
   const [prefilling, setPrefilling] = React.useState(false);
+  /**
+   * Como a prateleira é mostrada. Até três planos, cards contam melhor a
+   * história; a partir de quatro a tabela é o único jeito de comparar dedutível
+   * com dedutível sem rolar a tela. O padrão segue o tamanho, e ela troca.
+   */
+  const [shelfMode, setShelfMode] = React.useState<"auto" | "cards" | "tabela">("auto");
+
+  const shelfView = shelfMode === "auto" ? (draft.length >= 4 ? "tabela" : "cards") : shelfMode;
+  // Os mesmos destaques que vão para o PDF e para a página do cliente.
+  const draftHighlights = React.useMemo(
+    () => computeHighlights(draft, dict(profile.idioma), (n) => formatMoneyBR(n ?? null)),
+    [draft, profile.idioma],
+  );
 
   const patch = (p: Partial<QuoteProfile>) => setProfile((s) => ({ ...s, ...p }));
   const patchPerson = (i: number, p: Partial<QuotePerson>) =>
@@ -1316,16 +1335,39 @@ export function QuoteBuilder() {
               className="h-9 w-full max-w-[260px] text-sm"
             />
           </div>
-          <button
-            type="button"
-            onClick={() => {
-              setEditIndex(null);
-              setEditorOpen(true);
-            }}
-            className="inline-flex h-9 items-center gap-1.5 rounded-md border bg-background px-3 text-sm font-medium shadow-card transition-colors hover:bg-muted"
-          >
-            <Pencil className="h-4 w-4" /> Adicionar manualmente
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Cards contam a história de um plano; a tabela compara vários.
+                O padrão acompanha o tamanho da proposta, mas ela manda. */}
+            {draft.length >= 2 ? (
+              <div className="flex rounded-md border bg-muted/40 p-0.5 text-xs font-medium">
+                {(["cards", "tabela"] as const).map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    aria-pressed={shelfView === m}
+                    onClick={() => setShelfMode(m)}
+                    className={cn(
+                      "inline-flex items-center gap-1.5 rounded px-2.5 py-1.5 transition-colors",
+                      shelfView === m ? "bg-card shadow-card" : "text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    {m === "cards" ? <LayoutGrid className="h-3.5 w-3.5" /> : <Rows3 className="h-3.5 w-3.5" />}
+                    {m === "cards" ? "Cards" : "Comparar"}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => {
+                setEditIndex(null);
+                setEditorOpen(true);
+              }}
+              className="inline-flex h-9 items-center gap-1.5 rounded-md border bg-background px-3 text-sm font-medium shadow-card transition-colors hover:bg-muted"
+            >
+              <Pencil className="h-4 w-4" /> Adicionar manualmente
+            </button>
+          </div>
         </div>
         <div className="flex flex-1 flex-col px-5 py-4">
 
@@ -1432,13 +1474,61 @@ export function QuoteBuilder() {
           </p>
         ) : null}
 
+        {/* Com muitas opções, a leitura começa pelos destaques: quem ganha em
+            quê. É o mesmo resumo que o cliente vê na proposta e no PDF. */}
+        {draftHighlights.length ? (
+          <HighlightStrip highlights={topHighlights(draftHighlights)} options={draft} className="mt-4" />
+        ) : null}
+
         {draft.length ? (
+          shelfView === "tabela" ? (
+            // A partir de quatro planos, cards viram parede: a tabela põe os
+            // mesmos números em colunas alinhadas, que é como se compara.
+            <CompareTable
+              className="mt-4"
+              options={draft}
+              recommendedPlanId={recommendation?.planId}
+              highlights={draftHighlights}
+              renderAction={(plan) => {
+                const i = draft.findIndex((d) => d.planId === plan.planId);
+                return (
+                  <div className="flex items-center justify-end gap-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditIndex(i);
+                        setEditorOpen(true);
+                      }}
+                      title="Revisar"
+                      className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => removeOption(i)}
+                      title="Remover"
+                      className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-status-red-bg hover:text-status-red-fg"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                );
+              }}
+            />
+          ) : (
           // A prateleira da proposta: cada opção já numerada na ordem em que o
           // cliente vai receber, e entrando com a mesma animação da escolha.
           <div className="stagger mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
             {draft.map((o, i) => (
               <div key={o.planId || i} className="flex flex-col gap-1.5">
-                <PlanCard plan={o} readOnly order={i + 1} printUrl={o.printUrl} />
+                <PlanCard
+                  plan={o}
+                  readOnly
+                  order={i + 1}
+                  printUrl={o.printUrl}
+                  highlights={highlightsOf(draftHighlights, o.planId)}
+                />
                 <div className="flex items-center gap-2 text-xs">
                   <button
                     type="button"
@@ -1461,6 +1551,7 @@ export function QuoteBuilder() {
               </div>
             ))}
           </div>
+          )
         ) : null}
 
         {/* Sugestão da IA — a corretora decide se usa */}

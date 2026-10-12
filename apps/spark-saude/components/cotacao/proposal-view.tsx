@@ -6,7 +6,11 @@ import { cotacaoApi } from "@/lib/client/cotacao";
 import type { PublicProposal } from "@/lib/cotacao/types";
 import { PlanCard } from "@/components/cotacao/plan-card";
 import { EstimateNote } from "@/components/cotacao/estimate-note";
-import { cn } from "@/lib/utils";
+import { CompareTable } from "@/components/cotacao/compare-table";
+import { HighlightStrip } from "@/components/cotacao/highlight-strip";
+import { computeHighlights, highlightsOf, topHighlights } from "@/lib/cotacao/highlights";
+import { dict } from "@/lib/cotacao/i18n";
+import { cn, formatMoneyBR } from "@/lib/utils";
 
 /**
  * The client-facing proposal (docs/cotacao.md §4 Ponta B, §8 brand). This is
@@ -65,6 +69,18 @@ export function ProposalView({ token }: { token: string }) {
     if (!rec) return data.options;
     return [...data.options].sort((a, b) => (a.planId === rec ? -1 : b.planId === rec ? 1 : 0));
   }, [data]);
+
+  // Quem ganha em cada critério. A página do cliente é em português — o idioma
+  // da peça vale para a mensagem e o PDF, que ela envia junto.
+  const highlights = React.useMemo(
+    () => computeHighlights(options, dict("pt"), (n) => formatMoneyBR(n ?? null)),
+    [options],
+  );
+
+  /** Leva o cliente do destaque/linha da tabela para o card daquele plano. */
+  const scrollToPlan = (planId: string) => {
+    document.getElementById(`plano-${planId}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
 
   return (
     <div className="leao min-h-screen bg-page">
@@ -137,6 +153,33 @@ export function ProposalView({ token }: { token: string }) {
               <EstimateNote text={brand?.disclaimer ?? ""} />
             </div>
 
+            {/* O atalho de leitura. Com muitas opções o cliente trava na parede
+                de números — os destaques dizem quem ganha em quê, e a tabela
+                deixa os mesmos valores em colunas alinhadas. Os cards continuam
+                abaixo, para quem quiser o detalhe de cada plano. */}
+            {highlights.length ? (
+              <div className="mx-auto mt-8 max-w-5xl">
+                <h2 className="mb-3 text-center text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                  Comparando rápido
+                </h2>
+                <HighlightStrip highlights={topHighlights(highlights)} options={options} onPick={scrollToPlan} />
+              </div>
+            ) : null}
+
+            {options.length >= 4 ? (
+              <div className="mx-auto mt-6 max-w-5xl">
+                <CompareTable
+                  options={options}
+                  recommendedPlanId={data.recommendedPlanId}
+                  highlights={highlights}
+                  onRowClick={scrollToPlan}
+                />
+                <p className="mt-2 text-center text-xs text-muted-foreground">
+                  Toque numa linha para ver o plano em detalhe. Clique num título de coluna para reordenar.
+                </p>
+              </div>
+            ) : null}
+
             <div
               className={cn(
                 "stagger mx-auto mt-8 grid grid-cols-1 gap-5",
@@ -149,14 +192,19 @@ export function ProposalView({ token }: { token: string }) {
                 const decided = responses[opt.id];
                 const recommended = data.recommendedPlanId != null && opt.planId === data.recommendedPlanId;
                 return (
-                  <div key={opt.id} className="relative flex flex-col gap-2.5">
+                  <div key={opt.id} id={`plano-${opt.planId}`} className="relative scroll-mt-24 flex flex-col gap-2.5">
                     {recommended ? (
                       <span className="absolute -top-3 left-1/2 z-10 inline-flex -translate-x-1/2 items-center gap-1 whitespace-nowrap rounded-full bg-accent px-3 py-1 text-xs font-semibold text-white shadow-raise">
                         <Star className="h-3 w-3 fill-current" /> Recomendada pela corretora
                       </span>
                     ) : null}
                     <div className={cn("h-full", recommended && "rounded-[var(--radius)] ring-2 ring-accent/60")}>
-                      <PlanCard plan={opt} readOnly printUrl={opt.printUrl} />
+                      <PlanCard
+                        plan={opt}
+                        readOnly
+                        printUrl={opt.printUrl}
+                        highlights={highlightsOf(highlights, opt.planId)}
+                      />
                     </div>
 
                     {decided ? (

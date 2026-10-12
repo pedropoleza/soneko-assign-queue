@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { Check, Plus, Star } from "lucide-react";
+import type { Highlight } from "@/lib/cotacao/highlights";
 import type { PlanQuote } from "@/lib/cotacao/types";
 import { metalStyle } from "@/lib/cotacao/metal";
 import { PrintAttachment } from "@/components/cotacao/print-lightbox";
@@ -30,11 +31,14 @@ export function PlanCard({
   onToggle,
   readOnly = false,
   printUrl,
+  highlights,
 }: {
   plan: PlanQuote;
   selected?: boolean;
   order?: number | null;
   best?: boolean;
+  /** Em que critérios ESTE plano ganha — o atalho de leitura num conjunto grande. */
+  highlights?: Highlight[];
   /** Recebe o retângulo do card — é a origem da ficha que voa até o contador. */
   onToggle?: (rect?: DOMRect) => void;
   readOnly?: boolean;
@@ -112,10 +116,20 @@ export function PlanCard({
           </span>
         </div>
 
-        {/* Marcadores */}
-        {best || plan.tipoPlano || plan.qualityRating != null ? (
+        {/* Marcadores — os destaques primeiro: é por eles que se lê um conjunto
+            grande sem comparar número por número. */}
+        {best || highlights?.length || plan.tipoPlano || plan.qualityRating != null ? (
           <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-            {best ? (
+            {highlights?.map((h) => (
+              <span
+                key={h.key}
+                title={h.explain}
+                className="rounded-full bg-status-green-bg px-2 py-0.5 text-xs font-semibold text-status-green-fg"
+              >
+                {h.label}
+              </span>
+            ))}
+            {best && !highlights?.length ? (
               <span className="rounded-full bg-status-green-bg px-2 py-0.5 text-xs font-semibold text-status-green-fg">
                 Melhor preço
               </span>
