@@ -157,6 +157,7 @@ export async function listQuotesByContact(args: {
       createdAt: q.createdAt,
       status: q.status,
       year: q.year,
+      income: q.income,
       proposalToken: q.proposalToken,
       tokenExpiresAt: q.tokenExpiresAt,
       recommendedPlanId: q.recommendedPlanId ?? null,

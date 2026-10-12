@@ -334,3 +334,28 @@ Três peças resolvem isso, e as três leem o MESMO cálculo:
   planos (ela alterna Cards/Comparar) e na página do cliente a partir de 4.
   Coluna que nenhum plano preenche é escondida.
 - **PDF** — a mesma faixa de destaques acima do comparativo da página 1.
+
+### Cenários de renda (o caso mais comum)
+
+A renda declarada é o que define o crédito fiscal (APTC) — então cotar a mesma
+família a $33.000 e a $45.000 dá **os mesmos planos com preços diferentes**. É o
+caso prático mais frequente do dia dela.
+
+O botão **"Outra renda"**, em cada proposta do histórico, duplica o cenário:
+
+- **Carrega** o que não depende da renda: plano, seguradora, nível metálico,
+  dedutível, máximo do bolso, o que se paga em cada atendimento, household,
+  zipcode e ano.
+- **Zera** o que depende: mensalidade, crédito fiscal e custo anual. O print
+  também sai — ele mostra o preço da renda antiga e contradiria os números novos.
+- Marca os planos como `precisaRevisar` e **bloqueia a saída** (gerar, PDF e
+  enviar passam todos por `ensureQuote`) até ela reler os prints. Mandar um
+  cenário de $45.000 com as contas de $33.000 seria pior do que não ter o atalho.
+
+Sem rótulo, a proposta se nomeia pela renda ("Renda US$ 45.000"), e o histórico
+mostra a renda de cada cenário — é o que distingue duas propostas do mesmo
+cliente quando só esse campo muda.
+
+> Quando `CMS_MARKETPLACE_API_KEY` existir, dá para recotar os mesmos planos na
+> renda nova automaticamente, em vez de pedir prints. Hoje a chave não está
+> configurada, então o fluxo é manual por decisão, não por limitação do desenho.

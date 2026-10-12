@@ -35,11 +35,17 @@ export function CompareTable({
   highlights = [],
   onRowClick,
   renderAction,
+  pendingIds,
   className,
 }: {
   options: PlanQuote[];
   recommendedPlanId?: string | null;
   highlights?: Highlight[];
+  /**
+   * Planos herdados de outro cenário de renda, ainda com o preço antigo. Zero
+   * não é preço: mostramos um traço e um aviso, senão a linha parece pronta.
+   */
+  pendingIds?: Set<string>;
   onRowClick?: (planId: string) => void;
   renderAction?: (plan: PlanQuote, index: number) => React.ReactNode;
   className?: string;
@@ -112,6 +118,7 @@ export function CompareTable({
             const metal = metalStyle(plan.metalLevel);
             const mine = highlightsOf(highlights, plan.planId);
             const isRec = plan.planId === recommendedPlanId;
+            const pending = pendingIds?.has(plan.planId) ?? false;
             return (
               <tr
                 key={plan.planId}
@@ -145,6 +152,13 @@ export function CompareTable({
                         {plan.tipoPlano ? <span>{plan.tipoPlano}</span> : null}
                         <span className="truncate">{plan.seguradora}</span>
                       </p>
+                      {pending ? (
+                        <p className="mt-1">
+                          <span className="rounded-full bg-status-amber-bg px-1.5 py-0.5 text-xs font-semibold text-status-amber-fg">
+                            Revisar preço
+                          </span>
+                        </p>
+                      ) : null}
                       {mine.length ? (
                         <p className="mt-1 flex flex-wrap gap-1">
                           {mine.map((h) => (
@@ -163,10 +177,19 @@ export function CompareTable({
                 </td>
 
                 <td className="whitespace-nowrap px-3 py-3 text-right">
-                  <span className="text-base font-semibold" style={{ color: metal.ink }}>
-                    {formatMoneyBR(plan.premioMensal)}
-                  </span>
-                  <span className="block text-xs text-muted-foreground">/mês</span>
+                  {pending ? (
+                    <>
+                      <span className="text-base font-semibold text-muted-foreground">—</span>
+                      <span className="block text-xs text-status-amber-fg">renda nova</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="text-base font-semibold" style={{ color: metal.ink }}>
+                        {formatMoneyBR(plan.premioMensal)}
+                      </span>
+                      <span className="block text-xs text-muted-foreground">/mês</span>
+                    </>
+                  )}
                 </td>
                 {cols
                   .filter((c) => c.key !== "premioMensal")

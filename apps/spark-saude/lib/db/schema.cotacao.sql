@@ -198,6 +198,9 @@ returns jsonb language sql security definer set search_path = spark_cotacao, pub
       q.created_at       as "createdAt",
       q.status,
       q.year,
+      -- A renda distingue os cenários: a mesma família cotada a $33k e a $45k
+      -- tem os mesmos planos com preços diferentes (o crédito fiscal muda).
+      q.income,
       q.proposal_token   as "proposalToken",
       q.token_expires_at as "tokenExpiresAt",
       q.recommended_plan_id as "recommendedPlanId",

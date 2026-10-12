@@ -16,6 +16,7 @@ import {
   Pencil,
   LayoutGrid,
   Rows3,
+  Copy,
   FileText,
   Send,
 } from "lucide-react";
@@ -157,7 +158,12 @@ export function QuoteBuilder() {
   const shelfView = shelfMode === "auto" ? (draft.length >= 4 ? "tabela" : "cards") : shelfMode;
   // Os mesmos destaques que vão para o PDF e para a página do cliente.
   const draftHighlights = React.useMemo(
-    () => computeHighlights(draft, dict(profile.idioma), (n) => formatMoneyBR(n ?? null)),
+    // Um cenário pendente tem mensalidade zerada: calcular "mais barato" em
+    // cima disso elegeria o plano que ainda não foi revisado.
+    () =>
+      draft.some((o) => o.precisaRevisar)
+        ? []
+        : computeHighlights(draft, dict(profile.idioma), (n) => formatMoneyBR(n ?? null)),
     [draft, profile.idioma],
   );
 
@@ -339,9 +345,11 @@ export function QuoteBuilder() {
   const removeOption = (i: number) => setDraft((d) => d.filter((_, idx) => idx !== i));
   const saveOption = (o: PlanQuote) =>
     setDraft((d) => {
-      if (editIndex == null) return [...d, { ...o, printUrl: null }];
+      // Salvou pelo editor = os números foram revisados; a pendência do cenário
+      // de renda cai aqui.
+      if (editIndex == null) return [...d, { ...o, printUrl: null, precisaRevisar: false }];
       const copy = [...d];
-      copy[editIndex] = { ...o, printUrl: copy[editIndex]?.printUrl ?? null };
+      copy[editIndex] = { ...o, printUrl: copy[editIndex]?.printUrl ?? null, precisaRevisar: false };
       return copy;
     });
 
@@ -373,7 +381,21 @@ export function QuoteBuilder() {
       setError("Adicione ao menos um plano à proposta.");
       return null;
     }
-    const created = await cotacaoApi.create(profile, draft, recommendation?.planId ?? null, titulo);
+    // Cenário de renda novo com preço velho é pior do que não ter o atalho:
+    // o cliente receberia "$45.000" com as contas de "$33.000".
+    if (pendentes) {
+      setError(
+        pendentes === 1
+          ? "1 plano ainda está com o preço da renda anterior. Revise a mensalidade e o crédito antes de enviar."
+          : `${pendentes} planos ainda estão com o preço da renda anterior. Revise a mensalidade e o crédito de cada um antes de enviar.`,
+      );
+      return null;
+    }
+    // Sem rótulo, o cenário se nomeia pela renda — é o que distingue duas
+    // propostas do mesmo cliente quando ela varia só esse campo.
+    const rotulo =
+      titulo.trim() || `Renda US$ ${Math.round(profile.income).toLocaleString("pt-BR")}`;
+    const created = await cotacaoApi.create(profile, draft, recommendation?.planId ?? null, rotulo);
     setResult(created);
     setSent(null);
     void refreshHistorico();
@@ -439,6 +461,75 @@ export function QuoteBuilder() {
       setError((e as Error).message);
     }
   };
+
+
+  /**
+   * Duplica uma proposta para OUTRA RENDA.
+   *
+   * É o caso mais comum do dia dela: a mesma família cotada a $33.000 e a
+   * $45.000. Os planos são os mesmos — o que muda é o crédito fiscal (APTC),
+   * que depende da renda declarada, e portanto a mensalidade.
+   *
+   * Então carregamos tudo o que NÃO depende da renda (plano, seguradora, nível,
+   * dedutível, máximo do bolso, o que se paga em cada atendimento) e zeramos o
+   * que depende: mensalidade, crédito e custo anual. O print também sai — ele
+   * mostra o preço da renda antiga e contradiria os números novos.
+   *
+   * Os planos ficam marcados como "precisa revisar" e a proposta não sai
+   * enquanto houver um pendente. Mandar um cenário de $45.000 com os preços de
+   * $33.000 seria pior do que não ter o atalho.
+   */
+  const duplicarComOutraRenda = async (item: QuoteSummary) => {
+    setError(null);
+    try {
+      const q = await cotacaoApi.get(item.id);
+      const stored = (q.householdJson ?? {}) as { profile?: Partial<QuoteProfile> };
+
+      setProfile((s) => ({
+        ...s,
+        contactId: q.ghlContactId ?? s.contactId,
+        contactName: stored.profile?.contactName ?? s.contactName,
+        idioma: stored.profile?.idioma ?? s.idioma,
+        zipcode: q.zipcode,
+        state: q.state,
+        countyfips: q.countyfips ?? undefined,
+        year: q.year,
+        people: stored.profile?.people?.length ? stored.profile.people : s.people,
+        // A renda fica a mesma até ela trocar — é o campo que ela vem mexer.
+        income: q.income,
+      }));
+
+      setDraft(
+        q.options.map((o) => ({
+          ...o,
+          premioMensal: 0,
+          creditoFiscal: 0,
+          custoAnualEstimado: null,
+          printUrl: null,
+          precisaRevisar: true,
+        })),
+      );
+
+      setRecommendation(null);
+      setTitulo("");
+      setResult(null);
+      setPanel(null);
+      setSent(null);
+      setView("montar");
+      setShelfMode("tabela");
+      // Leva o foco para a renda: é o que ela veio trocar.
+      setTimeout(() => {
+        const el = document.getElementById("campo-renda") as HTMLInputElement | null;
+        el?.focus();
+        el?.select();
+      }, 50);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+
+  /** Planos herdados de outro cenário que ainda estão com o preço antigo. */
+  const pendentes = draft.filter((o) => o.precisaRevisar).length;
 
   /**
    * Começa outra proposta para o MESMO cliente.
@@ -1082,9 +1173,13 @@ export function QuoteBuilder() {
                 onChange={(e) => patch({ state: e.target.value.toUpperCase().slice(0, 2) })}
               />
             </Field>
+            {/* A renda é o campo que move o crédito fiscal — e por isso o que
+                ela varia entre cenários do mesmo cliente. Fica destacado quando
+                a proposta veio de uma duplicação. */}
             <Field label="Renda anual (USD)">
               <Input
-                className="h-10"
+                id="campo-renda"
+                className={cn("h-10", pendentes > 0 && "border-accent ring-1 ring-accent/40")}
                 type="number"
                 value={profile.income}
                 onChange={(e) => patch({ income: Number(e.target.value) })}
@@ -1284,12 +1379,24 @@ export function QuoteBuilder() {
                   </p>
                   <p className="mt-0.5 text-xs text-muted-foreground">
                     {new Date(h.createdAt).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })} ·{" "}
+                    {/* A renda primeiro: é ela que separa dois cenários do mesmo cliente. */}
+                    renda {formatMoneyBR(h.income)} ·{" "}
                     {h.optionCount === 1 ? "1 opção" : `${h.optionCount} opções`}
                     {h.menorPremio != null ? ` · a partir de ${formatMoneyBR(h.menorPremio)}/mês` : ""}
                     {new Date(h.tokenExpiresAt) < new Date() ? " · link expirado" : ""}
                   </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-1.5">
+                  {/* O atalho do dia dela: mesma família, outra renda. */}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => duplicarComOutraRenda(h)}
+                    title="Copiar estes planos para um novo cenário de renda"
+                    className="h-8"
+                  >
+                    <Copy className="h-3.5 w-3.5" /> Outra renda
+                  </Button>
                   <Button variant="outline" size="sm" onClick={() => abrirProposta(h)} className="h-8">
                     <Send className="h-3.5 w-3.5" /> Enviar
                   </Button>
@@ -1474,6 +1581,26 @@ export function QuoteBuilder() {
           </p>
         ) : null}
 
+        {/* Cenário de renda duplicado: os planos vieram com o preço da renda
+            anterior e a proposta está travada até ela reler os novos prints. */}
+        {pendentes > 0 ? (
+          <div className="mt-4 flex flex-wrap items-start gap-2 rounded-lg border border-accent/40 bg-accent-soft px-4 py-3">
+            <Info className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
+            <div className="min-w-0 flex-1 text-sm">
+              <p className="font-semibold">
+                {pendentes === 1
+                  ? "1 plano está com o preço da renda anterior"
+                  : `${pendentes} planos estão com o preço da renda anterior`}
+              </p>
+              <p className="mt-0.5 text-muted-foreground">
+                Ajuste a renda acima e atualize a <strong>mensalidade</strong> e o{" "}
+                <strong>crédito fiscal</strong> de cada plano com os prints novos — o resto (dedutível,
+                coberturas, nível) já veio preenchido. A proposta só sai depois disso.
+              </p>
+            </div>
+          </div>
+        ) : null}
+
         {/* Com muitas opções, a leitura começa pelos destaques: quem ganha em
             quê. É o mesmo resumo que o cliente vê na proposta e no PDF. */}
         {draftHighlights.length ? (
@@ -1489,6 +1616,7 @@ export function QuoteBuilder() {
               options={draft}
               recommendedPlanId={recommendation?.planId}
               highlights={draftHighlights}
+              pendingIds={new Set(draft.filter((o) => o.precisaRevisar).map((o) => o.planId))}
               renderAction={(plan) => {
                 const i = draft.findIndex((d) => d.planId === plan.planId);
                 return (

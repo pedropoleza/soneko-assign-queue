@@ -90,8 +90,15 @@ export interface PlanQuote {
   fonte: OptionSource;
 }
 
-/** A draft option in the builder — a plan (CMS or manual) plus an optional print. */
-export type PlanOptionDraft = PlanQuote & { printUrl?: string | null };
+/**
+ * A draft option in the builder — a plan (CMS or manual) plus an optional print.
+ *
+ * `precisaRevisar` marca um plano herdado de outro cenário de renda: o preço e o
+ * crédito fiscal daquele cenário NÃO valem aqui e precisam ser relidos do print
+ * novo. É estado de tela — o zod da rota de criação descarta, então nunca chega
+ * ao banco.
+ */
+export type PlanOptionDraft = PlanQuote & { printUrl?: string | null; precisaRevisar?: boolean };
 
 /** A plan the broker chose to propose, within a quote (persisted). */
 export interface QuoteOption extends PlanQuote {
@@ -149,6 +156,8 @@ export interface QuoteSummary {
   createdAt: string;
   status: QuoteStatus;
   year: number;
+  /** Renda declarada nesta proposta — é o que separa dois cenários do mesmo cliente. */
+  income: number;
   proposalToken: string;
   tokenExpiresAt: string;
   recommendedPlanId?: string | null;
